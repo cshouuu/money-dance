@@ -1,0 +1,40 @@
+name: Deploy Web to Cloudflare Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - 'package*.json'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run build -w @salary-flow/core
+      - run: npm run build -w @salary-flow/web
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      - name: Check Cloudflare credentials
+        id: cloudflare
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Cloudflare deploy skipped until CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are configured."
+          fi
+      - name: Deploy Pages
+        if: steps.cloudflare.outputs.configured == 'true'
+        working-directory: apps/web
+        run: npx wrangler pages deploy dist --project-name=salary-flow --branch=main
