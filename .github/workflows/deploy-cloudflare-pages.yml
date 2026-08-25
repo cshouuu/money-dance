@@ -8,6 +8,7 @@ on:
       - 'apps/web/**'
       - 'packages/core/**'
       - 'package*.json'
+      - '.github/workflows/deploy-cloudflare-pages.yml'
 
 jobs:
   deploy:
@@ -34,7 +35,11 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Cloudflare deploy skipped until CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are configured."
           fi
+      - name: Ensure Pages project exists
+        if: steps.cloudflare.outputs.configured == 'true'
+        working-directory: apps/web
+        run: npx wrangler pages project create money-dance --production-branch=main || true
       - name: Deploy Pages
         if: steps.cloudflare.outputs.configured == 'true'
         working-directory: apps/web
-        run: npx wrangler pages deploy dist --project-name=salary-flow --branch=main
+        run: npx wrangler pages deploy dist --project-name=money-dance --branch=main
