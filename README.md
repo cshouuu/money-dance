@@ -1,4 +1,4 @@
-# SalaryFlow / 薪流
+# Money Dance / 薪流
 
 把工资变成一个实时流动的数字：实时薪资、购买时间换算、摸鱼收益、物品持有成本。
 
@@ -34,20 +34,23 @@ npm run build
 - Root directory: repository root (`/`)
 - Build command: `npm run build -w @salary-flow/core && npm run build -w @salary-flow/web`
 - Build output: `apps/web/dist`
-- Environment: `VITE_API_BASE_URL=https://<your-vercel-api-domain>`
+- Environment: `VITE_API_BASE_URL=https://salary-flow-api.vercel.app`
 
-也可以使用 `npx wrangler pages deploy dist --project-name=salary-flow`。
+仓库已包含 GitHub Actions 工作流；配置 Cloudflare 凭证后会自动确保 `money-dance` Pages 项目存在并部署。手动部署命令：
+
+```bash
+npx wrangler pages deploy dist --project-name=money-dance
+```
 
 ### Backend — Vercel
 
-Vercel 项目 Root Directory 设为 `apps/api`。Vercel 的 monorepo 安装会解析根目录 npm workspace，Hono 可作为一等 Node backend 直接部署。生产环境建议配置：
+Vercel 项目 Root Directory 设为 `apps/api`。Vercel 的 monorepo 安装会解析根目录 npm workspace，Hono 可作为 Node backend 部署。生产环境建议配置：
 
 - `CORS_ORIGIN=https://<your-cloudflare-pages-domain>`
 
 ## MVP 数据策略
 
 MVP 采用 local-first：工资配置、摸鱼记录、想买物品和已购物品默认存储在用户浏览器 localStorage，不需要注册，也不会把薪资主动上传服务器。API 仅用于共享计算校验/健康检查，并为后续账号与云同步预留接口。
-
 
 ## Production API
 
