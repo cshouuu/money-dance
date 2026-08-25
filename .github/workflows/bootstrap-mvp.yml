@@ -17,11 +17,15 @@ jobs:
         with:
           ref: feature/mvp
           fetch-depth: 0
+
       - name: Expand MVP source
         run: |
-          unzip -o .bootstrap/money-dance-bootstrap.zip -d .
+          cat .bootstrap/part-* | base64 -d > /tmp/money-dance-bootstrap.zip
+          unzip -t /tmp/money-dance-bootstrap.zip
+          unzip -o /tmp/money-dance-bootstrap.zip -d .
           rm -rf .bootstrap
           rm -f .github/workflows/bootstrap-mvp.yml
+
       - name: Commit expanded source
         run: |
           git config user.name "github-actions[bot]"
