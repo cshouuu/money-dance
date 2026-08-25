@@ -1,0 +1,44 @@
+name: Bootstrap Money Dance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/bootstrap-money-dance.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/salaryflow-mvp
+          fetch-depth: 0
+
+      - name: Expand source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/chunk_* | base64 --decode > /tmp/source.tar.gz
+          tar -xzf /tmp/source.tar.gz
+          test -f package.json
+          test -f apps/web/src/App.tsx
+          test -f apps/api/src/app.ts
+          test -f packages/core/src/index.ts
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+      - name: Commit source to development branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: build SalaryFlow MVP'
+          git push origin HEAD:feature/salaryflow-mvp
