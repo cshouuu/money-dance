@@ -1,0 +1,14 @@
+{
+  "name": "salary-flow",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:web": "npm run build -w @salary-flow/core && npm run dev -w @salary-flow/web",
+    "dev:api": "npm run build -w @salary-flow/core && npm run dev -w @salary-flow/api",
+    "build": "npm run build -w @salary-flow/core && npm run build -w @salary-flow/web && npm run build -w @salary-flow/api",
+    "test": "npm run test -w @salary-flow/core",
+    "typecheck": "npm run build -w @salary-flow/core && npm run typecheck -ws --if-present"
+  },
+  "engines": { "node": ">=20" }
+}
