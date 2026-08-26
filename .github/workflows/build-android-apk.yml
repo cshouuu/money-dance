@@ -190,6 +190,27 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name money-dance-android-apk \
             --dir release
+      - name: Create update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          VERSION="${TAG#v}"
+          APK_NAME="money-dance-${TAG}.apk"
+          PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cat > release/money-dance-update.json <<EOF
+          {
+            "tag": "${TAG}",
+            "version": "${VERSION}",
+            "title": "Money Dance ${TAG}",
+            "notes": "Money Dance Android release ${TAG}",
+            "apkName": "${APK_NAME}",
+            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}",
+            "htmlUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
+            "publishedAt": "${PUBLISHED_AT}"
+          }
+          EOF
+          node -e "JSON.parse(require('fs').readFileSync('release/money-dance-update.json','utf8')); console.log('update manifest valid')"
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
