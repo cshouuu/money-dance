@@ -1,0 +1,4 @@
+html,body,#root{min-height:100%}
+body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+@media(max-width:900px){.mobile-nav{left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom))}.page{padding-bottom:calc(100px + env(safe-area-inset-bottom))}}
+@media(display-mode:standalone){body{overscroll-behavior-y:none;-webkit-user-select:none;user-select:none}input,textarea,select,[contenteditable=true]{-webkit-user-select:text;user-select:text}}
