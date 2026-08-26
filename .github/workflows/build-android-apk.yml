@@ -1,0 +1,66 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - '.github/workflows/build-android-apk.yml'
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install web dependencies
+        run: npm ci
+      - name: Build web bundle
+        env:
+          VITE_API_BASE_URL: https://salary-flow-api.vercel.app
+        run: |
+          npm run build -w @salary-flow/core
+          npm run build -w @salary-flow/web
+      - name: Install pinned Capacitor toolchain
+        run: npm install --no-save --package-lock=false -w @salary-flow/web @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
+      - name: Generate Android project
+        working-directory: apps/web
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Build installable APK
+        working-directory: apps/web/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p artifacts
+          cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk artifacts/money-dance-android.apk
+          sha256sum artifacts/money-dance-android.apk > artifacts/money-dance-android.apk.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: money-dance-android-apk
+          path: |
+            artifacts/money-dance-android.apk
+            artifacts/money-dance-android.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
