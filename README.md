@@ -36,6 +36,7 @@ Money Dance 是一个围绕「时间 × 工资 × 消费」构建的个人财务
 | ⚡ 意外 | 记录不影响工资计算的意外收入或意外支出 |
 | 📦 我的好物 | 记录已拥有的物品，观察持有时间增长后每小时成本如何下降 |
 | 📱 多端使用 | Web、iPhone PWA、Android APK 共用同一套核心产品逻辑 |
+| 🔄 Android 更新 | 自动检查 GitHub Release，新版可在 App 内发起下载并由系统确认覆盖安装 |
 
 ## 直接使用
 
@@ -64,7 +65,9 @@ Money Dance 是一个围绕「时间 × 工资 × 消费」构建的个人财务
 
 下载 `money-dance-vX.Y.Z.apk` 后即可安装，不需要 Google Play。
 
-> 当前 CI 产出的 APK 仍使用 Android debug signing，适合直接安装和验收。若要长期对外分发，并让用户稳定地覆盖安装新版本，需要后续配置一套固定的 Release keystore。
+正式 APK 使用固定 Release keystore 签名。安装首个固定签名版本后，后续版本可以直接覆盖升级而无需卸载。App 会定期检查 GitHub Releases，也可以在「我的 → 应用更新」手动检查；发现新版后可在应用内发起 APK 下载，最后一步仍由 Android 系统安装器要求用户确认。
+
+> 早期测试 APK 使用的是临时 debug 签名。如果设备上装的是旧 debug APK，第一次迁移到正式固定签名版本时需要先卸载旧版一次；此后即可长期覆盖升级。
 
 ## 技术架构
 
@@ -72,7 +75,7 @@ Money Dance 是一个围绕「时间 × 工资 × 消费」构建的个人财务
 Money Dance
 ├── apps/web                 React + Vite + TypeScript
 │   ├── Web / PWA
-│   └── Capacitor Android UI
+│   └── Capacitor Android UI + native updater bridge
 │
 ├── apps/api                 Hono + TypeScript
 │   └── Vercel
@@ -130,7 +133,7 @@ npm audit
 
 Android 使用现有 React/Vite 前端作为唯一 UI，通过 Capacitor 生成原生 Android 工程，因此不需要维护另一套 React Native / Flutter 代码。
 
-本地生成 Android 工程的详细说明见：
+原生层只承担 Android 专属能力，例如读取 App 版本、APK 下载与调用系统安装器。详细说明见：
 
 [`docs/MOBILE.md`](docs/MOBILE.md)
 
@@ -138,7 +141,7 @@ Android 使用现有 React/Vite 前端作为唯一 UI，通过 Capacitor 生成�
 
 Web 在 `main` 更新后会由 GitHub Actions 自动部署到 Cloudflare Pages。
 
-Android 使用 Git Tag 驱动发布。
+Android 使用 Git Tag 驱动发布，正式 Tag 必须符合 `vMAJOR.MINOR.PATCH`。
 
 例如发布 `v0.2.0`：
 
@@ -154,21 +157,32 @@ git push origin v0.2.0
 ```text
 Tag v0.2.0
    ↓
-构建 Web
+解析 versionName / versionCode
    ↓
-生成 Capacitor Android 工程
+构建 Web + Capacitor Android
    ↓
-Gradle 构建 APK
+恢复固定 Release keystore
    ↓
-生成 SHA-256
+签名 Release APK
+   ↓
+校验 APK 签名 + SHA-256
    ↓
 创建 GitHub Release
    ↓
 money-dance-v0.2.0.apk
 money-dance-v0.2.0.apk.sha256
+   ↓
+已安装 Money Dance 自动发现新版
 ```
 
-因此普通用户以后只需要进入 **Releases** 下载 APK，不需要再到 Actions 页面寻找 artifact。
+固定签名通过以下 GitHub Actions repository secrets 注入，私钥文件不会提交到 Git：
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+缺少任何一个签名 Secret 时，Tag 发布会直接失败，避免产生无法继续覆盖升级的错误版本。
 
 ## 部署
 
@@ -202,7 +216,7 @@ Money Dance 当前采用 local-first 策略。
 
 ## Roadmap
 
-- [ ] 固定 Android Release 签名，支持长期覆盖升级
+- [x] 固定 Android Release 签名与应用内版本检查 / 更新
 - [ ] 数据导入 / 导出
 - [ ] 可选云同步
 - [ ] Android 原生分享 / 触觉反馈 / 通知
