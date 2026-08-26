@@ -51,16 +51,58 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-      - name: Prepare APK artifact
+      - name: Prepare APK files
+        id: package
+        shell: bash
         run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            APK_BASENAME="money-dance-${GITHUB_REF_NAME}"
+          else
+            APK_BASENAME="money-dance-android"
+          fi
+
           mkdir -p artifacts
-          cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk artifacts/money-dance-android.apk
-          sha256sum artifacts/money-dance-android.apk > artifacts/money-dance-android.apk.sha256
+          cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk "artifacts/${APK_BASENAME}.apk"
+          sha256sum "artifacts/${APK_BASENAME}.apk" > "artifacts/${APK_BASENAME}.apk.sha256"
+          echo "apk_name=${APK_BASENAME}.apk" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: money-dance-android-apk
           path: |
-            artifacts/money-dance-android.apk
-            artifacts/money-dance-android.apk.sha256
+            artifacts/*.apk
+            artifacts/*.sha256
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: android-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download APK artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh run download "$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name money-dance-android-apk \
+            --dir release
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" release/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "Money Dance $TAG"
+          fi
