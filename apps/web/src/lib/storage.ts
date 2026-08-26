@@ -17,4 +17,5 @@ export const keys = {
   sessions: 'salary-flow.sessions.v1',
   activeSlacking: 'salary-flow.active-slacking.v1',
   assets: 'salary-flow.assets.v1',
+  ledger: 'salary-flow.ledger.v1',
 }
