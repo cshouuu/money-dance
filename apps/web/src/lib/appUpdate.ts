@@ -1,4 +1,4 @@
-const RELEASES_API = 'https://api.github.com/repos/cshouuu/money-dance/releases/latest'
+const RELEASES_PROXY_API = 'https://salary-flow-api.vercel.app/api/app-release/latest'
 const RELEASE_ASSET_PREFIX = 'https://github.com/cshouuu/money-dance/releases/download/'
 
 interface CapacitorBridge {
@@ -28,16 +28,10 @@ export interface AndroidRelease {
   publishedAt: string
 }
 
-interface GitHubReleaseResponse {
-  tag_name?: string
-  name?: string | null
-  body?: string | null
-  html_url?: string
-  published_at?: string | null
-  assets?: Array<{
-    name?: string
-    browser_download_url?: string
-  }>
+interface ReleaseProxyResponse {
+  ok?: boolean
+  data?: AndroidRelease | null
+  error?: string
 }
 
 interface NativeUpdateResult {
@@ -87,31 +81,32 @@ export function compareVersions(left: string, right: string) {
   return 0
 }
 
+function isTrustedRelease(release: AndroidRelease) {
+  return Boolean(
+    release.tag &&
+    release.version &&
+    release.apkName?.endsWith('.apk') &&
+    release.apkUrl?.startsWith(RELEASE_ASSET_PREFIX),
+  )
+}
+
 export async function fetchLatestAndroidRelease(): Promise<AndroidRelease | null> {
-  const response = await fetch(RELEASES_API, {
-    headers: { Accept: 'application/vnd.github+json' },
-    cache: 'no-store',
-  })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`RELEASE_CHECK_FAILED_${response.status}`)
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), 10000)
+  try {
+    const response = await fetch(`${RELEASES_PROXY_API}?t=${Date.now()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!response.ok) throw new Error(`RELEASE_PROXY_FAILED_${response.status}`)
 
-  const release = await response.json() as GitHubReleaseResponse
-  const tag = release.tag_name ?? ''
-  const apk = release.assets?.find(asset => {
-    const url = asset.browser_download_url ?? ''
-    return asset.name?.endsWith('.apk') && url.startsWith(RELEASE_ASSET_PREFIX)
-  })
-  if (!tag || !apk?.name || !apk.browser_download_url) return null
-
-  return {
-    tag,
-    version: normalizeVersion(tag),
-    title: release.name || `Money Dance ${tag}`,
-    notes: release.body || '',
-    apkName: apk.name,
-    apkUrl: apk.browser_download_url,
-    htmlUrl: release.html_url || 'https://github.com/cshouuu/money-dance/releases/latest',
-    publishedAt: release.published_at || '',
+    const payload = await response.json() as ReleaseProxyResponse
+    if (!payload.ok) throw new Error(payload.error || 'RELEASE_PROXY_FAILED')
+    if (!payload.data) return null
+    if (!isTrustedRelease(payload.data)) throw new Error('UNTRUSTED_RELEASE_METADATA')
+    return payload.data
+  } finally {
+    window.clearTimeout(timer)
   }
 }
 
