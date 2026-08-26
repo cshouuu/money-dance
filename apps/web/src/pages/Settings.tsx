@@ -2,6 +2,7 @@ import { calculateRates, type SalaryProfile, type SalaryType } from '@salary-flo
 import { CheckCircle2 } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { loadProfile, saveProfile } from '../lib/profile'
+import './Settings.css'
 
 export function Settings() {
   const [profile,setProfile]=useState<SalaryProfile>(()=>loadProfile()); const [saved,setSaved]=useState(false)
