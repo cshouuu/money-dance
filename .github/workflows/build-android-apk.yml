@@ -40,7 +40,7 @@ jobs:
           npm run build -w @salary-flow/core
           npm run build -w @salary-flow/web
       - name: Install pinned Capacitor toolchain
-        run: npm install --no-save --package-lock=false -w @salary-flow/web @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
+        run: npm install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
       - name: Generate Android project
         working-directory: apps/web
         run: |
