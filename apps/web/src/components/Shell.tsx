@@ -14,6 +14,7 @@ const items = [
 ] as const
 
 const compactItems = items.filter(([, , , compact]) => compact)
+const drawerItems = items.filter(([, , , compact]) => !compact)
 
 export function Shell() {
   const location = useLocation()
@@ -31,19 +32,19 @@ export function Shell() {
     const endY = event.changedTouches[0]?.clientY ?? touchStartY.current
     const delta = endY - touchStartY.current
     touchStartY.current = null
-    if (delta < -28) setMobileOpen(true)
-    if (delta > 28) setMobileOpen(false)
+    if (delta < -24) setMobileOpen(true)
+    if (delta > 24) setMobileOpen(false)
   }
 
-  const renderItem = ([to, Icon, label]: (typeof items)[number], expanded = false) => (
+  const renderItem = ([to, Icon, label]: (typeof items)[number], drawer = false) => (
     <NavLink
-      key={`${expanded ? 'expanded' : 'compact'}-${to}`}
+      key={`${drawer ? 'drawer' : 'compact'}-${to}`}
       to={to}
       end={to === '/'}
       onClick={() => setMobileOpen(false)}
-      className={({ isActive }) => `${expanded ? 'mobile-drawer-item' : 'mobile-dock-item'}${isActive ? ' active' : ''}`}
+      className={({ isActive }) => `${drawer ? 'mobile-drawer-item' : 'mobile-dock-item'}${isActive ? ' active' : ''}`}
     >
-      <Icon size={expanded ? 20 : 19}/><span>{label}</span>
+      <Icon size={drawer ? 19 : 18}/><span>{label}</span>
     </NavLink>
   )
 
@@ -61,15 +62,14 @@ export function Shell() {
         <button
           className="mobile-dock-handle"
           type="button"
-          aria-label={mobileOpen ? '收起全部导航' : '展开全部导航'}
+          aria-label={mobileOpen ? '收起更多导航' : '展开更多导航'}
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen(value => !value)}
         >
-          <span/><ChevronUp size={16}/>
+          <ChevronUp size={12}/>
         </button>
         <div className="mobile-drawer" aria-hidden={!mobileOpen}>
-          <div className="mobile-drawer-title"><b>全部功能</b><span>向下滑动收起</span></div>
-          <div className="mobile-drawer-grid">{items.map(item => renderItem(item, true))}</div>
+          <div className="mobile-drawer-grid">{drawerItems.map(item => renderItem(item, true))}</div>
         </div>
         <div className="mobile-dock-row">{compactItems.map(item => renderItem(item))}</div>
       </nav>
