@@ -17,11 +17,37 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
     private static final String APK_MIME = "application/vnd.android.package-archive";
     private static final String RELEASE_HOST = "github.com";
     private static final String RELEASE_PATH_PREFIX = "/cshouuu/money-dance/releases/download/";
+    private static final String RELEASES_API = "https://api.github.com/repos/cshouuu/money-dance/releases/latest";
+
+    private boolean isTrustedReleaseUri(Uri uri) {
+        return "https".equalsIgnoreCase(uri.getScheme())
+                && RELEASE_HOST.equalsIgnoreCase(uri.getHost())
+                && uri.getPath() != null
+                && uri.getPath().startsWith(RELEASE_PATH_PREFIX);
+    }
+
+    private String readBody(InputStream input) throws Exception {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"));
+        StringBuilder body = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) body.append(line);
+        reader.close();
+        return body.toString();
+    }
 
     @PluginMethod
     public void getVersion(PluginCall call) {
@@ -38,15 +64,80 @@ public class AppUpdaterPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getLatestRelease(PluginCall call) {
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(RELEASES_API).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "Money-Dance-Android");
+
+                int status = connection.getResponseCode();
+                if (status == 404) {
+                    JSObject result = new JSObject();
+                    result.put("found", false);
+                    call.resolve(result);
+                    return;
+                }
+                if (status < 200 || status >= 300) {
+                    call.reject("Release check failed with HTTP " + status);
+                    return;
+                }
+
+                JSONObject release = new JSONObject(readBody(connection.getInputStream()));
+                String tag = release.optString("tag_name", "");
+                JSONArray assets = release.optJSONArray("assets");
+                String apkName = "";
+                String apkUrl = "";
+                if (assets != null) {
+                    for (int i = 0; i < assets.length(); i++) {
+                        JSONObject asset = assets.optJSONObject(i);
+                        if (asset == null) continue;
+                        String name = asset.optString("name", "");
+                        String url = asset.optString("browser_download_url", "");
+                        if (name.endsWith(".apk") && isTrustedReleaseUri(Uri.parse(url))) {
+                            apkName = name;
+                            apkUrl = url;
+                            break;
+                        }
+                    }
+                }
+
+                JSObject result = new JSObject();
+                if (tag.isEmpty() || apkName.isEmpty() || apkUrl.isEmpty()) {
+                    result.put("found", false);
+                    call.resolve(result);
+                    return;
+                }
+
+                result.put("found", true);
+                result.put("tag", tag);
+                result.put("version", tag.replaceFirst("(?i)^v", "").split("-")[0]);
+                result.put("title", release.optString("name", "Money Dance " + tag));
+                result.put("notes", release.optString("body", ""));
+                result.put("apkName", apkName);
+                result.put("apkUrl", apkUrl);
+                result.put("htmlUrl", release.optString("html_url", "https://github.com/cshouuu/money-dance/releases/latest"));
+                result.put("publishedAt", release.optString("published_at", ""));
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("Unable to check latest release", error);
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }, "money-dance-update-check").start();
+    }
+
+    @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         String url = call.getString("url", "");
         String fileName = call.getString("fileName", "money-dance-update.apk");
         Uri uri = Uri.parse(url);
 
-        if (!"https".equalsIgnoreCase(uri.getScheme())
-                || !RELEASE_HOST.equalsIgnoreCase(uri.getHost())
-                || uri.getPath() == null
-                || !uri.getPath().startsWith(RELEASE_PATH_PREFIX)) {
+        if (!isTrustedReleaseUri(uri)) {
             call.reject("Untrusted update URL");
             return;
         }

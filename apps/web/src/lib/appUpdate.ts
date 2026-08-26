@@ -1,4 +1,3 @@
-const RELEASES_PROXY_API = 'https://salary-flow-api.vercel.app/api/app-release/latest'
 const RELEASE_ASSET_PREFIX = 'https://github.com/cshouuu/money-dance/releases/download/'
 
 interface CapacitorBridge {
@@ -28,10 +27,8 @@ export interface AndroidRelease {
   publishedAt: string
 }
 
-interface ReleaseProxyResponse {
-  ok?: boolean
-  data?: AndroidRelease | null
-  error?: string
+interface NativeReleaseResult extends Partial<AndroidRelease> {
+  found: boolean
 }
 
 interface NativeUpdateResult {
@@ -81,32 +78,33 @@ export function compareVersions(left: string, right: string) {
   return 0
 }
 
-function isTrustedRelease(release: AndroidRelease) {
+function isTrustedRelease(release: NativeReleaseResult): release is NativeReleaseResult & AndroidRelease {
   return Boolean(
+    release.found &&
     release.tag &&
     release.version &&
+    release.title !== undefined &&
+    release.notes !== undefined &&
     release.apkName?.endsWith('.apk') &&
-    release.apkUrl?.startsWith(RELEASE_ASSET_PREFIX),
+    release.apkUrl?.startsWith(RELEASE_ASSET_PREFIX) &&
+    release.htmlUrl !== undefined &&
+    release.publishedAt !== undefined,
   )
 }
 
 export async function fetchLatestAndroidRelease(): Promise<AndroidRelease | null> {
-  const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 10000)
-  try {
-    const response = await fetch(`${RELEASES_PROXY_API}?t=${Date.now()}`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-    if (!response.ok) throw new Error(`RELEASE_PROXY_FAILED_${response.status}`)
-
-    const payload = await response.json() as ReleaseProxyResponse
-    if (!payload.ok) throw new Error(payload.error || 'RELEASE_PROXY_FAILED')
-    if (!payload.data) return null
-    if (!isTrustedRelease(payload.data)) throw new Error('UNTRUSTED_RELEASE_METADATA')
-    return payload.data
-  } finally {
-    window.clearTimeout(timer)
+  const release = await nativeCall<NativeReleaseResult>('getLatestRelease')
+  if (!release.found) return null
+  if (!isTrustedRelease(release)) throw new Error('UNTRUSTED_RELEASE_METADATA')
+  return {
+    tag: release.tag,
+    version: release.version,
+    title: release.title,
+    notes: release.notes,
+    apkName: release.apkName,
+    apkUrl: release.apkUrl,
+    htmlUrl: release.htmlUrl,
+    publishedAt: release.publishedAt,
   }
 }
 
