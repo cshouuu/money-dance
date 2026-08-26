@@ -32,8 +32,13 @@ public class MainActivity extends BridgeActivity {
 `)
 
 let manifest = await readFile(manifestPath, 'utf8')
-if (!manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES')) {
-  manifest = manifest.replace(/(<manifest[^>]*>)/, '$1\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />')
+for (const permission of [
+  'android.permission.INTERNET',
+  'android.permission.REQUEST_INSTALL_PACKAGES',
+]) {
+  if (!manifest.includes(permission)) {
+    manifest = manifest.replace(/(<manifest[^>]*>)/, `$1\n    <uses-permission android:name="${permission}" />`)
+  }
 }
 await writeFile(manifestPath, manifest)
 

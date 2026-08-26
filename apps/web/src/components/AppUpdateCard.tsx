@@ -12,6 +12,16 @@ import './AppUpdate.css'
 
 type UpdateStatus = 'idle' | 'checking' | 'latest' | 'available' | 'downloading' | 'permission' | 'error'
 
+function describeError(error: unknown) {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error) return error
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = String((error as { message?: unknown }).message ?? '')
+    if (message) return message
+  }
+  return 'UNKNOWN_ERROR'
+}
+
 export function AppUpdateCard() {
   const [visible] = useState(() => isAndroidNative())
   const [current, setCurrent] = useState<InstalledAppVersion | null>(null)
@@ -21,7 +31,10 @@ export function AppUpdateCard() {
 
   useEffect(() => {
     if (!visible) return
-    getInstalledAppVersion().then(setCurrent).catch(() => setStatus('error'))
+    getInstalledAppVersion().then(setCurrent).catch(error => {
+      setStatus('error')
+      setMessage(`读取版本失败：${describeError(error)}`)
+    })
   }, [visible])
 
   if (!visible) return null
@@ -44,9 +57,9 @@ export function AppUpdateCard() {
         setStatus('latest')
         setMessage('已经是最新版本。')
       }
-    } catch {
+    } catch (error) {
       setStatus('error')
-      setMessage('检查更新失败，请稍后再试。')
+      setMessage(`检查更新失败：${describeError(error)}`)
     }
   }
 
@@ -62,9 +75,9 @@ export function AppUpdateCard() {
         setStatus('downloading')
         setMessage('新版 APK 正在后台下载。下载完成后 Android 会弹出系统安装确认。')
       }
-    } catch {
+    } catch (error) {
       setStatus('error')
-      setMessage('启动更新失败，请稍后重试。')
+      setMessage(`启动更新失败：${describeError(error)}`)
     }
   }
 

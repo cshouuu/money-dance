@@ -17,7 +17,6 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -31,7 +30,9 @@ public class AppUpdaterPlugin extends Plugin {
     private static final String APK_MIME = "application/vnd.android.package-archive";
     private static final String RELEASE_HOST = "github.com";
     private static final String RELEASE_PATH_PREFIX = "/cshouuu/money-dance/releases/download/";
-    private static final String RELEASES_API = "https://api.github.com/repos/cshouuu/money-dance/releases/latest";
+    private static final String UPDATE_MANIFEST_URL = "https://github.com/cshouuu/money-dance/releases/latest/download/money-dance-update.json";
+    private static final int HTTP_TIMEOUT_MS = 12000;
+    private static final int MAX_REDIRECTS = 6;
 
     private boolean isTrustedReleaseUri(Uri uri) {
         return "https".equalsIgnoreCase(uri.getScheme())
@@ -49,6 +50,50 @@ public class AppUpdaterPlugin extends Plugin {
         return body.toString();
     }
 
+    private JSONObject fetchUpdateManifest() throws Exception {
+        URL current = new URL(UPDATE_MANIFEST_URL);
+        for (int redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) current.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(HTTP_TIMEOUT_MS);
+                connection.setReadTimeout(HTTP_TIMEOUT_MS);
+                connection.setInstanceFollowRedirects(false);
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setRequestProperty("User-Agent", "Money-Dance-Android");
+                connection.setRequestProperty("Cache-Control", "no-cache");
+
+                int status = connection.getResponseCode();
+                if (status >= 300 && status < 400) {
+                    String location = connection.getHeaderField("Location");
+                    if (location == null || location.isEmpty()) {
+                        throw new IllegalStateException("UPDATE_MANIFEST_REDIRECT_WITHOUT_LOCATION");
+                    }
+                    URL next = new URL(current, location);
+                    if (!"https".equalsIgnoreCase(next.getProtocol())) {
+                        throw new SecurityException("UPDATE_MANIFEST_UNSAFE_REDIRECT");
+                    }
+                    current = next;
+                    continue;
+                }
+                if (status < 200 || status >= 300) {
+                    throw new IllegalStateException("UPDATE_MANIFEST_HTTP_" + status + "_HOST_" + current.getHost());
+                }
+                return new JSONObject(readBody(connection.getInputStream()));
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }
+        throw new IllegalStateException("UPDATE_MANIFEST_TOO_MANY_REDIRECTS");
+    }
+
+    private String errorMessage(Exception error) {
+        String detail = error.getMessage();
+        if (detail == null || detail.trim().isEmpty()) detail = "no_detail";
+        return error.getClass().getSimpleName() + ": " + detail;
+    }
+
     @PluginMethod
     public void getVersion(PluginCall call) {
         try {
@@ -59,74 +104,42 @@ public class AppUpdaterPlugin extends Plugin {
             result.put("versionCode", versionCode);
             call.resolve(result);
         } catch (Exception error) {
-            call.reject("Unable to read app version", error);
+            call.reject("Unable to read app version: " + errorMessage(error), error);
         }
     }
 
     @PluginMethod
     public void getLatestRelease(PluginCall call) {
         new Thread(() -> {
-            HttpURLConnection connection = null;
             try {
-                connection = (HttpURLConnection) new URL(RELEASES_API).openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(10000);
-                connection.setReadTimeout(10000);
-                connection.setRequestProperty("Accept", "application/vnd.github+json");
-                connection.setRequestProperty("User-Agent", "Money-Dance-Android");
+                JSONObject manifest = fetchUpdateManifest();
+                String tag = manifest.optString("tag", "");
+                String version = manifest.optString("version", "");
+                String apkName = manifest.optString("apkName", "");
+                String apkUrl = manifest.optString("apkUrl", "");
 
-                int status = connection.getResponseCode();
-                if (status == 404) {
-                    JSObject result = new JSObject();
-                    result.put("found", false);
-                    call.resolve(result);
+                if (tag.isEmpty() || version.isEmpty() || apkName.isEmpty() || apkUrl.isEmpty()) {
+                    call.reject("Invalid update manifest: REQUIRED_FIELDS_MISSING");
                     return;
                 }
-                if (status < 200 || status >= 300) {
-                    call.reject("Release check failed with HTTP " + status);
+                if (!apkName.matches("[A-Za-z0-9._-]+\\.apk") || !isTrustedReleaseUri(Uri.parse(apkUrl))) {
+                    call.reject("Invalid update manifest: UNTRUSTED_APK_METADATA");
                     return;
-                }
-
-                JSONObject release = new JSONObject(readBody(connection.getInputStream()));
-                String tag = release.optString("tag_name", "");
-                JSONArray assets = release.optJSONArray("assets");
-                String apkName = "";
-                String apkUrl = "";
-                if (assets != null) {
-                    for (int i = 0; i < assets.length(); i++) {
-                        JSONObject asset = assets.optJSONObject(i);
-                        if (asset == null) continue;
-                        String name = asset.optString("name", "");
-                        String url = asset.optString("browser_download_url", "");
-                        if (name.endsWith(".apk") && isTrustedReleaseUri(Uri.parse(url))) {
-                            apkName = name;
-                            apkUrl = url;
-                            break;
-                        }
-                    }
                 }
 
                 JSObject result = new JSObject();
-                if (tag.isEmpty() || apkName.isEmpty() || apkUrl.isEmpty()) {
-                    result.put("found", false);
-                    call.resolve(result);
-                    return;
-                }
-
                 result.put("found", true);
                 result.put("tag", tag);
-                result.put("version", tag.replaceFirst("(?i)^v", "").split("-")[0]);
-                result.put("title", release.optString("name", "Money Dance " + tag));
-                result.put("notes", release.optString("body", ""));
+                result.put("version", version);
+                result.put("title", manifest.optString("title", "Money Dance " + tag));
+                result.put("notes", manifest.optString("notes", ""));
                 result.put("apkName", apkName);
                 result.put("apkUrl", apkUrl);
-                result.put("htmlUrl", release.optString("html_url", "https://github.com/cshouuu/money-dance/releases/latest"));
-                result.put("publishedAt", release.optString("published_at", ""));
+                result.put("htmlUrl", manifest.optString("htmlUrl", "https://github.com/cshouuu/money-dance/releases/latest"));
+                result.put("publishedAt", manifest.optString("publishedAt", ""));
                 call.resolve(result);
             } catch (Exception error) {
-                call.reject("Unable to check latest release", error);
-            } finally {
-                if (connection != null) connection.disconnect();
+                call.reject("UPDATE_CHECK_FAILED: " + errorMessage(error), error);
             }
         }, "money-dance-update-check").start();
     }
