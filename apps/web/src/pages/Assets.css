@@ -1,0 +1,8 @@
+.assets-list-section{margin-top:38px}
+.assets-list-section>.section-title{margin:0 0 15px}
+.assets-list-section .asset-grid{margin-top:0}
+
+@media(max-width:560px){
+  .assets-list-section{margin-top:34px}
+  .assets-list-section>.section-title{margin-bottom:14px}
+}
