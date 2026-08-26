@@ -124,7 +124,7 @@
   .purchase-toast{right:15px;bottom:96px}
 }
 
-@media(max-width:430px){
+@media(max-width:560px){
   .converter-card{
     grid-template-columns:40px minmax(0,1fr) auto;
     grid-template-areas:
