@@ -1,9 +1,12 @@
-import { Boxes, Clock3, Coins, Fish, Settings2 } from 'lucide-react'
+import { BarChart3, Boxes, CircleDollarSign, Clock3, Coins, Fish, Settings2 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
+import './Shell.css'
 
 const items = [
   ['/', Coins, '今日'],
   ['/convert', Clock3, '换算'],
+  ['/summary', BarChart3, '汇算'],
+  ['/accidents', CircleDollarSign, '意外'],
   ['/slacking', Fish, '摸鱼'],
   ['/assets', Boxes, '物品'],
   ['/settings', Settings2, '我的'],
@@ -17,6 +20,6 @@ export function Shell() {
       <p className="privacy-note">Local-first · 薪资默认只保存在你的浏览器</p>
     </aside>
     <main className="main"><Outlet /></main>
-    <nav className="mobile-nav">{items.map(([to, Icon, label]) => <NavLink key={to} to={to} end={to === '/'} className={({isActive}) => isActive ? 'mobile-nav-item active' : 'mobile-nav-item'}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
+    <nav className="mobile-nav salary-mobile-nav">{items.map(([to, Icon, label]) => <NavLink key={to} to={to} end={to === '/'} className={({isActive}) => isActive ? 'mobile-nav-item active' : 'mobile-nav-item'}><Icon size={18}/><span>{label}</span></NavLink>)}</nav>
   </div>
 }
