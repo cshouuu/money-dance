@@ -4,18 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vercel dev",
+    "dev": "tsx watch src/dev.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@salary-flow/core": "0.1.0",
+    "@hono/node-server": "^2.1.1",
     "hono": "^4.9.4",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/node": "^22.17.2",
-    "typescript": "^5.9.2",
-    "vercel": "^59.5.0"
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.2"
   }
 }
