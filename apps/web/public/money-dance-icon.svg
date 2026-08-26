@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Money Dance">
+  <rect width="512" height="512" rx="116" fill="#1e281f"/>
+  <circle cx="256" cy="256" r="158" fill="#dfe8b6"/>
+  <path d="M160 292c22-70 62-112 96-112 33 0 54 26 74 66 12 23 24 35 42 35 15 0 29-9 40-28-5 68-48 111-104 111-45 0-70-24-92-66-15-29-27-42-43-42-16 0-31 12-45 36 8-38 19-69 32-92z" fill="#1e281f"/>
+  <circle cx="298" cy="222" r="12" fill="#dfe8b6"/>
+  <path d="M146 339c40 25 83 37 130 37 39 0 77-8 114-25" fill="none" stroke="#1e281f" stroke-width="18" stroke-linecap="round"/>
+</svg>
