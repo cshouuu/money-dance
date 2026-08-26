@@ -1,0 +1,33 @@
+name: Cleanup merged Android branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cleanup-merged-android-branch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Delete merged branch and this one-off workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin 'feature/android-in-app-updates' >/dev/null 2>&1; then
+            git push origin --delete 'feature/android-in-app-updates'
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm '.github/workflows/cleanup-merged-android-branch.yml'
+          git commit -m 'chore: remove one-off branch cleanup workflow'
+          git push origin HEAD:main
