@@ -1,0 +1,2 @@
+@media(max-width:900px){.salary-mobile-nav{grid-template-columns:repeat(7,minmax(0,1fr));padding:7px 6px}.salary-mobile-nav .mobile-nav-item{min-width:0;padding:6px 2px}.salary-mobile-nav .mobile-nav-item span{white-space:nowrap}}
+@media(max-width:390px){.salary-mobile-nav .mobile-nav-item{font-size:8px;gap:3px}.salary-mobile-nav svg{width:16px;height:16px}}
