@@ -1,0 +1,20 @@
+{
+  "name": "Money Dance · 薪流",
+  "short_name": "Money Dance",
+  "description": "把工资、工作时间、消费和生活成本连接起来。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f2ea",
+  "theme_color": "#1e281f",
+  "icons": [
+    {
+      "src": "/money-dance-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
