@@ -13,7 +13,7 @@ Money Dance keeps the existing React/Vite application as the single UI/codebase 
 
 The repository contains `.github/workflows/build-android-apk.yml`.
 
-It builds the current web application, creates a Capacitor Android project on the CI runner, synchronizes the web assets, builds an installable APK, and generates a SHA-256 checksum.
+It builds the current web application, creates a Capacitor Android project on the CI runner, injects the native update bridge, synchronizes the web assets, builds an installable APK, verifies its signature, and generates a SHA-256 checksum.
 
 ### Pull requests and manual builds
 
@@ -26,11 +26,37 @@ The artifact contains:
 - `money-dance-android.apk`
 - `money-dance-android.apk.sha256`
 
-This is intended for development and device acceptance testing.
+PR builds use a throwaway CI signing key and compile both debug and release variants. They exist only to prove that the native updater and release-signing Gradle configuration still compile; they are not the long-term Android release identity.
+
+### Permanent release signing
+
+Tagged production APKs must always use the same release keystore. The keystore is never committed to Git and is restored only inside GitHub Actions from repository secrets.
+
+Required Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+If any secret is missing, a `v*` tag build fails before publishing an APK. This is deliberate: publishing one release with a different key would break future in-place upgrades.
+
+Back up the release keystore securely. If it is lost, a future APK cannot update existing installations signed with that key.
+
+### Versioning
+
+Production tags must use `vMAJOR.MINOR.PATCH`, for example `v0.2.0`.
+
+The workflow derives:
+
+- Android `versionName` = `0.2.0`
+- Android `versionCode` = `major * 1,000,000 + minor * 1,000 + patch`
+
+This keeps Android's numeric upgrade ordering stable while the UI can compare normal semantic versions.
 
 ### Tagged releases
 
-Pushing a tag matching `v*` automatically builds the APK and then creates or updates the matching GitHub Release.
+Pushing a tag matching `v*` builds a fixed-key signed release APK and then creates or updates the matching GitHub Release.
 
 For example:
 
@@ -46,7 +72,32 @@ The Release receives directly downloadable files:
 
 Users should download Android builds from GitHub Releases rather than searching through Actions artifacts.
 
-The current CI package uses Android debug signing so it can be installed directly for device acceptance testing. Do not treat the debug key as the long-term release identity. Before distributing updateable release builds broadly, configure one persistent release keystore through GitHub Actions secrets and switch the workflow to a release signing configuration.
+### In-app updates
+
+The Android shell contains a small native Capacitor plugin called `AppUpdater`.
+
+The app:
+
+1. reads its installed `versionName` / `versionCode` from Android;
+2. checks `cshouuu/money-dance` GitHub Releases for the latest APK;
+3. compares the latest semantic version with the installed version;
+4. prompts the user when a newer release exists;
+5. downloads only APK URLs under `https://github.com/cshouuu/money-dance/releases/download/` through Android `DownloadManager`;
+6. opens Android's package installer when the download finishes.
+
+Android still requires the user to approve the final install/update confirmation. Money Dance does not attempt silent installation.
+
+On Android 8+, the first in-app update may also require the user to enable **Allow from this source** for Money Dance. The app opens the relevant system settings page and asks the user to return and retry the update.
+
+The app automatically checks at most once every six hours and also exposes a manual **我的 → 应用更新 → 检查更新** action.
+
+### First migration from old debug APKs
+
+Previously generated Money Dance APKs used ephemeral debug signing. Those APKs do **not** share the permanent release certificate.
+
+Therefore, users who already installed an old debug APK need to uninstall it once before installing the first fixed-signed release. From that first fixed-signed release onward, newer APKs can update in place without uninstalling, as long as the permanent keystore is preserved.
+
+Because uninstalling removes Android WebView local app data, export/backup should be considered before a broad migration if real user data already exists.
 
 ### Local Android development
 
@@ -60,6 +111,7 @@ npm install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/andr
 cd apps/web
 npx cap add android
 npx cap sync android
+node native/android/prepare-android.mjs
 npx cap open android
 ```
 
