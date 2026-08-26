@@ -4,9 +4,11 @@
 
 .converter-result{
   display:grid;
-  grid-template-columns:repeat(2,minmax(128px,auto));
-  gap:26px;
-  min-width:290px;
+  grid-template-columns:max-content max-content;
+  gap:20px;
+  width:max-content;
+  min-width:0;
+  margin-left:auto;
   justify-self:end;
   align-items:start;
   text-align:left;
@@ -62,6 +64,7 @@
     justify-self:stretch;
     min-width:0;
     width:100%;
+    margin-left:0;
     grid-template-columns:repeat(2,minmax(0,1fr));
     gap:12px;
     text-align:left;
