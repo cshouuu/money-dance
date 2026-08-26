@@ -8,6 +8,18 @@ describe('salary calculations', () => {
     expect(rates.daily).toBeCloseTo(15000 / 21.75, 8)
   })
 
+  it('subtracts monthly living cost before deriving rates', () => {
+    const rates = calculateRates({ ...DEFAULT_PROFILE, includeLivingCost: true, monthlyLivingCost: 3000 })
+    expect(rates.daily).toBeCloseTo((15000 - 3000) / 21.75, 8)
+    expect(rates.hourly).toBeCloseTo(((15000 - 3000) / 21.75) / 8, 8)
+  })
+
+  it('never returns negative disposable rates when living cost exceeds income', () => {
+    const rates = calculateRates({ ...DEFAULT_PROFILE, includeLivingCost: true, monthlyLivingCost: 20000 })
+    expect(rates.daily).toBe(0)
+    expect(rates.second).toBe(0)
+  })
+
   it('does not count unpaid lunch as worked time', () => {
     const now = new Date(2026, 7, 25, 12, 30, 0)
     expect(getWorkedPaidSeconds(DEFAULT_PROFILE, now)).toBe(3 * 3600)

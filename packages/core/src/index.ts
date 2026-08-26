@@ -8,6 +8,8 @@ export interface SalaryProfile {
   breakStartTime: string
   breakEndTime: string
   paidBreak: boolean
+  includeLivingCost: boolean
+  monthlyLivingCost: number
   monthlyWorkDays: number
   workDaysPerWeek: number
   currency: string
@@ -29,6 +31,8 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   breakStartTime: '12:00',
   breakEndTime: '13:00',
   paidBreak: false,
+  includeLivingCost: false,
+  monthlyLivingCost: 0,
   monthlyWorkDays: 21.75,
   workDaysPerWeek: 5,
   currency: 'CNY',
@@ -71,15 +75,20 @@ export function getPaidSecondsPerDay(profile: SalaryProfile): number {
 export function calculateRates(profile: SalaryProfile): SalaryRates {
   if (!Number.isFinite(profile.salary) || profile.salary < 0) throw new Error('Salary must be non-negative')
   if (!Number.isFinite(profile.monthlyWorkDays) || profile.monthlyWorkDays <= 0) throw new Error('Monthly work days must be positive')
+  const monthlyLivingCost = profile.includeLivingCost ? profile.monthlyLivingCost ?? 0 : 0
+  if (!Number.isFinite(monthlyLivingCost) || monthlyLivingCost < 0) throw new Error('Living cost must be non-negative')
+
   const paidSecondsPerDay = getPaidSecondsPerDay(profile)
   if (paidSecondsPerDay <= 0) throw new Error('Paid work duration must be positive')
 
-  let daily: number
-  if (profile.salaryType === 'annual') daily = (profile.salary / 12) / profile.monthlyWorkDays
-  else if (profile.salaryType === 'monthly') daily = profile.salary / profile.monthlyWorkDays
-  else if (profile.salaryType === 'daily') daily = profile.salary
-  else daily = profile.salary * (paidSecondsPerDay / 3600)
+  const livingCostPerWorkDay = monthlyLivingCost / profile.monthlyWorkDays
+  let grossDaily: number
+  if (profile.salaryType === 'annual') grossDaily = (profile.salary / 12) / profile.monthlyWorkDays
+  else if (profile.salaryType === 'monthly') grossDaily = profile.salary / profile.monthlyWorkDays
+  else if (profile.salaryType === 'daily') grossDaily = profile.salary
+  else grossDaily = profile.salary * (paidSecondsPerDay / 3600)
 
+  const daily = Math.max(0, grossDaily - livingCostPerWorkDay)
   const second = daily / paidSecondsPerDay
   return { daily, hourly: second * 3600, minute: second * 60, second, paidSecondsPerDay }
 }
