@@ -1,4 +1,39 @@
 html,body,#root{min-height:100%}
 body{padding-top:env(safe-area-inset-top);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
-@media(max-width:900px){.mobile-nav{left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));bottom:calc(12px + env(safe-area-inset-bottom))}.page{padding-bottom:calc(100px + env(safe-area-inset-bottom))}}
-@media(display-mode:standalone){body{overscroll-behavior-y:none;-webkit-user-select:none;user-select:none}input,textarea,select,[contenteditable=true]{-webkit-user-select:text;user-select:text}}
+
+@keyframes mobile-content-in{
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+@media(max-width:900px){
+  .page{padding-bottom:calc(108px + env(safe-area-inset-bottom))}
+  button,a{-webkit-tap-highlight-color:transparent}
+
+  .input-card,.settings-card,.hero-card,.metric-card,.timer-card,.summary-strip,.asset-card,.list-card,.ledger-row,.empty{
+    transition:transform .28s cubic-bezier(.22,.8,.24,1),box-shadow .28s ease,background-color .25s ease,border-color .25s ease,opacity .25s ease;
+  }
+
+  .item-list>.list-card,.asset-grid>.asset-card,.ledger-list>.ledger-row,.empty{
+    animation:mobile-content-in .3s cubic-bezier(.22,.8,.24,1) both;
+  }
+
+  .primary-button,.ghost-button,.stop-button,.buy-button,.icon-button,.text-button,.pagination button,.dimension-tabs button,.direction-switch button{
+    transition:transform .18s ease,background-color .22s ease,color .22s ease,box-shadow .22s ease,opacity .22s ease;
+  }
+
+  .primary-button:active,.ghost-button:active,.stop-button:active,.buy-button:active,.icon-button:active,.text-button:active,.pagination button:active,.dimension-tabs button:active,.direction-switch button:active{
+    transform:scale(.975);
+  }
+
+  .dimension-tabs button,.direction-switch button{will-change:transform}
+}
+
+@media(display-mode:standalone){
+  body{overscroll-behavior-y:none;-webkit-user-select:none;user-select:none}
+  input,textarea,select,[contenteditable=true]{-webkit-user-select:text;user-select:text}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
