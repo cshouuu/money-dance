@@ -28,17 +28,24 @@ import java.net.URL;
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
     private static final String APK_MIME = "application/vnd.android.package-archive";
-    private static final String RELEASE_HOST = "github.com";
-    private static final String RELEASE_PATH_PREFIX = "/cshouuu/money-dance/releases/download/";
-    private static final String UPDATE_MANIFEST_URL = "https://github.com/cshouuu/money-dance/releases/latest/download/money-dance-update.json";
+    private static final String GITHUB_RELEASE_HOST = "github.com";
+    private static final String GITHUB_RELEASE_PATH_PREFIX = "/cshouuu/money-dance/releases/download/";
+    private static final String R2_RELEASE_HOST = "money-dance-6gl.pages.dev";
+    private static final String R2_RELEASE_PATH_PREFIX = "/download/releases/";
+    private static final String R2_UPDATE_MANIFEST_URL = "https://money-dance-6gl.pages.dev/download/latest.json";
+    private static final String GITHUB_UPDATE_MANIFEST_URL = "https://github.com/cshouuu/money-dance/releases/latest/download/money-dance-update.json";
     private static final int HTTP_TIMEOUT_MS = 12000;
     private static final int MAX_REDIRECTS = 6;
 
     private boolean isTrustedReleaseUri(Uri uri) {
-        return "https".equalsIgnoreCase(uri.getScheme())
-                && RELEASE_HOST.equalsIgnoreCase(uri.getHost())
-                && uri.getPath() != null
-                && uri.getPath().startsWith(RELEASE_PATH_PREFIX);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getPath() == null) {
+            return false;
+        }
+        boolean githubRelease = GITHUB_RELEASE_HOST.equalsIgnoreCase(uri.getHost())
+                && uri.getPath().startsWith(GITHUB_RELEASE_PATH_PREFIX);
+        boolean r2Release = R2_RELEASE_HOST.equalsIgnoreCase(uri.getHost())
+                && uri.getPath().startsWith(R2_RELEASE_PATH_PREFIX);
+        return githubRelease || r2Release;
     }
 
     private String readBody(InputStream input) throws Exception {
@@ -50,8 +57,8 @@ public class AppUpdaterPlugin extends Plugin {
         return body.toString();
     }
 
-    private JSONObject fetchUpdateManifest() throws Exception {
-        URL current = new URL(UPDATE_MANIFEST_URL);
+    private JSONObject fetchManifestFrom(String manifestUrl) throws Exception {
+        URL current = new URL(manifestUrl);
         for (int redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
             HttpURLConnection connection = null;
             try {
@@ -88,7 +95,26 @@ public class AppUpdaterPlugin extends Plugin {
         throw new IllegalStateException("UPDATE_MANIFEST_TOO_MANY_REDIRECTS");
     }
 
+    private JSONObject fetchUpdateManifest() throws Exception {
+        Exception r2Error = null;
+        try {
+            return fetchManifestFrom(R2_UPDATE_MANIFEST_URL);
+        } catch (Exception error) {
+            r2Error = error;
+        }
+
+        try {
+            return fetchManifestFrom(GITHUB_UPDATE_MANIFEST_URL);
+        } catch (Exception githubError) {
+            throw new IllegalStateException(
+                    "R2_" + errorMessage(r2Error) + "; GITHUB_" + errorMessage(githubError),
+                    githubError
+            );
+        }
+    }
+
     private String errorMessage(Exception error) {
+        if (error == null) return "UnknownError: no_detail";
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = "no_detail";
         return error.getClass().getSimpleName() + ": " + detail;
