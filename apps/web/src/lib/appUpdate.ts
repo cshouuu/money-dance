@@ -1,4 +1,6 @@
-const RELEASE_ASSET_PREFIX = 'https://github.com/cshouuu/money-dance/releases/download/'
+const GITHUB_RELEASE_ASSET_PREFIX = 'https://github.com/cshouuu/money-dance/releases/download/'
+const R2_RELEASE_ASSET_PREFIX = 'https://money-dance-6gl.pages.dev/download/releases/'
+const TRUSTED_RELEASE_ASSET_PREFIXES = [GITHUB_RELEASE_ASSET_PREFIX, R2_RELEASE_ASSET_PREFIX] as const
 
 interface CapacitorBridge {
   getPlatform?: () => string
@@ -78,6 +80,10 @@ export function compareVersions(left: string, right: string) {
   return 0
 }
 
+export function isTrustedAndroidUpdateUrl(url: string) {
+  return TRUSTED_RELEASE_ASSET_PREFIXES.some(prefix => url.startsWith(prefix))
+}
+
 function isTrustedRelease(release: NativeReleaseResult): release is NativeReleaseResult & AndroidRelease {
   return Boolean(
     release.found &&
@@ -86,7 +92,8 @@ function isTrustedRelease(release: NativeReleaseResult): release is NativeReleas
     release.title !== undefined &&
     release.notes !== undefined &&
     release.apkName?.endsWith('.apk') &&
-    release.apkUrl?.startsWith(RELEASE_ASSET_PREFIX) &&
+    release.apkUrl &&
+    isTrustedAndroidUpdateUrl(release.apkUrl) &&
     release.htmlUrl !== undefined &&
     release.publishedAt !== undefined,
   )
@@ -122,7 +129,7 @@ export async function checkForAndroidUpdate() {
 }
 
 export async function installAndroidRelease(release: AndroidRelease) {
-  if (!release.apkUrl.startsWith(RELEASE_ASSET_PREFIX)) throw new Error('UNTRUSTED_UPDATE_URL')
+  if (!isTrustedAndroidUpdateUrl(release.apkUrl)) throw new Error('UNTRUSTED_UPDATE_URL')
   return nativeCall<NativeUpdateResult>('downloadAndInstall', {
     url: release.apkUrl,
     fileName: release.apkName,
