@@ -128,6 +128,26 @@ jobs:
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
           ANDROID_RELEASE_SIGNING: 'true'
         run: node apps/web/native/android/prepare-android.mjs
+      - name: Verify AppUpdater native registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_ACTIVITY="apps/web/android/app/src/main/java/com/cshouuu/moneydance/MainActivity.java"
+          PLUGIN_SOURCE="apps/web/android/app/src/main/java/com/cshouuu/moneydance/AppUpdaterPlugin.java"
+          test -f "$MAIN_ACTIVITY"
+          test -f "$PLUGIN_SOURCE"
+          grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$PLUGIN_SOURCE"
+          node - "$MAIN_ACTIVITY" <<'NODE'
+          const fs = require('fs')
+          const source = fs.readFileSync(process.argv[2], 'utf8')
+          const registerAt = source.indexOf('registerPlugin(AppUpdaterPlugin.class)')
+          const superAt = source.indexOf('super.onCreate(savedInstanceState)')
+          if (registerAt < 0 || superAt < 0 || registerAt > superAt) {
+            console.error('AppUpdater must be registered before BridgeActivity creates the Capacitor Bridge')
+            process.exit(1)
+          }
+          console.log('AppUpdater registration order verified')
+          NODE
       - name: Build APK
         working-directory: apps/web/android
         shell: bash
