@@ -54,36 +54,54 @@ The workflow derives:
 
 This keeps Android's numeric upgrade ordering stable while the UI can compare normal semantic versions.
 
-### Tagged releases
+### Tagged releases and R2 delivery
 
-Pushing a tag matching `v*` builds a fixed-key signed release APK and then creates or updates the matching GitHub Release.
+Pushing a tag matching `v*` builds a fixed-key signed release APK and creates or updates the matching GitHub Release.
 
 For example:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-The Release receives directly downloadable files:
+GitHub Releases remains the permanent release archive and receives:
 
-- `money-dance-v0.2.0.apk`
-- `money-dance-v0.2.0.apk.sha256`
+- `money-dance-v0.3.0.apk`
+- `money-dance-v0.3.0.apk.sha256`
+- `money-dance-update.json`
 
-Users should download Android builds from GitHub Releases rather than searching through Actions artifacts.
+The same signed APK is also uploaded to the private Cloudflare R2 bucket `money-dance-releases`. The existing Cloudflare Pages project exposes only the update endpoints through a Pages Function with an R2 binding:
+
+- `/download/latest.json`
+- `/download/releases/money-dance-vX.Y.Z.apk`
+- `/download/health`
+
+The bucket itself remains private; users do not receive R2 credentials or direct bucket access.
+
+R2 is the preferred in-app APK delivery source. GitHub Releases remains a fallback so existing installs can continue updating even if the Cloudflare delivery path is temporarily unavailable.
+
+The release workflow maintains `retention.json` in R2 and keeps at most the newest **10 APK versions**. When a new release would exceed 10 retained APKs, the oldest APK object is deleted automatically. GitHub Releases is not pruned and continues to preserve the full release history.
+
+Required Cloudflare Actions secrets:
+
+- `CLOUDFLARE_API_TOKEN` with R2 write access and Pages deployment access
+- `CLOUDFLARE_ACCOUNT_ID`
 
 ### In-app updates
 
-The Android shell contains a small native Capacitor plugin called `AppUpdater`.
+The Android shell contains a native Capacitor plugin called `AppUpdater`.
 
 The app:
 
 1. reads its installed `versionName` / `versionCode` from Android;
-2. checks `cshouuu/money-dance` GitHub Releases for the latest APK;
-3. compares the latest semantic version with the installed version;
+2. checks both the Cloudflare R2-backed Pages update manifest and the GitHub Release manifest;
+3. chooses the newer valid semantic version when both are reachable;
 4. prompts the user when a newer release exists;
-5. downloads only APK URLs under `https://github.com/cshouuu/money-dance/releases/download/` through Android `DownloadManager`;
-6. opens Android's package installer when the download finishes.
+5. prefers APKs served from `https://money-dance-6gl.pages.dev/download/releases/`;
+6. continues to trust the project's own GitHub Release APK path as a fallback;
+7. downloads through Android `DownloadManager`;
+8. opens Android's package installer when the download finishes.
 
 Android still requires the user to approve the final install/update confirmation. Money Dance does not attempt silent installation.
 

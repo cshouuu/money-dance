@@ -1,0 +1,12 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "money-dance",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-08-27",
+  "r2_buckets": [
+    {
+      "binding": "RELEASES",
+      "bucket_name": "money-dance-releases"
+    }
+  ]
+}

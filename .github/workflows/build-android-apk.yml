@@ -196,11 +196,20 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: android-apk
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       actions: read
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
       - name: Download APK artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -210,7 +219,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name money-dance-android-apk \
             --dir release
-      - name: Create update manifest
+      - name: Create update manifests
         shell: bash
         run: |
           set -euo pipefail
@@ -218,6 +227,10 @@ jobs:
           VERSION="${TAG#v}"
           APK_NAME="money-dance-${TAG}.apk"
           PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          GITHUB_APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}"
+          R2_APK_URL="https://money-dance-6gl.pages.dev/download/releases/${APK_NAME}"
+          HTML_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+
           cat > release/money-dance-update.json <<EOF
           {
             "tag": "${TAG}",
@@ -225,21 +238,119 @@ jobs:
             "title": "Money Dance ${TAG}",
             "notes": "Money Dance Android release ${TAG}",
             "apkName": "${APK_NAME}",
-            "apkUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${APK_NAME}",
-            "htmlUrl": "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}",
+            "apkUrl": "${GITHUB_APK_URL}",
+            "htmlUrl": "${HTML_URL}",
             "publishedAt": "${PUBLISHED_AT}"
           }
           EOF
-          node -e "JSON.parse(require('fs').readFileSync('release/money-dance-update.json','utf8')); console.log('update manifest valid')"
-      - name: Publish GitHub Release
+
+          cat > release/r2-latest.json <<EOF
+          {
+            "tag": "${TAG}",
+            "version": "${VERSION}",
+            "title": "Money Dance ${TAG}",
+            "notes": "Money Dance Android release ${TAG}",
+            "apkName": "${APK_NAME}",
+            "apkUrl": "${R2_APK_URL}",
+            "htmlUrl": "${HTML_URL}",
+            "publishedAt": "${PUBLISHED_AT}"
+          }
+          EOF
+
+          node -e "JSON.parse(require('fs').readFileSync('release/money-dance-update.json','utf8')); JSON.parse(require('fs').readFileSync('release/r2-latest.json','utf8')); console.log('update manifests valid')"
+      - name: Validate R2 publishing credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Publish APK and latest manifest to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_NAME="money-dance-${GITHUB_REF_NAME}.apk"
+
+          npx --no-install wrangler r2 object put "money-dance-releases/releases/${APK_NAME}" \
+            --file "release/${APK_NAME}" \
+            --content-type application/vnd.android.package-archive \
+            --cache-control 'public, max-age=31536000, immutable' \
+            --remote --force
+
+          npx --no-install wrangler r2 object put money-dance-releases/latest.json \
+            --file release/r2-latest.json \
+            --content-type application/json \
+            --cache-control 'no-store' \
+            --remote --force
+
+          if ! npx --no-install wrangler r2 object get money-dance-releases/retention.json \
+            --file release/retention.json --remote; then
+            printf '{"files":[]}\n' > release/retention.json
+          fi
+
+          APK_NAME="$APK_NAME" node <<'NODE'
+          const fs = require('fs')
+          const current = process.env.APK_NAME
+          let state = { files: [] }
+          try { state = JSON.parse(fs.readFileSync('release/retention.json', 'utf8')) } catch {}
+          const parse = (name) => {
+            const m = name.match(/^money-dance-v(\d+)\.(\d+)\.(\d+)\.apk$/)
+            return m ? m.slice(1).map(Number) : [-1, -1, -1]
+          }
+          const compare = (a, b) => {
+            const av = parse(a), bv = parse(b)
+            for (let i = 0; i < 3; i++) if (av[i] !== bv[i]) return bv[i] - av[i]
+            return a.localeCompare(b)
+          }
+          const all = [current, ...(Array.isArray(state.files) ? state.files : [])]
+            .filter((value, index, list) => /^money-dance-v\d+\.\d+\.\d+\.apk$/.test(value) && list.indexOf(value) === index)
+            .sort(compare)
+          const keep = all.slice(0, 10)
+          const remove = all.slice(10)
+          fs.writeFileSync('release/retention-next.json', JSON.stringify({ files: keep }, null, 2) + '\n')
+          fs.writeFileSync('release/r2-delete.txt', remove.join('\n') + (remove.length ? '\n' : ''))
+          console.log(`R2 retention: keeping ${keep.length}, deleting ${remove.length}`)
+          NODE
+
+          while IFS= read -r old_apk; do
+            [ -z "$old_apk" ] && continue
+            echo "Deleting old R2 APK: $old_apk"
+            npx --no-install wrangler r2 object delete "money-dance-releases/releases/${old_apk}" --remote
+          done < release/r2-delete.txt
+
+          npx --no-install wrangler r2 object put money-dance-releases/retention.json \
+            --file release/retention-next.json \
+            --content-type application/json \
+            --cache-control 'no-store' \
+            --remote --force
+      - name: Verify R2 delivery through Cloudflare Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_NAME="money-dance-${GITHUB_REF_NAME}.apk"
+          curl -fsS --retry 5 --retry-delay 2 --max-time 15 \
+            https://money-dance-6gl.pages.dev/download/latest.json \
+            | grep -Fq "\"version\": \"${GITHUB_REF_NAME#v}\""
+          STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --range 0-1023 --max-time 20 \
+            "https://money-dance-6gl.pages.dev/download/releases/${APK_NAME}")"
+          if [[ "$STATUS" != "200" && "$STATUS" != "206" ]]; then
+            echo "Unexpected R2 APK HTTP status: $STATUS" >&2
+            exit 1
+          fi
+          echo "R2 APK delivery verified with HTTP $STATUS"
+      - name: Publish GitHub Release after R2 verification
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="$GITHUB_REF_NAME"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" release/* \
+            gh release create "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --generate-notes \
