@@ -95,22 +95,51 @@ public class AppUpdaterPlugin extends Plugin {
         throw new IllegalStateException("UPDATE_MANIFEST_TOO_MANY_REDIRECTS");
     }
 
+    private int compareVersions(String left, String right) {
+        String[] leftParts = left.split("\\.");
+        String[] rightParts = right.split("\\.");
+        for (int i = 0; i < 3; i++) {
+            int leftValue = i < leftParts.length ? Integer.parseInt(leftParts[i]) : 0;
+            int rightValue = i < rightParts.length ? Integer.parseInt(rightParts[i]) : 0;
+            if (leftValue != rightValue) return Integer.compare(leftValue, rightValue);
+        }
+        return 0;
+    }
+
     private JSONObject fetchUpdateManifest() throws Exception {
+        JSONObject r2Manifest = null;
+        JSONObject githubManifest = null;
         Exception r2Error = null;
+        Exception githubError = null;
+
         try {
-            return fetchManifestFrom(R2_UPDATE_MANIFEST_URL);
+            r2Manifest = fetchManifestFrom(R2_UPDATE_MANIFEST_URL);
         } catch (Exception error) {
             r2Error = error;
         }
 
         try {
-            return fetchManifestFrom(GITHUB_UPDATE_MANIFEST_URL);
-        } catch (Exception githubError) {
-            throw new IllegalStateException(
-                    "R2_" + errorMessage(r2Error) + "; GITHUB_" + errorMessage(githubError),
-                    githubError
-            );
+            githubManifest = fetchManifestFrom(GITHUB_UPDATE_MANIFEST_URL);
+        } catch (Exception error) {
+            githubError = error;
         }
+
+        if (r2Manifest != null && githubManifest != null) {
+            String r2Version = r2Manifest.optString("version", "0.0.0");
+            String githubVersion = githubManifest.optString("version", "0.0.0");
+            try {
+                return compareVersions(r2Version, githubVersion) >= 0 ? r2Manifest : githubManifest;
+            } catch (Exception ignored) {
+                return r2Manifest;
+            }
+        }
+        if (r2Manifest != null) return r2Manifest;
+        if (githubManifest != null) return githubManifest;
+
+        throw new IllegalStateException(
+                "R2_" + errorMessage(r2Error) + "; GITHUB_" + errorMessage(githubError),
+                githubError != null ? githubError : r2Error
+        );
     }
 
     private String errorMessage(Exception error) {
