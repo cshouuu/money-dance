@@ -25,8 +25,10 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        // Capacitor builds the Bridge during super.onCreate(), so custom plugins
+        // must be registered first or they will not exist at runtime.
         registerPlugin(AppUpdaterPlugin.class);
+        super.onCreate(savedInstanceState);
     }
 }
 `)
