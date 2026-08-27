@@ -258,20 +258,6 @@ jobs:
           EOF
 
           node -e "JSON.parse(require('fs').readFileSync('release/money-dance-update.json','utf8')); JSON.parse(require('fs').readFileSync('release/r2-latest.json','utf8')); console.log('update manifests valid')"
-      - name: Publish GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="$GITHUB_REF_NAME"
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            gh release create "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --generate-notes \
-              --title "Money Dance $TAG"
-          fi
       - name: Validate R2 publishing credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -356,3 +342,17 @@ jobs:
             exit 1
           fi
           echo "R2 APK delivery verified with HTTP $STATUS"
+      - name: Publish GitHub Release after R2 verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" release/money-dance-update.json release/*.apk release/*.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "Money Dance $TAG"
+          fi
