@@ -35,7 +35,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   }, [open, rendered])
 
   useEffect(() => {
-    if (!open) return
+    if (!open || !rendered) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     cancelButtonRef.current?.focus()
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
@@ -44,7 +44,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
       window.removeEventListener('keydown', onKeyDown)
       previousFocus?.focus()
     }
-  }, [open, onCancel])
+  }, [open, rendered, onCancel])
 
   if (!rendered) return null
   return createPortal(<div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>

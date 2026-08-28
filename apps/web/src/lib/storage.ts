@@ -16,6 +16,8 @@ export const keys = {
   wishes: 'salary-flow.wishes.v1',
   sessions: 'salary-flow.sessions.v1',
   activeSlacking: 'salary-flow.active-slacking.v1',
+  overtimeSessions: 'salary-flow.overtime-sessions.v1',
+  activeOvertime: 'salary-flow.active-overtime.v1',
   assets: 'salary-flow.assets.v1',
   ledger: 'salary-flow.ledger.v1',
   workRecords: 'salary-flow.work-records.v1',
