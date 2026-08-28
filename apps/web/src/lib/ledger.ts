@@ -1,5 +1,6 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
-import type { DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
+import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
+import { isConfiguredWorkday, leaveTypeLabel, loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { getFlexibleWorkedSeconds, loadWorkRecords } from './work'
@@ -48,12 +49,6 @@ function sameCalendarDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-function isConfiguredWorkday(date: Date, workDaysPerWeek: number): boolean {
-  const normalized = Math.min(7, Math.max(1, Math.round(workDaysPerWeek)))
-  const mondayBasedIndex = (date.getDay() + 6) % 7
-  return mondayBasedIndex < normalized
-}
-
 export function getSummaryRange(dimension: SummaryDimension, anchor: string): { start: Date; end: Date } {
   if (dimension === 'day') {
     const start = localDateAtNoon(anchor)
@@ -83,7 +78,12 @@ function getSalaryEffectiveDate(profile: SalaryProfile, now: Date): Date {
   return Number.isNaN(effectiveDate.getTime()) ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : effectiveDate
 }
 
-function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[]): SummaryEntry[] {
+export function salaryEntryIdForDate(value: string | Date): string {
+  const date = typeof value === 'string' ? localDateAtNoon(value) : value
+  return `salary-${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+}
+
+function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[], attendanceRecords: AttendanceRecord[]): SummaryEntry[] {
   const rates = calculateRates(profile)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
@@ -91,6 +91,7 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
   const entries: SummaryEntry[] = []
   const rangeStart = start > effectiveDate ? start : effectiveDate
   const workRecordByDate = new Map(workRecords.map(record => [record.date, record]))
+  const attendanceByDate = new Map(attendanceRecords.map(record => [record.date, record]))
 
   for (const cursor = new Date(rangeStart); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
     const day = new Date(cursor)
@@ -98,21 +99,30 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     if (day > today) break
     const date = toLocalDateValue(day)
     const workRecord = workRecordByDate.get(date)
-    const workMode = workRecord?.mode ?? profile.defaultWorkMode
+    const attendance = attendanceByDate.get(date)
     let amount = 0
-    if (workMode === 'flexible') {
-      if (workRecord) amount = getFlexibleWorkedSeconds(workRecord, now, rates.paidSecondsPerDay) * rates.second
+    let source = '工资收入'
+    if (attendance?.status === 'leave') {
+      source = `工资收入 · ${leaveTypeLabel(attendance.leaveType)}`
+      if (attendance.payMode === 'multiplier') amount = rates.daily * Math.max(0, attendance.multiplier ?? 0)
+      if (attendance.payMode === 'fixed') amount = Math.max(0, attendance.fixedAmount ?? 0)
     } else {
-      if (!workRecord && !isConfiguredWorkday(day, profile.workDaysPerWeek)) continue
-      amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
+      const workMode = workRecord?.mode ?? profile.defaultWorkMode
+      if (workMode === 'flexible') {
+        if (workRecord) amount = getFlexibleWorkedSeconds(workRecord, now, rates.paidSecondsPerDay) * rates.second
+        else if (attendance?.status === 'normal' && !sameCalendarDay(day, today)) amount = rates.daily
+      } else {
+        if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, profile.workDaysPerWeek)) continue
+        amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
+      }
     }
     if (amount <= 0) continue
-    const id = `salary-${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`
+    const id = salaryEntryIdForDate(day)
     entries.push({
       id,
       direction: 'income',
       amount,
-      source: '工资收入',
+      source,
       category: '薪资',
       occurredAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0).toISOString(),
       kind: 'salary',
@@ -136,12 +146,13 @@ function isInRange(value: string, start: Date, end: Date): boolean {
   return !Number.isNaN(occurredAt.getTime()) && occurredAt >= start && occurredAt < end
 }
 
-export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords()): SummaryResult {
-  const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId)
+export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords(), attendanceRecords = loadAttendanceRecords()): SummaryResult {
+  const attendanceSalaryIds = new Set(attendanceRecords.map(record => salaryEntryIdForDate(record.date)))
+  const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId && !attendanceSalaryIds.has(entry.replacesId))
   const replacedSalaryIds = new Set(overrides.map(entry => entry.replacesId))
-  const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords).filter(entry => !replacedSalaryIds.has(entry.id))
+  const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords, attendanceRecords).filter(entry => !replacedSalaryIds.has(entry.id))
   const storedEntries: SummaryEntry[] = ledger
-    .filter(entry => !entry.deleted && isInRange(entry.occurredAt, start, end))
+    .filter(entry => !entry.deleted && isInRange(entry.occurredAt, start, end) && !(entry.kind === 'salary_override' && entry.replacesId && attendanceSalaryIds.has(entry.replacesId)))
     .map(entry => ({
       id: entry.kind === 'salary_override' && entry.replacesId ? entry.replacesId : entry.id,
       direction: entry.direction,
