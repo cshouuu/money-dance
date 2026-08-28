@@ -3,6 +3,7 @@ import { ArrowUpRight, Clock3, Fish, Sparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useNow } from '../lib/useNow'
+import { toLocalDateValue } from '../lib/form'
 import { loadProfile } from '../lib/profile'
 import { keys, loadJSON } from '../lib/storage'
 import type { SlackingSession } from '../types'
@@ -17,8 +18,8 @@ export function Dashboard() {
   const worked = getWorkedPaidSeconds(profile, now)
   const progress = Math.max(0, Math.min(100, (worked / rates.paidSecondsPerDay) * 100))
   const sessions = loadJSON<SlackingSession[]>(keys.sessions, [])
-  const today = now.toISOString().slice(0,10)
-  const todaySlacking = sessions.filter(s => s.startTime.slice(0,10) === today)
+  const today = toLocalDateValue(now)
+  const todaySlacking = sessions.filter(s => toLocalDateValue(new Date(s.startTime)) === today)
   const slackingSeconds = todaySlacking.reduce((a, s) => a + s.durationSeconds, 0)
   const slackingMoney = todaySlacking.reduce((a, s) => a + s.earnedAmount, 0)
 
