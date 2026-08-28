@@ -1,5 +1,6 @@
 import { Clock3, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { localDateWithTime, toLocalTimeValue } from '../lib/form'
 import type { DailyWorkRecord } from '../types'
 import './WorkTimeDialog.css'
@@ -25,7 +26,7 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, onSt
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [error, setError] = useState('')
-  const startInputRef = useRef<HTMLInputElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const nowTime = toLocalTimeValue()
 
   useEffect(() => {
@@ -33,12 +34,15 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, onSt
     setStartTime(recordTime(record, 'start') || nowTime)
     setEndTime(recordTime(record, 'end'))
     setError('')
-    const timer = window.setTimeout(() => startInputRef.current?.focus(), 0)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const timer = window.setTimeout(() => closeButtonRef.current?.focus(), 0)
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
     }
   }, [open, purpose, record, nowTime, onCancel])
 
@@ -55,13 +59,13 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, onSt
     else onAdjust(startTime, endTime || undefined)
   }
 
-  return <div className="work-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
+  return createPortal(<div className="work-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
     <form className="work-time-dialog" role="dialog" aria-modal="true" aria-labelledby="work-time-dialog-title" onSubmit={submit}>
-      <div className="work-dialog-header"><div><p className="eyebrow">TODAY ONLY</p><h2 id="work-time-dialog-title">{purpose === 'start' ? '今天几点开工？' : '修正今天的工作时间'}</h2></div><button type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
+      <div className="work-dialog-header"><div><p className="eyebrow">TODAY ONLY</p><h2 id="work-time-dialog-title">{purpose === 'start' ? '今天几点开工？' : '修正今天的工作时间'}</h2></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
       {purpose === 'start' && <><p className="work-dialog-copy">只调整今天，明天仍会使用你的默认计薪方式。</p><div className="work-quick-actions"><button type="button" className="work-now-button" onClick={()=>onStart(nowTime)}><Clock3 size={16}/><span><b>从现在开始</b><small>{nowTime}</small></span></button><button type="button" onClick={()=>onStart(plannedStart)}><span><b>按计划时间</b><small>{plannedStart}</small></span></button></div><div className="work-dialog-divider"><span>或补记实际开始时间</span></div></>}
-      <div className="work-time-fields"><label><span>开始时间</span><input ref={startInputRef} required type="time" max={nowTime} value={startTime} onChange={event=>{setStartTime(event.target.value);setError('')}}/></label>{purpose === 'adjust' && <label><span>结束时间 <small>留空则继续计薪</small></span><input type="time" max={nowTime} value={endTime} onChange={event=>{setEndTime(event.target.value);setError('')}}/></label>}</div>
+      <div className="work-time-fields"><label><span>开始时间</span><input required type="time" max={nowTime} value={startTime} onChange={event=>{setStartTime(event.target.value);setError('')}}/></label>{purpose === 'adjust' && <label><span>结束时间 <small>留空则继续计薪</small></span><input type="time" max={nowTime} value={endTime} onChange={event=>{setEndTime(event.target.value);setError('')}}/></label>}</div>
       {error && <p className="work-dialog-error" role="alert">{error}</p>}
       <div className="work-dialog-actions"><button type="button" className="work-cancel-button" onClick={onCancel}>取消</button><button type="submit" className="work-confirm-button">{purpose === 'start' ? '按这个时间开始' : '保存时间'}</button></div>
     </form>
-  </div>
+  </div>, document.body)
 }

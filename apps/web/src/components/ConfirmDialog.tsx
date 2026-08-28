@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import './ConfirmDialog.css'
 
 interface ConfirmDialogProps {
@@ -34,17 +35,20 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   useEffect(() => {
     if (!open) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     cancelButtonRef.current?.focus()
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
       previousFocus?.focus()
     }
   }, [open, onCancel])
 
   if (!rendered) return null
-  return <div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>
+  return createPortal(<div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>
     <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby={message ? 'confirm-dialog-message' : undefined}>
       <p className="eyebrow">JUST CHECKING</p>
       <h2 id="confirm-dialog-title">{title}</h2>
@@ -54,5 +58,5 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
         <button type="button" className="dialog-confirm" onClick={onConfirm}>{confirmLabel}</button>
       </div>
     </div>
-  </div>
+  </div>, document.body)
 }
