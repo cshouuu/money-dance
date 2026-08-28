@@ -1,7 +1,8 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
-import type { LedgerDirection, LedgerEntry, LedgerKind } from '../types'
-import { toLocalDateTime } from './form'
+import type { DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
+import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
+import { getFlexibleWorkedSeconds, loadWorkRecords } from './work'
 
 export type SummaryDimension = 'day' | 'month' | 'year'
 
@@ -82,21 +83,29 @@ function getSalaryEffectiveDate(profile: SalaryProfile, now: Date): Date {
   return Number.isNaN(effectiveDate.getTime()) ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : effectiveDate
 }
 
-function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date): SummaryEntry[] {
+function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[]): SummaryEntry[] {
   const rates = calculateRates(profile)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
   const effectiveDate = getSalaryEffectiveDate(profile, now)
   const entries: SummaryEntry[] = []
   const rangeStart = start > effectiveDate ? start : effectiveDate
+  const workRecordByDate = new Map(workRecords.map(record => [record.date, record]))
 
   for (const cursor = new Date(rangeStart); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
     const day = new Date(cursor)
     day.setHours(0, 0, 0, 0)
     if (day > today) break
-    if (!isConfiguredWorkday(day, profile.workDaysPerWeek)) continue
-
-    const amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
+    const date = toLocalDateValue(day)
+    const workRecord = workRecordByDate.get(date)
+    const workMode = workRecord?.mode ?? profile.defaultWorkMode
+    let amount = 0
+    if (workMode === 'flexible') {
+      if (workRecord) amount = getFlexibleWorkedSeconds(workRecord, now, rates.paidSecondsPerDay) * rates.second
+    } else {
+      if (!workRecord && !isConfiguredWorkday(day, profile.workDaysPerWeek)) continue
+      amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
+    }
     if (amount <= 0) continue
     const id = `salary-${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`
     entries.push({
@@ -126,10 +135,10 @@ function isInRange(value: string, start: Date, end: Date): boolean {
   return !Number.isNaN(occurredAt.getTime()) && occurredAt >= start && occurredAt < end
 }
 
-export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date()): SummaryResult {
+export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords()): SummaryResult {
   const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId)
   const replacedSalaryIds = new Set(overrides.map(entry => entry.replacesId))
-  const salaryEntries = salarySummaryEntries(profile, start, end, now).filter(entry => !replacedSalaryIds.has(entry.id))
+  const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords).filter(entry => !replacedSalaryIds.has(entry.id))
   const storedEntries: SummaryEntry[] = ledger
     .filter(entry => !entry.deleted && isInRange(entry.occurredAt, start, end))
     .map(entry => ({

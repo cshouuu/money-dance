@@ -18,4 +18,5 @@ export const keys = {
   activeSlacking: 'salary-flow.active-slacking.v1',
   assets: 'salary-flow.assets.v1',
   ledger: 'salary-flow.ledger.v1',
+  workRecords: 'salary-flow.work-records.v1',
 }

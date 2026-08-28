@@ -16,6 +16,16 @@ export function toLocalDateTime(value: string): Date {
   return new Date(year, month - 1, day, 12, 0, 0, 0)
 }
 
+export function localDateWithTime(date: string, time: string): Date {
+  const [year, month, day] = date.split('-').map(Number)
+  const [hours, minutes] = time.split(':').map(Number)
+  return new Date(year, month - 1, day, hours, minutes, 0, 0)
+}
+
+export function toLocalTimeValue(date = new Date()): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
 export function salaryEffectiveDateForMode(mode: 'none' | 'month' | 'year', now = new Date()): string {
   if (mode === 'year') return `${now.getFullYear()}-01-01`
   if (mode === 'month') return `${toLocalMonthValue(now)}-01`

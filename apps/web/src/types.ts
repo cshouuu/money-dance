@@ -14,6 +14,22 @@ export interface SlackingSession {
   earnedAmount: number
 }
 
+export type DailyWorkStatus = 'ready' | 'working' | 'paused' | 'ended'
+
+export interface WorkSession {
+  id: string
+  startTime: string
+  endTime?: string
+}
+
+export interface DailyWorkRecord {
+  date: string
+  mode: 'scheduled' | 'flexible'
+  status: DailyWorkStatus
+  sessions: WorkSession[]
+  updatedAt: string
+}
+
 export interface OwnedItem {
   id: string
   name: string
