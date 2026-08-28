@@ -11,6 +11,17 @@ export function toLocalMonthValue(date = new Date()): string {
   return toLocalDateValue(date).slice(0, 7)
 }
 
+export function toLocalDateTime(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day, 12, 0, 0, 0)
+}
+
+export function salaryEffectiveDateForMode(mode: 'none' | 'month' | 'year', now = new Date()): string {
+  if (mode === 'year') return `${now.getFullYear()}-01-01`
+  if (mode === 'month') return `${toLocalMonthValue(now)}-01`
+  return toLocalDateValue(now)
+}
+
 export function normalizeDecimalInput(value: string, decimalPlaces = 2): string {
   if (!value) return ''
 

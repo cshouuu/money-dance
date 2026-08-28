@@ -6,7 +6,7 @@ import './Shell.css'
 const items = [
   ['/', Coins, '今日', true],
   ['/convert', Clock3, '换算', true],
-  ['/summary', BarChart3, '汇算', true],
+  ['/summary', BarChart3, '账本', true],
   ['/accidents', CircleDollarSign, '意外', false],
   ['/slacking', Fish, '摸鱼', false],
   ['/assets', Boxes, '物品', false],
