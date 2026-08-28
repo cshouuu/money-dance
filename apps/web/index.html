@@ -12,9 +12,63 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/money-dance-icon.svg" type="image/svg+xml" />
     <title>Money Dance · 薪流</title>
+    <style>
+      #boot-recovery[hidden]{display:none}
+      #boot-recovery{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:#f5f2ea;color:#1d241c;font-family:Inter,'Noto Sans SC',system-ui,sans-serif}
+      #boot-recovery>div{width:min(420px,100%);padding:26px;border:1px solid #dedbd1;border-radius:22px;background:#fcfaf5;box-shadow:0 18px 50px rgba(32,43,32,.12)}
+      #boot-recovery p{margin:0;color:#73796f;font-size:13px;line-height:1.7}
+      #boot-recovery strong{display:block;margin-bottom:10px;font-size:20px}
+      #boot-recovery button{width:100%;height:46px;margin-top:20px;border:0;border-radius:12px;background:#1e281f;color:#f8f6eb;font:600 13px inherit}
+      #boot-recovery button:disabled{opacity:.6}
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-recovery" role="alert" hidden>
+      <div>
+        <strong>Money Dance 没有正常启动</strong>
+        <p>可能是桌面版缓存没有更新完整。修复只会清理应用缓存，不会删除你的工资设置和历史记录。</p>
+        <button id="boot-recovery-retry" type="button">修复缓存并重新打开</button>
+      </div>
+    </div>
+    <script>
+      (() => {
+        window.__MONEY_DANCE_BOOTED__ = false
+        const recovery = document.getElementById('boot-recovery')
+        const retry = document.getElementById('boot-recovery-retry')
+        let timer = window.setTimeout(showRecovery, 10000)
+
+        function showRecovery() {
+          if (!window.__MONEY_DANCE_BOOTED__) recovery.hidden = false
+        }
+
+        window.addEventListener('money-dance:booted', () => {
+          window.clearTimeout(timer)
+          recovery.hidden = true
+        }, { once: true })
+        window.addEventListener('error', showRecovery, true)
+        window.addEventListener('unhandledrejection', showRecovery)
+
+        retry.addEventListener('click', async () => {
+          retry.disabled = true
+          retry.textContent = '正在修复…'
+          try {
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations()
+              await Promise.all(registrations.map(registration => registration.unregister()))
+            }
+            if ('caches' in window) {
+              const cacheNames = await caches.keys()
+              await Promise.all(cacheNames
+                .filter(name => name.startsWith('money-dance-'))
+                .map(name => caches.delete(name)))
+            }
+          } finally {
+            window.location.reload()
+          }
+        })
+      })()
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

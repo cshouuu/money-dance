@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/verify-pwa-build.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "preview": "vite preview"
