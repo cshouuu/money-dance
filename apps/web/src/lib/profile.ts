@@ -9,8 +9,9 @@ export function loadProfile(): SalaryProfile {
     ...profile,
     salaryHistoryMode: profile.salaryHistoryMode ?? 'none',
     salaryEffectiveDate: profile.salaryEffectiveDate || toLocalDateValue(),
+    defaultWorkMode: profile.defaultWorkMode ?? 'scheduled',
   }
-  if (!stored.salaryHistoryMode || !stored.salaryEffectiveDate) saveJSON(keys.profile, migrated)
+  if (!stored.salaryHistoryMode || !stored.salaryEffectiveDate || !stored.defaultWorkMode) saveJSON(keys.profile, migrated)
   return migrated
 }
 

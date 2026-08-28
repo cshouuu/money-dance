@@ -1,5 +1,6 @@
 export type SalaryType = 'monthly' | 'annual' | 'daily' | 'hourly'
 export type SalaryHistoryMode = 'none' | 'month' | 'year'
+export type WorkMode = 'scheduled' | 'flexible'
 
 export interface SalaryProfile {
   salary: number
@@ -16,6 +17,7 @@ export interface SalaryProfile {
   currency: string
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
+  defaultWorkMode: WorkMode
 }
 
 export interface SalaryRates {
@@ -41,6 +43,7 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   currency: 'CNY',
   salaryHistoryMode: 'none',
   salaryEffectiveDate: '',
+  defaultWorkMode: 'scheduled',
 }
 
 const DAY = 24 * 60 * 60

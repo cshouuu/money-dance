@@ -3,12 +3,13 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo } from 'react'
 import { getSummaryRange, summarizeLedger, type SummaryDimension } from '../lib/ledger'
 import { toLocalDateValue, toLocalMonthValue } from '../lib/form'
-import type { LedgerEntry } from '../types'
+import type { DailyWorkRecord, LedgerEntry } from '../types'
 import './LedgerCalendar.css'
 
 interface LedgerCalendarProps {
   profile: SalaryProfile
   ledger: LedgerEntry[]
+  workRecords: DailyWorkRecord[]
   dimension: SummaryDimension
   anchor: string
   onChange: (dimension: SummaryDimension, anchor: string) => void
@@ -55,7 +56,7 @@ function anchorForDimension(next: SummaryDimension, current: SummaryDimension, a
   return year === now.getFullYear() ? toLocalDateValue(now) : `${year}-01-01`
 }
 
-export function LedgerCalendar({ profile, ledger, dimension, anchor, onChange }: LedgerCalendarProps) {
+export function LedgerCalendar({ profile, ledger, workRecords, dimension, anchor, onChange }: LedgerCalendarProps) {
   const now = new Date()
   const today = toLocalDateValue(now)
   const selectedMonth = dimension === 'day' ? anchor.slice(0, 7) : dimension === 'month' ? anchor : `${anchor}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -63,7 +64,7 @@ export function LedgerCalendar({ profile, ledger, dimension, anchor, onChange }:
 
   const cellNet = (cellDimension: SummaryDimension, cellAnchor: string) => {
     const { start, end } = getSummaryRange(cellDimension, cellAnchor)
-    return summarizeLedger(profile, ledger, start, end, now).net
+    return summarizeLedger(profile, ledger, start, end, now, workRecords).net
   }
 
   const dayCells = useMemo<(CalendarCell | null)[]>(() => {
@@ -77,7 +78,7 @@ export function LedgerCalendar({ profile, ledger, dimension, anchor, onChange }:
       cells.push({ key: dateAnchor, label: String(day), anchor: dateAnchor, net: cellNet('day', dateAnchor), current: dateAnchor === today })
     }
     return cells
-  }, [dimension, selectedMonth, profile, ledger, today])
+  }, [dimension, selectedMonth, profile, ledger, workRecords, today])
 
   const monthCells = useMemo<CalendarCell[]>(() => {
     if (dimension !== 'month') return []
@@ -85,7 +86,7 @@ export function LedgerCalendar({ profile, ledger, dimension, anchor, onChange }:
       const monthAnchor = `${selectedYear}-${String(index + 1).padStart(2, '0')}`
       return { key: monthAnchor, label: `${index + 1}月`, anchor: monthAnchor, net: cellNet('month', monthAnchor), current: monthAnchor === toLocalMonthValue(now) }
     })
-  }, [dimension, selectedYear, profile, ledger])
+  }, [dimension, selectedYear, profile, ledger, workRecords])
 
   const yearCells = useMemo<CalendarCell[]>(() => {
     if (dimension !== 'year') return []
@@ -95,7 +96,7 @@ export function LedgerCalendar({ profile, ledger, dimension, anchor, onChange }:
       const yearAnchor = String(value)
       return { key: yearAnchor, label: value === now.getFullYear() ? '本年' : `${value}年`, anchor: yearAnchor, net: cellNet('year', yearAnchor), current: value === now.getFullYear() }
     })
-  }, [dimension, selectedYear, profile, ledger])
+  }, [dimension, selectedYear, profile, ledger, workRecords])
 
   const navigate = (direction: -1 | 1) => {
     if (dimension === 'day') {
