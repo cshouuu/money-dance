@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import './ConfirmDialog.css'
+import { useModalViewport } from './useModalViewport'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -16,6 +17,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  useModalViewport(open || rendered)
 
   useEffect(() => {
     let timer: number | undefined
@@ -35,14 +37,11 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   useEffect(() => {
     if (!open) return
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     cancelButtonRef.current?.focus()
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
       previousFocus?.focus()
     }
   }, [open, onCancel])

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { localDateWithTime, toLocalTimeValue } from '../lib/form'
 import type { DailyWorkRecord } from '../types'
 import './WorkTimeDialog.css'
+import { useModalViewport } from './useModalViewport'
 
 interface WorkTimeDialogProps {
   open: boolean
@@ -28,21 +29,19 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, onSt
   const [error, setError] = useState('')
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const nowTime = toLocalTimeValue()
+  useModalViewport(open)
 
   useEffect(() => {
     if (!open) return
     setStartTime(recordTime(record, 'start') || nowTime)
     setEndTime(recordTime(record, 'end'))
     setError('')
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     const timer = window.setTimeout(() => closeButtonRef.current?.focus(), 0)
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.clearTimeout(timer)
       window.removeEventListener('keydown', onKeyDown)
-      document.body.style.overflow = previousOverflow
     }
   }, [open, purpose, record, nowTime, onCancel])
 
