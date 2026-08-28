@@ -20,6 +20,7 @@ export async function onRequestGet(context) {
 
   let key
   let cacheControl
+  let downloadFileName = null
 
   if (pathname === '/download/latest.json') {
     key = 'latest.json'
@@ -29,6 +30,7 @@ export async function onRequestGet(context) {
     if (!APK_NAME.test(fileName)) return new Response('Not found', { status: 404 })
     key = `releases/${fileName}`
     cacheControl = 'public, max-age=31536000, immutable'
+    downloadFileName = fileName
   } else {
     return new Response('Not found', { status: 404 })
   }
@@ -44,6 +46,11 @@ export async function onRequestGet(context) {
   headers.set('accept-ranges', 'bytes')
   headers.set('cache-control', cacheControl)
   headers.set('x-content-type-options', 'nosniff')
+
+  if (downloadFileName) {
+    headers.set('content-type', 'application/vnd.android.package-archive')
+    headers.set('content-disposition', `attachment; filename="${downloadFileName}"`)
+  }
 
   let status = 200
   if (object.range) {
