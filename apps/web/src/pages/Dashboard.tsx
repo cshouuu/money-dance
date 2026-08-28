@@ -22,7 +22,7 @@ const statusLabels = {
 } as const
 
 export function Dashboard() {
-  const now = useNow(100)
+  const now = useNow(1000)
   const [profile] = useState(() => loadProfile())
   const [workRecords, setWorkRecords] = useState<DailyWorkRecord[]>(() => loadWorkRecords())
   const [slackingSessions] = useState<SlackingSession[]>(() => loadJSON<SlackingSession[]>(keys.sessions, []))
