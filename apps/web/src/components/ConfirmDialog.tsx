@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import './ConfirmDialog.css'
+import { useModalViewport } from './useModalViewport'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -15,6 +17,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  useModalViewport(open || rendered)
 
   useEffect(() => {
     let timer: number | undefined
@@ -44,7 +47,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
   }, [open, onCancel])
 
   if (!rendered) return null
-  return <div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>
+  return createPortal(<div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>
     <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby={message ? 'confirm-dialog-message' : undefined}>
       <p className="eyebrow">JUST CHECKING</p>
       <h2 id="confirm-dialog-title">{title}</h2>
@@ -54,5 +57,5 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
         <button type="button" className="dialog-confirm" onClick={onConfirm}>{confirmLabel}</button>
       </div>
     </div>
-  </div>
+  </div>, document.body)
 }
