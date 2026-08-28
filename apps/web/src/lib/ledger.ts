@@ -1,6 +1,7 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
+import type { LedgerDirection, LedgerEntry, LedgerKind } from '../types'
+import { toLocalDateTime } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
-import type { LedgerEntry, LedgerDirection } from '../types'
 
 export type SummaryDimension = 'day' | 'month' | 'year'
 
@@ -11,6 +12,10 @@ export interface SummaryEntry {
   source: string
   category: string
   occurredAt: string
+  kind: LedgerKind | 'salary'
+  generated?: boolean
+  ledgerEntryId?: string
+  replacesId?: string
 }
 
 export interface SummaryResult {
@@ -35,8 +40,7 @@ export function appendLedgerEntry(entry: LedgerEntry): LedgerEntry[] {
 }
 
 export function localDateAtNoon(value: string): Date {
-  const [year, month, day] = value.split('-').map(Number)
-  return new Date(year, month - 1, day, 12, 0, 0, 0)
+  return toLocalDateTime(value)
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {
@@ -67,13 +71,26 @@ export function getSummaryRange(dimension: SummaryDimension, anchor: string): { 
   return { start: new Date(year, 0, 1), end: new Date(year + 1, 0, 1) }
 }
 
+function getSalaryEffectiveDate(profile: SalaryProfile, now: Date): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.salaryEffectiveDate)) {
+    const today = new Date(now)
+    today.setHours(0, 0, 0, 0)
+    return today
+  }
+  const effectiveDate = localDateAtNoon(profile.salaryEffectiveDate)
+  effectiveDate.setHours(0, 0, 0, 0)
+  return Number.isNaN(effectiveDate.getTime()) ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : effectiveDate
+}
+
 function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date): SummaryEntry[] {
   const rates = calculateRates(profile)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
+  const effectiveDate = getSalaryEffectiveDate(profile, now)
   const entries: SummaryEntry[] = []
+  const rangeStart = start > effectiveDate ? start : effectiveDate
 
-  for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
+  for (const cursor = new Date(rangeStart); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
     const day = new Date(cursor)
     day.setHours(0, 0, 0, 0)
     if (day > today) break
@@ -81,34 +98,50 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
 
     const amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
     if (amount <= 0) continue
-    const occurredAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0).toISOString()
+    const id = `salary-${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`
     entries.push({
-      id: `salary-${day.getFullYear()}-${day.getMonth() + 1}-${day.getDate()}`,
+      id,
       direction: 'income',
       amount,
       source: '工资收入',
       category: '薪资',
-      occurredAt,
+      occurredAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, 0).toISOString(),
+      kind: 'salary',
+      generated: true,
     })
   }
 
   return entries
 }
 
+function categoryFor(entry: LedgerEntry): string {
+  if (entry.kind === 'purchase') return '购买'
+  if (entry.kind === 'manual') return '手工录入'
+  if (entry.kind === 'salary_override') return '薪资调整'
+  return entry.direction === 'income' ? '意外收入' : '意外花费'
+}
+
+function isInRange(value: string, start: Date, end: Date): boolean {
+  const occurredAt = new Date(value)
+  return !Number.isNaN(occurredAt.getTime()) && occurredAt >= start && occurredAt < end
+}
+
 export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date()): SummaryResult {
-  const salaryEntries = salarySummaryEntries(profile, start, end, now)
+  const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId)
+  const replacedSalaryIds = new Set(overrides.map(entry => entry.replacesId))
+  const salaryEntries = salarySummaryEntries(profile, start, end, now).filter(entry => !replacedSalaryIds.has(entry.id))
   const storedEntries: SummaryEntry[] = ledger
-    .filter(entry => {
-      const occurredAt = new Date(entry.occurredAt)
-      return occurredAt >= start && occurredAt < end
-    })
+    .filter(entry => !entry.deleted && isInRange(entry.occurredAt, start, end))
     .map(entry => ({
-      id: entry.id,
+      id: entry.kind === 'salary_override' && entry.replacesId ? entry.replacesId : entry.id,
       direction: entry.direction,
       amount: entry.amount,
       source: entry.source,
-      category: entry.kind === 'purchase' ? '购买' : entry.direction === 'income' ? '意外收入' : '意外花费',
+      category: categoryFor(entry),
       occurredAt: entry.occurredAt,
+      kind: entry.kind,
+      ledgerEntryId: entry.id,
+      replacesId: entry.replacesId,
     }))
 
   const entries = [...salaryEntries, ...storedEntries].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())

@@ -24,7 +24,7 @@ export interface OwnedItem {
 }
 
 export type LedgerDirection = 'income' | 'expense'
-export type LedgerKind = 'purchase' | 'accident'
+export type LedgerKind = 'purchase' | 'accident' | 'manual' | 'salary_override'
 
 export interface LedgerEntry {
   id: string
@@ -35,4 +35,6 @@ export interface LedgerEntry {
   occurredAt: string
   linkedId?: string
   note?: string
+  replacesId?: string
+  deleted?: boolean
 }

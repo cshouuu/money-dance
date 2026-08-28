@@ -1,8 +1,8 @@
-import { calculateRates, type SalaryProfile, type SalaryRates, type SalaryType } from '@salary-flow/core'
+import { calculateRates, type SalaryHistoryMode, type SalaryProfile, type SalaryRates, type SalaryType } from '@salary-flow/core'
 import { CheckCircle2 } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { AppUpdateCard } from '../components/AppUpdateCard'
-import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
+import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, salaryEffectiveDateForMode } from '../lib/form'
 import { loadProfile, saveProfile } from '../lib/profile'
 import './Settings.css'
 
@@ -56,14 +56,16 @@ export function Settings() {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!event.currentTarget.reportValidity() || !draftProfile || !rates) return
-    saveProfile(draftProfile)
-    setProfile(draftProfile)
+    const savedProfile = { ...draftProfile, salaryEffectiveDate: salaryEffectiveDateForMode(draftProfile.salaryHistoryMode) }
+    saveProfile(savedProfile)
+    setProfile(savedProfile)
     setSaved(true)
   }
 
   const rateLabelPrefix = profile.includeLivingCost ? '可支配' : ''
   return <section className="page"><header className="page-header"><div><p className="eyebrow">SALARY PROFILE</p><h1>先定义，你的一小时值多少钱。</h1><p>这里输入的是“用于时间价值计算的工资”，MVP 不负责个税、社保或不同国家税制。</p></div></header>
     <form className="settings-card" onSubmit={submit}><div className="settings-section"><h3>工资</h3><div className="form-grid"><label><span>工资金额</span><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} onKeyDown={preventInvalidNumberKey} onChange={event=>{setSaved(false);setSalaryInput(normalizeDecimalInput(event.target.value))}}/></label><label><span>工资周期</span><select required value={profile.salaryType} onChange={event=>set('salaryType',event.target.value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></select></label><label><span>月平均工作日</span><input required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onChange={event=>{setSaved(false);setMonthlyWorkDaysInput(normalizeDecimalInput(event.target.value))}}/></label><label><span>每周工作日</span><input required type="number" inputMode="numeric" min="1" max="7" step="1" value={workDaysPerWeekInput} onKeyDown={preventInvalidNumberKey} onChange={event=>{setSaved(false);setWorkDaysPerWeekInput(normalizeDecimalInput(event.target.value,0))}}/></label></div><label className="toggle-row"><input type="checkbox" checked={profile.includeLivingCost} onChange={event=>set('includeLivingCost',event.target.checked)}/><span><b>计算生活成本</b><small>开启后，会先扣除月生活成本，再计算你的可支配日薪、时薪、分钟薪资和秒薪</small></span></label>{profile.includeLivingCost&&<div className="form-grid living-cost-field"><label><span>月生活成本</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={monthlyLivingCostInput} onKeyDown={preventInvalidNumberKey} onChange={event=>{setSaved(false);setMonthlyLivingCostInput(normalizeDecimalInput(event.target.value))}} placeholder="例如：5000"/></div></label></div>}</div>
+      <div className="settings-section salary-history-section"><h3>历史账本</h3><label className="toggle-row salary-history-toggle"><input type="checkbox" checked={profile.salaryHistoryMode!=='none'} onChange={event=>set('salaryHistoryMode',event.target.checked?'month':'none')}/><span><b>将这份薪资应用至历史</b><small>不开启时，账本会从今天开始按这份薪资计算，过去日期不补算工资</small></span></label>{profile.salaryHistoryMode!=='none'&&<fieldset className="history-options"><legend>应用范围</legend>{(['month','year'] as SalaryHistoryMode[]).map(mode=><label key={mode}><input type="radio" name="salary-history-mode" checked={profile.salaryHistoryMode===mode} onChange={()=>set('salaryHistoryMode',mode)}/><span>{mode==='month'?'本月':'本年'}</span></label>)}</fieldset>}</div>
       <div className="settings-section"><h3>工作时间</h3><div className="form-grid"><label><span>上班时间</span><input required type="time" value={profile.workStartTime} onChange={event=>set('workStartTime',event.target.value)}/></label><label><span>下班时间</span><input required type="time" value={profile.workEndTime} onChange={event=>set('workEndTime',event.target.value)}/></label><label><span>午休开始</span><input required type="time" value={profile.breakStartTime} onChange={event=>set('breakStartTime',event.target.value)}/></label><label><span>午休结束</span><input required type="time" value={profile.breakEndTime} onChange={event=>set('breakEndTime',event.target.value)}/></label></div><label className="toggle-row"><input type="checkbox" checked={profile.paidBreak} onChange={event=>set('paidBreak',event.target.checked)}/><span><b>午休计薪</b><small>开启后，午休时间也会计入今日实时收入</small></span></label></div>
       {rates&&<div className="rate-preview"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>{rateLabelPrefix}时薪</small><b>¥{rates.hourly.toFixed(2)}</b></div><div><small>{rateLabelPrefix}分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>{rateLabelPrefix}每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>}
       {calculationError&&<p className="settings-warning" role="alert">{calculationError}</p>}
