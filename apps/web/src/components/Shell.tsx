@@ -1,4 +1,4 @@
-import { BarChart3, Boxes, BriefcaseBusiness, ChevronUp, CircleDollarSign, Clock3, Coins, Fish, Settings2 } from 'lucide-react'
+import { BarChart3, Boxes, BriefcaseBusiness, CalendarCheck2, ChevronUp, CircleDollarSign, Clock3, Coins, Fish, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState, type TouchEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import './Shell.css'
@@ -10,6 +10,7 @@ const items = [
   ['/accidents', CircleDollarSign, '意外', false],
   ['/slacking', Fish, '摸鱼', false],
   ['/overtime', BriefcaseBusiness, '加班', false],
+  ['/attendance', CalendarCheck2, '薪苦', false],
   ['/assets', Boxes, '物品', false],
   ['/settings', Settings2, '我的', true],
 ] as const

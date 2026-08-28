@@ -21,4 +21,5 @@ export const keys = {
   assets: 'salary-flow.assets.v1',
   ledger: 'salary-flow.ledger.v1',
   workRecords: 'salary-flow.work-records.v1',
+  attendanceRecords: 'salary-flow.attendance-records.v1',
 }

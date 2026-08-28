@@ -49,6 +49,20 @@ export interface DailyWorkRecord {
   updatedAt: string
 }
 
+export type AttendanceStatus = 'normal' | 'leave'
+export type LeaveType = 'personal' | 'sick' | 'annual' | 'compensatory' | 'marriage' | 'maternity' | 'prenatal' | 'paternity' | 'parental' | 'bereavement' | 'remote'
+export type AttendancePayMode = 'unpaid' | 'multiplier' | 'fixed'
+
+export interface AttendanceRecord {
+  date: string
+  status: AttendanceStatus
+  leaveType?: LeaveType
+  payMode?: AttendancePayMode
+  multiplier?: number
+  fixedAmount?: number
+  updatedAt: string
+}
+
 export interface OwnedItem {
   id: string
   name: string
