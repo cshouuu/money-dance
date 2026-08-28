@@ -125,6 +125,7 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
 
 function categoryFor(entry: LedgerEntry): string {
   if (entry.kind === 'purchase') return '购买'
+  if (entry.kind === 'overtime') return '加班收入'
   if (entry.kind === 'manual') return '手工录入'
   if (entry.kind === 'salary_override') return '薪资调整'
   return entry.direction === 'income' ? '意外收入' : '意外花费'

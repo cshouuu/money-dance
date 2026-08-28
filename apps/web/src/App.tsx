@@ -8,5 +8,6 @@ import { Dashboard } from './pages/Dashboard'
 import { Settings } from './pages/Settings'
 import { Slacking } from './pages/Slacking'
 import { Summary } from './pages/Summary'
+import { Overtime } from './pages/Overtime'
 
-export default function App(){return <BrowserRouter><AppUpdatePrompt/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/assets" element={<Assets/>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}
+export default function App(){return <BrowserRouter><AppUpdatePrompt/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/overtime" element={<Overtime/>}/><Route path="/assets" element={<Assets/>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}

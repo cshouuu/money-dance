@@ -1,0 +1,2 @@
+.dashboard-metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.overtime-metric{background:#eee9dc}.overtime-metric .metric-icon{background:#dfe4c6}.overtime-metric>a{display:block;margin-top:14px;color:#4e624a;font-size:11px;font-weight:600;text-decoration:none}
+@media(max-width:900px){.dashboard-metric-grid{grid-template-columns:1fr}}

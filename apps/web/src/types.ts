@@ -14,6 +14,25 @@ export interface SlackingSession {
   earnedAmount: number
 }
 
+export type OvertimePayMode = 'unpaid' | 'multiplier' | 'fixed'
+
+export interface OvertimeStartOption {
+  payMode: OvertimePayMode
+  multiplier?: number
+  fixedAmount?: number
+}
+
+export interface ActiveOvertime extends OvertimeStartOption {
+  startTime: string
+}
+
+export interface OvertimeSession extends ActiveOvertime {
+  id: string
+  endTime: string
+  durationSeconds: number
+  earnedAmount: number
+}
+
 export type DailyWorkStatus = 'ready' | 'working' | 'paused' | 'ended'
 
 export interface WorkSession {
@@ -40,7 +59,7 @@ export interface OwnedItem {
 }
 
 export type LedgerDirection = 'income' | 'expense'
-export type LedgerKind = 'purchase' | 'accident' | 'manual' | 'salary_override'
+export type LedgerKind = 'purchase' | 'accident' | 'manual' | 'salary_override' | 'overtime'
 
 export interface LedgerEntry {
   id: string
