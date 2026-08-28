@@ -2,6 +2,7 @@ import { calculateRates, formatDuration } from '@salary-flow/core'
 import { BadgeDollarSign, BriefcaseBusiness, Play, Square, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { FinishToast } from '../components/FinishToast'
 import { OvertimeStartDialog } from '../components/OvertimeStartDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { loadLedger, saveLedger } from '../lib/ledger'
@@ -35,6 +36,7 @@ export function Overtime() {
   const [sessions, setSessions] = useState<OvertimeSession[]>(() => loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
   const [startDialogOpen, setStartDialogOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
+  const [finishNotice, setFinishNotice] = useState<{ id: string; message: string } | null>(null)
   const [page, setPage] = useState(1)
 
   const liveSeconds = active ? Math.max(0, (now.getTime() - new Date(active.startTime).getTime()) / 1000) : 0
@@ -47,6 +49,7 @@ export function Overtime() {
   const openStartDialog = useCallback(() => setStartDialogOpen(true), [])
   const closeStartDialog = useCallback(() => setStartDialogOpen(false), [])
   const cancelDelete = useCallback(() => setPendingDelete(null), [])
+  const closeFinishNotice = useCallback(() => setFinishNotice(null), [])
   const start = useCallback((option: OvertimeStartOption) => {
     const next: ActiveOvertime = { ...option, startTime: new Date().toISOString() }
     setActive(next)
@@ -75,6 +78,7 @@ export function Overtime() {
     setActive(null)
     saveJSON(keys.activeOvertime, null)
     setPage(1)
+    setFinishNotice({ id: session.id, message: `终于结束了，这次加班赚了¥${session.earnedAmount.toFixed(2)}，赶紧去犒劳一下自己吧` })
   }, [active, rates.second, sessions])
 
   const confirmDelete = useCallback(() => {
@@ -108,5 +112,6 @@ export function Overtime() {
 
     <OvertimeStartDialog open={startDialogOpen} onStart={start} onCancel={closeStartDialog}/>
     <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.type === 'all' ? '这些加班证据也要全部删掉吗？' : '真的要删掉这次加班记录吗？'} message={pendingDelete?.type === 'session' ? `${formatStart(pendingDelete.session.startTime)} · ${overtimePayLabel(pendingDelete.session)} · ¥${pendingDelete.session.earnedAmount.toFixed(2)}` : undefined} confirmLabel="删掉，当没加过" cancelLabel="留着，都是证据" onConfirm={confirmDelete} onCancel={cancelDelete}/>
+    {finishNotice && <FinishToast key={finishNotice.id} message={finishNotice.message} onClose={closeFinishNotice}/>}
   </section>
 }
