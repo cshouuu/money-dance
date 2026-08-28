@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './ConfirmDialog.css'
 
 interface ConfirmDialogProps {
@@ -14,6 +14,7 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmDialogProps) {
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let timer: number | undefined
@@ -32,19 +33,24 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
 
   useEffect(() => {
     if (!open) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    cancelButtonRef.current?.focus()
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
   }, [open, onCancel])
 
   if (!rendered) return null
   return <div className={`dialog-backdrop${closing ? ' closing' : ''}`} role="presentation" onMouseDown={event => { if (event.currentTarget === event.target && open) onCancel() }}>
-    <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+    <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby={message ? 'confirm-dialog-message' : undefined}>
       <p className="eyebrow">JUST CHECKING</p>
       <h2 id="confirm-dialog-title">{title}</h2>
-      {message && <p>{message}</p>}
+      {message && <p id="confirm-dialog-message">{message}</p>}
       <div className="confirm-dialog-actions">
-        <button type="button" className="dialog-cancel" onClick={onCancel}>{cancelLabel}</button>
+        <button ref={cancelButtonRef} type="button" className="dialog-cancel" onClick={onCancel}>{cancelLabel}</button>
         <button type="button" className="dialog-confirm" onClick={onConfirm}>{confirmLabel}</button>
       </div>
     </div>
