@@ -76,3 +76,20 @@ export function createOvertimeLedgerEntries(session: OvertimeSession, createEntr
     linkedId: session.id,
   }]
 }
+
+export function migrateLegacyOvertimeLedgerDates(entries: LedgerEntry[], sessions: OvertimeSession[]): LedgerEntry[] {
+  const sessionsById = new Map(sessions.map(session => [session.id, session]))
+  let changed = false
+  const migrated = entries.map(entry => {
+    if (entry.kind !== 'overtime' || !entry.linkedId) return entry
+    const session = sessionsById.get(entry.linkedId)
+    if (!session) return entry
+    const isUntouchedLegacyEntry = entry.occurredAt === session.endTime
+      && entry.amount === session.earnedAmount
+      && entry.source === `加班收入 · ${overtimePayLabel(session)}`
+    if (!isUntouchedLegacyEntry || session.startTime === session.endTime) return entry
+    changed = true
+    return { ...entry, occurredAt: session.startTime }
+  })
+  return changed ? migrated : entries
+}
