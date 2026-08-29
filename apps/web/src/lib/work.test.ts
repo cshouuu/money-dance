@@ -41,6 +41,17 @@ describe('today workday rules', () => {
     expect(summary.earnedAmount).toBeGreaterThan(0)
   })
 
+  it('auto-calculates a big-week Saturday and rests on the following small-week Saturday', () => {
+    const alternatingProfile = {
+      ...profile,
+      workWeekMode: 'alternating' as const,
+      alternatingAnchorDate: '2026-08-24',
+      alternatingAnchorType: 'big' as const,
+    }
+    expect(summarizeTodayWork(alternatingProfile, [], saturday).dayType).toBe('work')
+    expect(summarizeTodayWork(alternatingProfile, [], new Date(2026, 8, 5, 10)).dayType).toBe('rest')
+  })
+
   it('allows a one-day scheduled override on Saturday', () => {
     const summary = summarizeTodayWork(profile, [scheduledRecord()], saturday)
     expect(summary.dayType).toBe('work')

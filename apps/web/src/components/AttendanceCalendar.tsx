@@ -1,6 +1,6 @@
 import type { SalaryProfile } from '@salary-flow/core'
 import { CalendarCheck2, ChevronLeft, ChevronRight } from 'lucide-react'
-import { isConfiguredWorkday, leaveTypeLabel } from '../lib/attendance'
+import { alternatingWeekTypeForDate, isConfiguredWorkday, leaveTypeLabel } from '../lib/attendance'
 import { toLocalDateTime, toLocalDateValue, toLocalMonthValue } from '../lib/form'
 import type { SummaryDimension } from '../lib/ledger'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
@@ -56,7 +56,14 @@ export function AttendanceCalendar({ profile, records, workRecords, dimension, a
     if (record?.status === 'normal') return { label: '正常', tone: 'normal', explicit: true }
     if (record?.status === 'leave') return { label: leaveTypeLabel(record.leaveType), tone: 'leave', explicit: true }
     const day = toLocalDateTime(date)
-    if (workedDates.has(date) || isConfiguredWorkday(day, profile.workDaysPerWeek)) return { label: '正常', tone: 'normal', explicit: false }
+    if (workedDates.has(date)) return { label: '正常', tone: 'normal', explicit: false }
+    if (profile.workWeekMode === 'alternating' && day.getDay() === 6) {
+      const weekType = alternatingWeekTypeForDate(day, profile)
+      return weekType === 'big'
+        ? { label: '大周', tone: 'normal', explicit: false }
+        : { label: '小周', tone: 'rest', explicit: false }
+    }
+    if (isConfiguredWorkday(day, profile)) return { label: '正常', tone: 'normal', explicit: false }
     return { label: '休息', tone: 'rest', explicit: false }
   }
 

@@ -1,6 +1,8 @@
 export type SalaryType = 'monthly' | 'annual' | 'daily' | 'hourly'
 export type SalaryHistoryMode = 'none' | 'month' | 'year'
 export type WorkMode = 'scheduled' | 'flexible'
+export type WorkWeekMode = 'fixed' | 'alternating'
+export type AlternatingWeekType = 'big' | 'small'
 
 export interface SalaryProfile {
   salary: number
@@ -14,6 +16,9 @@ export interface SalaryProfile {
   monthlyLivingCost: number
   monthlyWorkDays: number
   workDaysPerWeek: number
+  workWeekMode: WorkWeekMode
+  alternatingAnchorDate: string
+  alternatingAnchorType: AlternatingWeekType
   currency: string
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
@@ -40,6 +45,9 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   monthlyLivingCost: 0,
   monthlyWorkDays: 21.75,
   workDaysPerWeek: 5,
+  workWeekMode: 'fixed',
+  alternatingAnchorDate: '1970-01-05',
+  alternatingAnchorType: 'big',
   currency: 'CNY',
   salaryHistoryMode: 'none',
   salaryEffectiveDate: '',

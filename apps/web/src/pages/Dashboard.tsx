@@ -3,7 +3,7 @@ import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, 
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
-import { leaveTypeLabel, loadAttendanceRecords } from '../lib/attendance'
+import { alternatingWeekTypeForDate, leaveTypeLabel, loadAttendanceRecords } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { loadProfile } from '../lib/profile'
 import { calculateOvertimeEarnings } from '../lib/overtime'
@@ -62,7 +62,9 @@ export function Dashboard() {
       ? `${leaveLabel} · ${attendancePayLabel}`
       : work.mode === 'flexible'
         ? statusLabels[work.status]
-        : '固定作息 · 自动计薪'
+        : profile.workWeekMode === 'alternating'
+          ? `${alternatingWeekTypeForDate(now, profile) === 'big' ? '大周' : '小周'} · 自动计薪`
+          : '固定作息 · 自动计薪'
 
   const persistRecord = useCallback((record: DailyWorkRecord) => {
     setWorkRecords(current => {

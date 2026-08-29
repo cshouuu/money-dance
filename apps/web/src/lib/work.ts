@@ -68,7 +68,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
 
   const scheduledWorkday = record?.mode === 'scheduled'
     || attendance?.status === 'normal'
-    || isConfiguredWorkday(now, profile.workDaysPerWeek)
+    || isConfiguredWorkday(now, profile)
   if (mode === 'scheduled' && !scheduledWorkday) {
     return {
       mode,
