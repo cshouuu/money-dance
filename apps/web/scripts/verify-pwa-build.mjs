@@ -53,10 +53,32 @@ const releases = {
 }
 const downloadUrl = 'https://example.com/download/releases/money-dance-v0.2.20.apk'
 
+const browserDownload = await onRequestGet({
+  request: new Request(downloadUrl, {
+    headers: { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate' },
+  }),
+  env: { RELEASES: releases },
+})
+assert.equal(browserDownload.status, 200, 'browser navigation must return a download page')
+assert.match(browserDownload.headers.get('content-type') || '', /^text\/html/, 'browser download page must return HTML')
+const browserDownloadHtml = await browserDownload.text()
+assert.match(browserDownloadHtml, /\?raw=1/, 'browser download page must link to the raw APK')
+assert.match(browserDownloadHtml, /download="money-dance-v0\.2\.20\.apk"/, 'browser download page must use the download attribute')
+assert.equal(calls.length, 0, 'browser download page must not stream the APK before the user starts the download')
+
+const rawBrowserDownload = await onRequestGet({
+  request: new Request(`${downloadUrl}?raw=1`, {
+    headers: { 'sec-fetch-dest': 'document', 'sec-fetch-mode': 'navigate' },
+  }),
+  env: { RELEASES: releases },
+})
+assert.equal(rawBrowserDownload.status, 200, 'raw browser downloads must return the APK')
+assert.equal(rawBrowserDownload.headers.get('content-type'), 'application/vnd.android.package-archive')
+
 const fullDownload = await onRequestGet({ request: new Request(downloadUrl), env: { RELEASES: releases } })
 assert.equal(fullDownload.status, 200, 'normal APK downloads must return 200')
 assert.equal(fullDownload.headers.get('content-range'), null, 'normal downloads must not include Content-Range')
-assert.equal(calls[0].options, undefined, 'normal downloads must not send an empty range option to R2')
+assert.equal(calls[1].options, undefined, 'normal downloads must not send an empty range option to R2')
 
 const partialDownload = await onRequestGet({
   request: new Request(downloadUrl, { headers: { range: 'bytes=0-1' } }),
