@@ -10,50 +10,61 @@ function json(data, status = 200, cacheControl = 'no-store') {
   })
 }
 
-export async function onRequestGet(context) {
+function resolveDownload(pathname) {
+  if (pathname === '/download/latest.json') {
+    return { key: 'latest.json', cacheControl: 'no-store', downloadFileName: null }
+  }
+
+  if (pathname.startsWith('/download/releases/')) {
+    const fileName = decodeURIComponent(pathname.slice('/download/releases/'.length))
+    if (!APK_NAME.test(fileName)) return null
+    return {
+      key: `releases/${fileName}`,
+      cacheControl: 'public, max-age=31536000, immutable',
+      downloadFileName: fileName,
+    }
+  }
+
+  return null
+}
+
+async function handleRequest(context, headOnly) {
   const url = new URL(context.request.url)
   const pathname = url.pathname
 
   if (pathname === '/download/health') {
+    if (headOnly) {
+      return new Response(null, {
+        status: 200,
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+      })
+    }
     return json({ ok: true, source: 'cloudflare-pages-r2' }, 200, 'no-store')
   }
 
-  let key
-  let cacheControl
-  let downloadFileName = null
+  const download = resolveDownload(pathname)
+  if (!download) return new Response(headOnly ? null : 'Not found', { status: 404 })
 
-  if (pathname === '/download/latest.json') {
-    key = 'latest.json'
-    cacheControl = 'no-store'
-  } else if (pathname.startsWith('/download/releases/')) {
-    const fileName = decodeURIComponent(pathname.slice('/download/releases/'.length))
-    if (!APK_NAME.test(fileName)) return new Response('Not found', { status: 404 })
-    key = `releases/${fileName}`
-    cacheControl = 'public, max-age=31536000, immutable'
-    downloadFileName = fileName
-  } else {
-    return new Response('Not found', { status: 404 })
-  }
-
-  const object = await context.env.RELEASES.get(key, {
-    range: context.request.headers,
-  })
-  if (!object) return new Response('Not found', { status: 404 })
+  const rangeHeader = headOnly ? null : context.request.headers.get('range')
+  const object = headOnly
+    ? await context.env.RELEASES.head(download.key)
+    : await context.env.RELEASES.get(download.key, rangeHeader ? { range: context.request.headers } : undefined)
+  if (!object) return new Response(headOnly ? null : 'Not found', { status: 404 })
 
   const headers = new Headers()
   object.writeHttpMetadata(headers)
   headers.set('etag', object.httpEtag)
   headers.set('accept-ranges', 'bytes')
-  headers.set('cache-control', cacheControl)
+  headers.set('cache-control', download.cacheControl)
   headers.set('x-content-type-options', 'nosniff')
 
-  if (downloadFileName) {
+  if (download.downloadFileName) {
     headers.set('content-type', 'application/vnd.android.package-archive')
-    headers.set('content-disposition', `attachment; filename="${downloadFileName}"`)
+    headers.set('content-disposition', `attachment; filename="${download.downloadFileName}"`)
   }
 
   let status = 200
-  if (object.range) {
+  if (!headOnly && rangeHeader && object.range) {
     const offset = object.range.offset ?? 0
     const length = object.range.length ?? object.size
     const end = offset + length - 1
@@ -64,5 +75,13 @@ export async function onRequestGet(context) {
     headers.set('content-length', String(object.size))
   }
 
-  return new Response(object.body, { status, headers })
+  return new Response(headOnly ? null : object.body, { status, headers })
+}
+
+export function onRequestGet(context) {
+  return handleRequest(context, false)
+}
+
+export function onRequestHead(context) {
+  return handleRequest(context, true)
 }
