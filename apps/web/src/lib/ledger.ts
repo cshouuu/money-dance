@@ -112,7 +112,7 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
         if (workRecord) amount = getFlexibleWorkedSeconds(workRecord, now, rates.paidSecondsPerDay) * rates.second
         else if (attendance?.status === 'normal' && !sameCalendarDay(day, today)) amount = rates.daily
       } else {
-        if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, profile.workDaysPerWeek)) continue
+        if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, profile)) continue
         amount = sameCalendarDay(day, today) ? calculateEarnedToday(profile, now) : rates.daily
       }
     }

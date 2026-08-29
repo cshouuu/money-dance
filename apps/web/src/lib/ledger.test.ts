@@ -61,3 +61,33 @@ describe('attendance salary recalculation', () => {
     expect(summary.entries[0]?.source).toBe('旧工资调整')
   })
 })
+
+describe('alternating workweek salary entries', () => {
+  const alternatingProfile = {
+    ...profile,
+    workWeekMode: 'alternating' as const,
+    alternatingAnchorDate: '2026-08-24',
+    alternatingAnchorType: 'big' as const,
+  }
+
+  it('adds salary for a big-week Saturday', () => {
+    const saturday = new Date(2026, 7, 29)
+    const summary = summarizeLedger(alternatingProfile, [], saturday, new Date(2026, 7, 30), new Date(2026, 8, 6), [], [])
+    expect(summary.income).toBe(100)
+    expect(summary.entries[0]?.id).toBe('salary-2026-8-29')
+  })
+
+  it('does not add salary for the following small-week Saturday', () => {
+    const saturday = new Date(2026, 8, 5)
+    const summary = summarizeLedger(alternatingProfile, [], saturday, new Date(2026, 8, 6), new Date(2026, 8, 6), [], [])
+    expect(summary.income).toBe(0)
+    expect(summary.entries).toHaveLength(0)
+  })
+
+  it('lets a manual attendance adjustment override a small-week Saturday', () => {
+    const saturday = new Date(2026, 8, 5)
+    const attendanceRecords: AttendanceRecord[] = [{ date: '2026-09-05', status: 'normal', updatedAt: new Date(2026, 8, 5, 12).toISOString() }]
+    const summary = summarizeLedger(alternatingProfile, [], saturday, new Date(2026, 8, 6), new Date(2026, 8, 6), [], attendanceRecords)
+    expect(summary.income).toBe(100)
+  })
+})
