@@ -16,3 +16,7 @@ export function loadProfile(): SalaryProfile {
 }
 
 export function saveProfile(profile: SalaryProfile): void { saveJSON(keys.profile, profile) }
+
+export function recommendedMonthlyWorkDays(workDaysPerWeek: number): number {
+  return Number(((workDaysPerWeek * 52) / 12).toFixed(2))
+}
