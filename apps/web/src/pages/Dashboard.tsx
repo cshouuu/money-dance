@@ -1,4 +1,4 @@
-import { calculateRates, formatDuration } from '@salary-flow/core'
+import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -10,7 +10,7 @@ import { calculateOvertimeEarnings } from '../lib/overtime'
 import { keys, loadJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import { closeActiveWorkSession, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
-import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, OvertimeSession, SlackingSession } from '../types'
+import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, OvertimeSession, SlackingSession, WishItem } from '../types'
 import './Dashboard.css'
 
 const money = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -30,6 +30,7 @@ export function Dashboard() {
   const [slackingSessions] = useState<SlackingSession[]>(() => loadJSON<SlackingSession[]>(keys.sessions, []))
   const [overtimeSessions] = useState<OvertimeSession[]>(() => loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
   const [activeOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
+  const [wishes] = useState<WishItem[]>(() => loadJSON<WishItem[]>(keys.wishes, []))
   const [dialogPurpose, setDialogPurpose] = useState<'start' | 'adjust' | null>(null)
   const rates = useMemo(() => calculateRates(profile), [profile])
   const work = summarizeTodayWork(profile, workRecords, now, rates, attendanceRecords)
@@ -45,6 +46,8 @@ export function Dashboard() {
   const activeOvertimeSeconds = activeOvertimeToday ? Math.max(0, (now.getTime() - new Date(activeOvertimeToday.startTime).getTime()) / 1000) : 0
   const overtimeSeconds = todayOvertime.reduce((total, session) => total + session.durationSeconds, 0) + activeOvertimeSeconds
   const overtimeMoney = todayOvertime.reduce((total, session) => total + session.earnedAmount, 0) + (activeOvertimeToday ? calculateOvertimeEarnings(activeOvertimeToday, activeOvertimeSeconds, rates.second) : 0)
+  const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
+  const featuredWishes = wishlistItems.slice(0, 3)
   const firstStart = work.record?.sessions[0]?.startTime
   const leaveLabel = work.attendance?.status === 'leave' ? leaveTypeLabel(work.attendance.leaveType) : ''
   const attendancePayLabel = work.attendance?.payMode === 'multiplier'
@@ -120,13 +123,13 @@ export function Dashboard() {
       <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertimeToday ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
     </div>
 
-    <div className="section-title"><div><p className="eyebrow">QUICK ACTIONS</p><h2>把价格换成人生时间</h2></div></div>
-    <div className="quick-cards">
-      {[['☕','一杯咖啡',32],['🎧','AirPods Pro',1899],['📱','一部手机',7999]].map(([emoji,name,price]) => {
-        const seconds = Number(price) / rates.second
-        return <Link to={`/convert?name=${encodeURIComponent(String(name))}&price=${price}`} className="quick-card" key={String(name)}><span className="emoji">{emoji}</span><div><b>{name}</b><small>¥{price}</small></div><strong>{formatDuration(seconds)}</strong></Link>
+    <div className="section-title dashboard-wishlist-title"><div><p className="eyebrow">WISH LIST</p><h2>我的心愿清单</h2></div><Link className="dashboard-wishlist-link" to="/convert">查看全部 {wishlistItems.length} 项 <ArrowUpRight size={14}/></Link></div>
+    {featuredWishes.length === 0 ? <div className="dashboard-wishlist-empty"><span>✨</span><div><b>还没有心愿</b><small>把想买的东西换算成需要工作的时间。</small></div><Link to="/convert">去心愿清单</Link></div> : <div className="dashboard-wishlist-grid">
+      {featuredWishes.map(item => {
+        const seconds = priceToWorkSeconds(item.price, rates.second)
+        return <article className="dashboard-wish-card" key={item.id}><span className="dashboard-wish-avatar">{item.name.trim().slice(0,1).toUpperCase() || '愿'}</span><div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)}</small></div><div className="dashboard-wish-time"><small>需要工作</small><strong>{formatDuration(seconds)}</strong></div></article>
       })}
-    </div>
+    </div>}
 
     <WorkTimeDialog open={dialogPurpose!==null} purpose={dialogPurpose ?? 'start'} date={today} plannedStart={profile.workStartTime} record={work.record?.mode === 'flexible' ? work.record : undefined} onStart={startAt} onAdjust={adjustTime} onCancel={closeDialog}/>
   </section>
