@@ -6,7 +6,7 @@ import { WorkTimeDialog } from '../components/WorkTimeDialog'
 import { alternatingWeekTypeForDate, attendanceStatusLabel, loadAttendanceRecords } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { loadProfile } from '../lib/profile'
-import { calculateOvertimeEarnings } from '../lib/overtime'
+import { calculateOvertimeEarnings, splitOvertimeSessionByLocalDay } from '../lib/overtime'
 import { keys, loadJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import { closeActiveWorkSession, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
@@ -41,11 +41,18 @@ export function Dashboard() {
   const todaySlacking = useMemo(() => slackingSessions.filter(session => toLocalDateValue(new Date(session.startTime)) === today), [slackingSessions, today])
   const slackingSeconds = useMemo(() => todaySlacking.reduce((total, session) => total + session.durationSeconds, 0), [todaySlacking])
   const slackingMoney = useMemo(() => todaySlacking.reduce((total, session) => total + session.earnedAmount, 0), [todaySlacking])
-  const todayOvertime = useMemo(() => overtimeSessions.filter(session => toLocalDateValue(new Date(session.startTime)) === today), [overtimeSessions, today])
-  const activeOvertimeToday = activeOvertime && toLocalDateValue(new Date(activeOvertime.startTime)) === today ? activeOvertime : null
-  const activeOvertimeSeconds = activeOvertimeToday ? Math.max(0, (now.getTime() - new Date(activeOvertimeToday.startTime).getTime()) / 1000) : 0
-  const overtimeSeconds = todayOvertime.reduce((total, session) => total + session.durationSeconds, 0) + activeOvertimeSeconds
-  const overtimeMoney = todayOvertime.reduce((total, session) => total + session.earnedAmount, 0) + (activeOvertimeToday ? calculateOvertimeEarnings(activeOvertimeToday, activeOvertimeSeconds, rates.second) : 0)
+  const completedOvertimeToday = useMemo(() => overtimeSessions.flatMap(splitOvertimeSessionByLocalDay).filter(slice => slice.date === today), [overtimeSessions, today])
+  const completedOvertimeMoney = useMemo(() => overtimeSessions.filter(session => toLocalDateValue(new Date(session.startTime)) === today).reduce((total, session) => total + session.earnedAmount, 0), [overtimeSessions, today])
+  const activeOvertimeSlice = useMemo(() => {
+    if (!activeOvertime) return null
+    const endTime = now.toISOString()
+    return splitOvertimeSessionByLocalDay({ startTime: activeOvertime.startTime, endTime }).find(slice => slice.date === today) ?? null
+  }, [activeOvertime, now, today])
+  const activeOvertimeMoney = activeOvertime && toLocalDateValue(new Date(activeOvertime.startTime)) === today
+    ? calculateOvertimeEarnings(activeOvertime, Math.max(0, (now.getTime() - new Date(activeOvertime.startTime).getTime()) / 1000), rates.second)
+    : 0
+  const overtimeSeconds = completedOvertimeToday.reduce((total, slice) => total + slice.durationSeconds, 0) + (activeOvertimeSlice?.durationSeconds ?? 0)
+  const overtimeMoney = completedOvertimeMoney + activeOvertimeMoney
   const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
   const featuredWishes = wishlistItems.slice(0, 3)
   const firstStart = work.record?.sessions[0]?.startTime
@@ -123,7 +130,7 @@ export function Dashboard() {
     <div className="metric-grid dashboard-metric-grid">
       <article className="metric-card"><div className="metric-icon"><Clock3 size={18}/></div><p>你的时间单价</p><h3>{money(rates.hourly)}<small> / 小时</small></h3><span>{money(rates.minute)} / 分钟 · ¥{rates.second.toFixed(4)} / 秒</span></article>
       <article className="metric-card accent"><div className="metric-icon"><Fish size={18}/></div><p>今日摸鱼收益</p><h3>{money(slackingMoney)}</h3><span>{formatDuration(slackingSeconds)} · {earned ? (slackingMoney / earned * 100).toFixed(1) : '0.0'}% 今日收入</span><Link to="/slacking">去摸鱼计时 →</Link></article>
-      <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertimeToday ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
+      <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
     </div>
 
     <div className="section-title dashboard-wishlist-title"><div><p className="eyebrow">WISH LIST</p><h2>我的心愿清单</h2></div><Link className="dashboard-wishlist-link" to="/convert">查看全部 {wishlistItems.length} 项 <ArrowUpRight size={14}/></Link></div>
