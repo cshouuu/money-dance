@@ -7,7 +7,7 @@ import { OvertimeStartDialog } from '../components/OvertimeStartDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { createId } from '../lib/id'
 import { loadLedger, saveLedger } from '../lib/ledger'
-import { calculateOvertimeEarnings, overtimePayLabel } from '../lib/overtime'
+import { calculateOvertimeEarnings, createOvertimeLedgerEntries, overtimePayLabel } from '../lib/overtime'
 import { loadProfile } from '../lib/profile'
 import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
@@ -80,7 +80,7 @@ export function Overtime() {
       saveJSON(keys.overtimeSessions, next)
       if (session.earnedAmount > 0) {
         const ledger = loadLedger()
-        saveLedger([{ id: createId(), kind: 'overtime', direction: 'income', amount: session.earnedAmount, source: `加班收入 · ${overtimePayLabel(session)}`, occurredAt: endTime, linkedId: session.id }, ...ledger])
+        saveLedger([...createOvertimeLedgerEntries(session, createId), ...ledger])
       }
       setFinishNotice({ id: session.id, message: `终于结束了，这次加班赚了¥${session.earnedAmount.toFixed(2)}，赶紧去犒劳一下自己吧` })
     } finally {
