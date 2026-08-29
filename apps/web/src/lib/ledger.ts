@@ -89,17 +89,20 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
   today.setHours(0, 0, 0, 0)
   const effectiveDate = getSalaryEffectiveDate(profile, now)
   const entries: SummaryEntry[] = []
-  const rangeStart = start > effectiveDate ? start : effectiveDate
   const workRecordByDate = new Map(workRecords.map(record => [record.date, record]))
   const attendanceByDate = new Map(attendanceRecords.map(record => [record.date, record]))
 
-  for (const cursor = new Date(rangeStart); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
+  for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
     const day = new Date(cursor)
     day.setHours(0, 0, 0, 0)
     if (day > today) break
     const date = toLocalDateValue(day)
     const workRecord = workRecordByDate.get(date)
     const attendance = attendanceByDate.get(date)
+    // The effective date only limits automatically generated history. A saved
+    // attendance adjustment is an explicit instruction and must still be
+    // reflected in the ledger, even when it predates the salary history range.
+    if (day < effectiveDate && !attendance) continue
     let amount = 0
     let source = '工资收入'
     if (attendance?.status === 'leave' || attendance?.status === 'holiday') {

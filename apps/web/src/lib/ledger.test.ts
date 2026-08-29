@@ -88,6 +88,44 @@ describe('attendance salary recalculation', () => {
   })
 })
 
+describe('manual attendance before the salary history start date', () => {
+  const currentOnlyProfile = {
+    ...profile,
+    salaryHistoryMode: 'none' as const,
+    salaryEffectiveDate: '2026-08-28',
+  }
+
+  it('does not automatically generate salary before the effective date', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], [])
+    expect(summary.income).toBe(0)
+    expect(summary.entries).toHaveLength(0)
+  })
+
+  it('uses a fixed amount from an explicit historical attendance adjustment', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'fixed', fixedAmount: 66 }))
+    expect(summary.income).toBe(66)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 带薪假')
+  })
+
+  it('uses a multiplier from an explicit historical attendance adjustment', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ payMode: 'multiplier', multiplier: 0.5 }))
+    expect(summary.income).toBeCloseTo(50)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 病假')
+  })
+
+  it('uses normal daily salary when the historical day is explicitly marked as normal', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ status: 'normal', leaveType: undefined, payMode: undefined }))
+    expect(summary.income).toBe(100)
+    expect(summary.entries[0]?.source).toBe('工资收入')
+  })
+
+  it('keeps an explicit unpaid historical adjustment at zero', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'unpaid' }))
+    expect(summary.income).toBe(0)
+    expect(summary.entries).toHaveLength(0)
+  })
+})
+
 describe('alternating workweek salary entries', () => {
   const alternatingProfile = {
     ...profile,
