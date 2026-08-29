@@ -1,8 +1,9 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
-import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
+import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind, OvertimeSession } from '../types'
 import { attendanceStatusLabel, isConfiguredWorkday, loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
+import { migrateLegacyOvertimeLedgerDates } from './overtime'
 import { getFlexibleWorkedSeconds, loadWorkRecords } from './work'
 
 export type SummaryDimension = 'day' | 'month' | 'year'
@@ -28,7 +29,10 @@ export interface SummaryResult {
 }
 
 export function loadLedger(): LedgerEntry[] {
-  return loadJSON<LedgerEntry[]>(keys.ledger, [])
+  const entries = loadJSON<LedgerEntry[]>(keys.ledger, [])
+  const migrated = migrateLegacyOvertimeLedgerDates(entries, loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
+  if (migrated !== entries) saveLedger(migrated)
+  return migrated
 }
 
 export function saveLedger(entries: LedgerEntry[]): void {
