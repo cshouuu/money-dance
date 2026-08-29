@@ -52,7 +52,7 @@ export function Shell() {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">¥</span><div><b>SalaryFlow</b><small>薪流</small></div></div>
+      <div className="brand"><span className="brand-mark"><img src="/money-dance-icon.svg" alt="" style={{width:'100%',height:'100%',borderRadius:'inherit'}}/></span><div><b>MoneyDance</b><small>把时间变成钱</small></div></div>
       <nav>{items.map(([to, Icon, label]) => <NavLink key={to} to={to} end={to === '/'} className={({isActive}) => isActive ? 'nav-item active' : 'nav-item'}><Icon size={19}/><span>{label}</span></NavLink>)}</nav>
       <p className="privacy-note">Local-first · 薪资默认只保存在你的浏览器</p>
     </aside>
