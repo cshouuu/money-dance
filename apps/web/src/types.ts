@@ -49,7 +49,7 @@ export interface DailyWorkRecord {
   updatedAt: string
 }
 
-export type AttendanceStatus = 'normal' | 'leave'
+export type AttendanceStatus = 'normal' | 'leave' | 'holiday'
 export type LeaveType = 'personal' | 'sick' | 'annual' | 'compensatory' | 'marriage' | 'maternity' | 'prenatal' | 'paternity' | 'parental' | 'bereavement' | 'remote'
 export type AttendancePayMode = 'unpaid' | 'multiplier' | 'fixed'
 

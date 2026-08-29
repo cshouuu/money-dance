@@ -36,6 +36,12 @@ export function leaveTypeLabel(type?: LeaveType): string {
   return LEAVE_TYPES.find(item => item.value === type)?.label ?? '请假'
 }
 
+export function attendanceStatusLabel(record: AttendanceRecord): string {
+  if (record.status === 'holiday') return record.payMode === 'unpaid' ? '无薪假' : '带薪假'
+  if (record.status === 'leave') return leaveTypeLabel(record.leaveType)
+  return '正常上班'
+}
+
 function weekStart(date: Date): Date {
   const result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12)
   const mondayBasedIndex = (result.getDay() + 6) % 7

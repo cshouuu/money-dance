@@ -1,6 +1,6 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
-import { isConfiguredWorkday, leaveTypeLabel, loadAttendanceRecords } from './attendance'
+import { attendanceStatusLabel, isConfiguredWorkday, loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { getFlexibleWorkedSeconds, loadWorkRecords } from './work'
@@ -102,8 +102,8 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     const attendance = attendanceByDate.get(date)
     let amount = 0
     let source = '工资收入'
-    if (attendance?.status === 'leave') {
-      source = `工资收入 · ${leaveTypeLabel(attendance.leaveType)}`
+    if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
+      source = `工资收入 · ${attendanceStatusLabel(attendance)}`
       if (attendance.payMode === 'multiplier') amount = rates.daily * Math.max(0, attendance.multiplier ?? 0)
       if (attendance.payMode === 'fixed') amount = Math.max(0, attendance.fixedAmount ?? 0)
     } else {

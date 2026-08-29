@@ -3,19 +3,24 @@ import { getWeekStartDateValue } from './attendance'
 import { toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 
+export function normalizeSalaryHistoryMode(value: unknown): SalaryProfile['salaryHistoryMode'] {
+  return value === 'custom' || value === 'month' || value === 'year' ? 'custom' : 'none'
+}
+
 export function loadProfile(): SalaryProfile {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
   const profile = { ...DEFAULT_PROFILE, ...stored }
+  const storedHistoryMode = (stored as { salaryHistoryMode?: unknown }).salaryHistoryMode
   const migrated = {
     ...profile,
-    salaryHistoryMode: profile.salaryHistoryMode ?? 'none',
+    salaryHistoryMode: normalizeSalaryHistoryMode(storedHistoryMode),
     salaryEffectiveDate: profile.salaryEffectiveDate || toLocalDateValue(),
     defaultWorkMode: profile.defaultWorkMode ?? 'scheduled',
     workWeekMode: stored.workWeekMode ?? 'fixed',
     alternatingAnchorDate: stored.alternatingAnchorDate || getWeekStartDateValue(),
     alternatingAnchorType: stored.alternatingAnchorType ?? 'big',
   }
-  if (!stored.salaryHistoryMode || !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode || !stored.alternatingAnchorDate || !stored.alternatingAnchorType) saveJSON(keys.profile, migrated)
+  if (storedHistoryMode !== migrated.salaryHistoryMode || !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode || !stored.alternatingAnchorDate || !stored.alternatingAnchorType) saveJSON(keys.profile, migrated)
   return migrated
 }
 

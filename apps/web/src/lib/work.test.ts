@@ -75,4 +75,22 @@ describe('today workday rules', () => {
     expect(summary.dayType).toBe('leave')
     expect(summary.earnedAmount).toBeCloseTo(calculateRates(profile).daily * 0.8)
   })
+
+  it('does not calculate salary for an unpaid holiday', () => {
+    const summary = summarizeTodayWork(profile, [scheduledRecord()], saturday, undefined, attendance({ status: 'holiday', payMode: 'unpaid' }))
+    expect(summary.dayType).toBe('holiday')
+    expect(summary.earnedAmount).toBe(0)
+  })
+
+  it('uses the user-defined multiplier for a paid holiday', () => {
+    const summary = summarizeTodayWork(profile, [], saturday, undefined, attendance({ status: 'holiday', payMode: 'multiplier', multiplier: 1.2 }))
+    expect(summary.dayType).toBe('holiday')
+    expect(summary.earnedAmount).toBeCloseTo(calculateRates(profile).daily * 1.2)
+  })
+
+  it('uses the user-defined fixed amount for a paid holiday', () => {
+    const summary = summarizeTodayWork(profile, [], saturday, undefined, attendance({ status: 'holiday', payMode: 'fixed', fixedAmount: 88 }))
+    expect(summary.dayType).toBe('holiday')
+    expect(summary.earnedAmount).toBe(88)
+  })
 })

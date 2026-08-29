@@ -8,7 +8,7 @@ import { keys, loadJSON, saveJSON } from './storage'
 export interface TodayWorkSummary {
   mode: WorkMode
   status: DailyWorkStatus
-  dayType: 'work' | 'rest' | 'leave'
+  dayType: 'work' | 'rest' | 'leave' | 'holiday'
   workedSeconds: number
   earnedAmount: number
   record?: DailyWorkRecord
@@ -51,14 +51,14 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const mode = record?.mode ?? profile.defaultWorkMode
   const rates = providedRates ?? calculateRates(profile)
 
-  if (attendance?.status === 'leave') {
+  if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
     let earnedAmount = 0
     if (attendance.payMode === 'multiplier') earnedAmount = rates.daily * Math.max(0, attendance.multiplier ?? 0)
     if (attendance.payMode === 'fixed') earnedAmount = Math.max(0, attendance.fixedAmount ?? 0)
     return {
       mode,
       status: 'ended',
-      dayType: 'leave',
+      dayType: attendance.status,
       workedSeconds: 0,
       earnedAmount,
       record,

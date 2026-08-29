@@ -1,6 +1,6 @@
 import { DEFAULT_PROFILE, type SalaryProfile } from '@salary-flow/core'
 import { describe, expect, it } from 'vitest'
-import { alternatingWeekTypeForDate, getWeekStartDateValue, isConfiguredWorkday } from './attendance'
+import { alternatingWeekTypeForDate, attendanceStatusLabel, getWeekStartDateValue, isConfiguredWorkday } from './attendance'
 
 const alternatingProfile: SalaryProfile = {
   ...DEFAULT_PROFILE,
@@ -40,5 +40,12 @@ describe('alternating workweek', () => {
   it('keeps the existing fixed workweek behavior', () => {
     expect(isConfiguredWorkday(new Date(2026, 7, 29, 12), { ...DEFAULT_PROFILE, workDaysPerWeek: 5 })).toBe(false)
     expect(isConfiguredWorkday(new Date(2026, 7, 29, 12), { ...DEFAULT_PROFILE, workDaysPerWeek: 6 })).toBe(true)
+  })
+})
+
+describe('attendanceStatusLabel', () => {
+  it('distinguishes paid and unpaid holidays', () => {
+    expect(attendanceStatusLabel({ date: '2026-08-29', status: 'holiday', payMode: 'multiplier', multiplier: 1, updatedAt: '' })).toBe('带薪假')
+    expect(attendanceStatusLabel({ date: '2026-08-29', status: 'holiday', payMode: 'unpaid', updatedAt: '' })).toBe('无薪假')
   })
 })

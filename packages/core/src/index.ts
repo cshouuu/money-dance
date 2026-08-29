@@ -1,5 +1,5 @@
 export type SalaryType = 'monthly' | 'annual' | 'daily' | 'hourly'
-export type SalaryHistoryMode = 'none' | 'month' | 'year'
+export type SalaryHistoryMode = 'none' | 'custom'
 export type WorkMode = 'scheduled' | 'flexible'
 export type WorkWeekMode = 'fixed' | 'alternating'
 export type AlternatingWeekType = 'big' | 'small'
