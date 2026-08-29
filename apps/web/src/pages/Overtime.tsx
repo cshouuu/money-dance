@@ -1,14 +1,15 @@
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { BadgeDollarSign, BriefcaseBusiness, Play, Square, Trash2 } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FinishToast } from '../components/FinishToast'
 import { OvertimeStartDialog } from '../components/OvertimeStartDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
+import { createId } from '../lib/id'
 import { loadLedger, saveLedger } from '../lib/ledger'
 import { calculateOvertimeEarnings, overtimePayLabel } from '../lib/overtime'
 import { loadProfile } from '../lib/profile'
-import { keys, loadJSON, saveJSON } from '../lib/storage'
+import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import type { ActiveOvertime, OvertimeSession, OvertimeStartOption } from '../types'
 import './Overtime.css'
@@ -31,13 +32,14 @@ function formatStart(value: string): string {
 export function Overtime() {
   const [profile] = useState(() => loadProfile())
   const rates = useMemo(() => calculateRates(profile), [profile])
-  const now = useNow(250)
+  const now = useNow(1000)
   const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
   const [sessions, setSessions] = useState<OvertimeSession[]>(() => loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
   const [startDialogOpen, setStartDialogOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   const [finishNotice, setFinishNotice] = useState<{ id: string; message: string } | null>(null)
   const [page, setPage] = useState(1)
+  const stoppingRef = useRef(false)
 
   const liveSeconds = active ? Math.max(0, (now.getTime() - new Date(active.startTime).getTime()) / 1000) : 0
   const liveMoney = active ? calculateOvertimeEarnings(active, liveSeconds, rates.second) : 0
@@ -58,27 +60,32 @@ export function Overtime() {
   }, [])
 
   const stop = useCallback(() => {
-    if (!active) return
-    const endTime = new Date().toISOString()
-    const durationSeconds = Math.max(0, (new Date(endTime).getTime() - new Date(active.startTime).getTime()) / 1000)
-    const session: OvertimeSession = {
-      ...active,
-      id: crypto.randomUUID(),
-      endTime,
-      durationSeconds,
-      earnedAmount: calculateOvertimeEarnings(active, durationSeconds, rates.second),
+    if (!active || stoppingRef.current) return
+    stoppingRef.current = true
+    try {
+      const endTime = new Date().toISOString()
+      const durationSeconds = Math.max(0, (new Date(endTime).getTime() - new Date(active.startTime).getTime()) / 1000)
+      const session: OvertimeSession = {
+        ...active,
+        id: createId(),
+        endTime,
+        durationSeconds,
+        earnedAmount: calculateOvertimeEarnings(active, durationSeconds, rates.second),
+      }
+      const next = [session, ...sessions]
+      setActive(null)
+      setSessions(next)
+      setPage(1)
+      removeJSON(keys.activeOvertime)
+      saveJSON(keys.overtimeSessions, next)
+      if (session.earnedAmount > 0) {
+        const ledger = loadLedger()
+        saveLedger([{ id: createId(), kind: 'overtime', direction: 'income', amount: session.earnedAmount, source: `加班收入 · ${overtimePayLabel(session)}`, occurredAt: endTime, linkedId: session.id }, ...ledger])
+      }
+      setFinishNotice({ id: session.id, message: `终于结束了，这次加班赚了¥${session.earnedAmount.toFixed(2)}，赶紧去犒劳一下自己吧` })
+    } finally {
+      stoppingRef.current = false
     }
-    const next = [session, ...sessions]
-    setSessions(next)
-    saveJSON(keys.overtimeSessions, next)
-    if (session.earnedAmount > 0) {
-      const ledger = loadLedger()
-      saveLedger([{ id: crypto.randomUUID(), kind: 'overtime', direction: 'income', amount: session.earnedAmount, source: `加班收入 · ${overtimePayLabel(session)}`, occurredAt: endTime, linkedId: session.id }, ...ledger])
-    }
-    setActive(null)
-    saveJSON(keys.activeOvertime, null)
-    setPage(1)
-    setFinishNotice({ id: session.id, message: `终于结束了，这次加班赚了¥${session.earnedAmount.toFixed(2)}，赶紧去犒劳一下自己吧` })
   }, [active, rates.second, sessions])
 
   const confirmDelete = useCallback(() => {

@@ -7,8 +7,22 @@ export function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
-export function saveJSON<T>(key: string, value: T): void {
-  localStorage.setItem(key, JSON.stringify(value))
+export function saveJSON<T>(key: string, value: T): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function removeJSON(key: string): boolean {
+  try {
+    localStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const keys = {

@@ -1,5 +1,6 @@
 .clear-slacking-button:disabled{cursor:not-allowed;opacity:.42}
 .slacking-record>.slacking-delete-button{display:grid!important}
+.timer-card .stop-button,.timer-card .primary-button.big{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 
 @media(max-width:560px){
   .slacking-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;align-items:start}
