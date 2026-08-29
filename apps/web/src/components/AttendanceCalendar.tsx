@@ -19,7 +19,7 @@ interface AttendanceCalendarProps {
 
 interface DayState {
   label: string
-  tone: 'normal' | 'leave' | 'rest' | 'future'
+  tone: 'normal' | 'leave' | 'holiday' | 'rest' | 'future'
   explicit: boolean
 }
 
@@ -55,6 +55,7 @@ export function AttendanceCalendar({ profile, records, workRecords, dimension, a
     const record = recordByDate.get(date)
     if (record?.status === 'normal') return { label: '正常', tone: 'normal', explicit: true }
     if (record?.status === 'leave') return { label: leaveTypeLabel(record.leaveType), tone: 'leave', explicit: true }
+    if (record?.status === 'holiday') return { label: record.payMode === 'unpaid' ? '无薪假' : '带薪假', tone: 'holiday', explicit: true }
     const day = toLocalDateTime(date)
     if (workedDates.has(date)) return { label: '正常', tone: 'normal', explicit: false }
     if (profile.workWeekMode === 'alternating' && day.getDay() === 6) {
@@ -70,14 +71,16 @@ export function AttendanceCalendar({ profile, records, workRecords, dimension, a
   const countRange = (start: Date, end: Date) => {
     let normal = 0
     let leave = 0
+    let holiday = 0
     for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
       const date = toLocalDateValue(cursor)
       if (date > today) break
       const state = stateForDate(date)
       if (state.tone === 'normal') normal += 1
       if (state.tone === 'leave') leave += 1
+      if (state.tone === 'holiday') holiday += 1
     }
-    return { normal, leave }
+    return { normal, leave, holiday }
   }
 
   const navigate = (direction: -1 | 1) => {
@@ -130,8 +133,8 @@ export function AttendanceCalendar({ profile, records, workRecords, dimension, a
     <div className="calendar-dimension-tabs" role="group" aria-label="日历粒度">{dimensions.map(item => <button key={item.value} type="button" className={dimension === item.value ? 'active' : ''} aria-pressed={dimension === item.value} onClick={() => onChange(item.value, anchorForDimension(item.value, dimension, anchor, now))}>{item.label}</button>)}</div>
     <div className="calendar-period-nav"><button type="button" aria-label="上一时间段" onClick={() => navigate(-1)}><ChevronLeft size={18}/></button><strong>{dimension === 'day' ? `${selectedYear}年 ${Number(selectedMonth.slice(5))}月` : dimension === 'month' ? `${selectedYear}年` : `${selectedYear - 6} — ${selectedYear}`}</strong><button type="button" aria-label="下一时间段" onClick={() => navigate(1)}><ChevronRight size={18}/></button></div>
     {dimension === 'day' && <><div className="calendar-weekdays" aria-hidden="true">{['日','一','二','三','四','五','六'].map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid day">{dayCells.map((cell, index) => cell ? <button key={cell.date} type="button" disabled={cell.state.tone === 'future'} className={`attendance-${cell.state.tone}${cell.date === anchor ? ' selected' : ''}${cell.date === today ? ' current' : ''}${cell.state.explicit ? ' explicit' : ''}`} aria-label={`${cell.date}，${cell.state.label}${cell.state.explicit ? '，已调整' : ''}`} onClick={() => { onChange('day', cell.date); onSelectDate(cell.date) }}><b>{cell.day}</b><span>{cell.state.label}</span></button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>)}</div></>}
-    {dimension === 'month' && <div className="calendar-grid month">{monthCells.map(cell => <button key={cell.anchor} type="button" disabled={cell.anchor > toLocalMonthValue(now)} className={cell.anchor === toLocalMonthValue(now) ? 'current' : ''} onClick={() => drillDown('month', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave}</span></button>)}</div>}
-    {dimension === 'year' && <div className="calendar-grid year">{yearCells.map(cell => <button key={cell.anchor} type="button" disabled={Number(cell.anchor) > now.getFullYear()} className={Number(cell.anchor) === now.getFullYear() ? 'current' : ''} onClick={() => drillDown('year', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave}</span></button>)}</div>}
-    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span>点击日期调整出勤</span></div>
+    {dimension === 'month' && <div className="calendar-grid month">{monthCells.map(cell => <button key={cell.anchor} type="button" disabled={cell.anchor > toLocalMonthValue(now)} className={cell.anchor === toLocalMonthValue(now) ? 'current' : ''} onClick={() => drillDown('month', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
+    {dimension === 'year' && <div className="calendar-grid year">{yearCells.map(cell => <button key={cell.anchor} type="button" disabled={Number(cell.anchor) > now.getFullYear()} className={Number(cell.anchor) === now.getFullYear() ? 'current' : ''} onClick={() => drillDown('year', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
+    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span><i className="attendance-holiday-dot"/>放假</span><span>点击日期调整出勤</span></div>
   </section>
 }

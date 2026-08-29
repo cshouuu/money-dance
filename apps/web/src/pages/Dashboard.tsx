@@ -3,7 +3,7 @@ import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, 
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
-import { alternatingWeekTypeForDate, leaveTypeLabel, loadAttendanceRecords } from '../lib/attendance'
+import { alternatingWeekTypeForDate, attendanceStatusLabel, loadAttendanceRecords } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { loadProfile } from '../lib/profile'
 import { calculateOvertimeEarnings } from '../lib/overtime'
@@ -49,17 +49,18 @@ export function Dashboard() {
   const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
   const featuredWishes = wishlistItems.slice(0, 3)
   const firstStart = work.record?.sessions[0]?.startTime
-  const leaveLabel = work.attendance?.status === 'leave' ? leaveTypeLabel(work.attendance.leaveType) : ''
+  const attendanceLabel = work.attendance ? attendanceStatusLabel(work.attendance) : ''
   const attendancePayLabel = work.attendance?.payMode === 'multiplier'
     ? `${work.attendance.multiplier ?? 0} 倍计薪`
     : work.attendance?.payMode === 'fixed'
       ? `固定 ${money(work.attendance.fixedAmount ?? 0)}`
       : '不计薪'
-  const heroLabel = work.dayType === 'rest' ? '今天休息' : work.dayType === 'leave' ? '今日出勤调整' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
+  const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday'
+  const heroLabel = work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
   const modeStatus = work.dayType === 'rest'
     ? '非工作日 · 不自动计薪'
-    : work.dayType === 'leave'
-      ? `${leaveLabel} · ${attendancePayLabel}`
+    : isAttendanceOverride
+      ? `${attendanceLabel} · ${attendancePayLabel}`
       : work.mode === 'flexible'
         ? statusLabels[work.status]
         : profile.workWeekMode === 'alternating'
@@ -101,7 +102,7 @@ export function Dashboard() {
       <div className="hero-glow" />
       <div className="hero-heading-row"><p className="hero-label"><Sparkles size={16}/> {heroLabel}</p><span className="hero-mode-status">{modeStatus}</span></div>
       <div className="money-ticker">{money(earned)}</div>
-      <p className="rate-line">{work.dayType === 'rest' ? '休息日不自动计薪' : work.dayType === 'leave' ? '已按照薪苦日历中的出勤设置计算' : `+ ¥${rates.second.toFixed(5)} / 秒`}</p>
+      <p className="rate-line">{work.dayType === 'rest' ? '休息日不自动计薪' : isAttendanceOverride ? '已按照薪苦日历中的出勤设置计算' : `+ ¥${rates.second.toFixed(5)} / 秒`}</p>
 
       {work.dayType === 'work' && work.mode === 'flexible' && <div className="work-controls">
         {work.status === 'ready' && <><button type="button" className="hero-work-primary" onClick={()=>setDialogPurpose('start')}><Play size={16}/>开始工作</button><button type="button" className="hero-work-link" onClick={useScheduledToday}>今天按固定作息</button></>}
@@ -114,8 +115,8 @@ export function Dashboard() {
         <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{work.mode === 'flexible' ? firstStart ? toLocalTimeValue(new Date(firstStart)) : '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? `目标 ${formatDuration(rates.paidSecondsPerDay)}` : profile.workEndTime}</span></div>
         <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>已计薪 <b>{formatDuration(worked)}</b></span><span>{work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(rates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
       </> : <>
-        <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : `${leaveLabel}已覆盖今天的默认计薪安排。`}</div>
-        <div className="hero-meta"><span>今日状态 <b>{work.dayType === 'rest' ? '休息' : leaveLabel}</b></span><span>计薪方式 <b>{work.dayType === 'rest' ? '不自动计薪' : attendancePayLabel}</b></span><span>今日收入 <b>{money(earned)}</b></span>{work.dayType === 'rest' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天也上班</button>}</div>
+        <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
+        <div className="hero-meta"><span>今日状态 <b>{work.dayType === 'rest' ? '休息' : attendanceLabel}</b></span><span>计薪方式 <b>{work.dayType === 'rest' ? '不自动计薪' : attendancePayLabel}</b></span><span>今日收入 <b>{money(earned)}</b></span>{work.dayType === 'rest' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天也上班</button>}</div>
       </>}
     </div>
 

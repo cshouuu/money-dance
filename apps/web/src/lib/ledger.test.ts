@@ -60,6 +60,32 @@ describe('attendance salary recalculation', () => {
     expect(summary.income).toBe(999)
     expect(summary.entries[0]?.source).toBe('旧工资调整')
   })
+
+  it('starts generated salary entries on the selected historical date', () => {
+    const customStartProfile = { ...profile, salaryHistoryMode: 'custom' as const, salaryEffectiveDate: '2026-08-27' }
+    const summary = summarizeLedger(customStartProfile, [], new Date(2026, 7, 26), new Date(2026, 7, 28), now, [], [])
+    expect(summary.income).toBe(100)
+    expect(summary.entries).toHaveLength(1)
+    expect(summary.entries[0]?.id).toBe('salary-2026-8-27')
+  })
+
+  it('removes salary income for an unpaid holiday', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'unpaid' }))
+    expect(summary.income).toBe(0)
+    expect(summary.entries).toHaveLength(0)
+  })
+
+  it('uses the selected multiplier and label for a paid holiday', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'multiplier', multiplier: 1.2 }))
+    expect(summary.income).toBeCloseTo(120)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 带薪假')
+  })
+
+  it('uses a fixed amount for a paid holiday', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'fixed', fixedAmount: 66 }))
+    expect(summary.income).toBe(66)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 带薪假')
+  })
 })
 
 describe('alternating workweek salary entries', () => {

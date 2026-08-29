@@ -26,12 +26,6 @@ export function toLocalTimeValue(date = new Date()): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-export function salaryEffectiveDateForMode(mode: 'none' | 'month' | 'year', now = new Date()): string {
-  if (mode === 'year') return `${now.getFullYear()}-01-01`
-  if (mode === 'month') return `${toLocalMonthValue(now)}-01`
-  return toLocalDateValue(now)
-}
-
 export function normalizeDecimalInput(value: string, decimalPlaces = 2): string {
   if (!value) return ''
 

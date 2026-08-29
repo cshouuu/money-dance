@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALTERNATING_MONTHLY_WORK_DAYS, recommendedMonthlyWorkDays } from './profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, normalizeSalaryHistoryMode, recommendedMonthlyWorkDays } from './profile'
 
 describe('recommendedMonthlyWorkDays', () => {
   it.each([
@@ -12,5 +12,16 @@ describe('recommendedMonthlyWorkDays', () => {
 
   it('recommends the average of five-day and six-day weeks for an alternating schedule', () => {
     expect(ALTERNATING_MONTHLY_WORK_DAYS).toBe(23.83)
+  })
+})
+
+describe('normalizeSalaryHistoryMode', () => {
+  it.each(['month', 'year', 'custom'])('migrates %s to a custom history range', mode => {
+    expect(normalizeSalaryHistoryMode(mode)).toBe('custom')
+  })
+
+  it('keeps disabled or unknown history settings disabled', () => {
+    expect(normalizeSalaryHistoryMode('none')).toBe('none')
+    expect(normalizeSalaryHistoryMode(undefined)).toBe('none')
   })
 })

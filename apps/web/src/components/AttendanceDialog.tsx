@@ -60,34 +60,34 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     }
 
     if (!paid) {
-      onSave({ date, status, leaveType, payMode: 'unpaid', updatedAt: new Date().toISOString() })
+      onSave({ date, status, ...(status === 'leave' ? { leaveType } : {}), payMode: 'unpaid', updatedAt: new Date().toISOString() })
       return
     }
 
     if (payMode === 'multiplier') {
       const value = parseNumberInput(multiplier)
       if (value === null || value <= 0 || value > 100) return
-      onSave({ date, status, leaveType, payMode, multiplier: value, updatedAt: new Date().toISOString() })
+      onSave({ date, status, ...(status === 'leave' ? { leaveType } : {}), payMode, multiplier: value, updatedAt: new Date().toISOString() })
       return
     }
 
     const value = parseNumberInput(fixedAmount)
     if (value === null || value <= 0 || value > MAX_MONEY_AMOUNT) return
-    onSave({ date, status, leaveType, payMode, fixedAmount: value, updatedAt: new Date().toISOString() })
+    onSave({ date, status, ...(status === 'leave' ? { leaveType } : {}), payMode, fixedAmount: value, updatedAt: new Date().toISOString() })
   }
 
   return createPortal(<div className="dialog-backdrop attendance-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
     <form className="attendance-dialog" role="dialog" aria-modal="true" aria-labelledby="attendance-dialog-title" onSubmit={submit}>
       <div className="attendance-dialog-header"><div><p className="eyebrow">ATTENDANCE DETAIL</p><h2 id="attendance-dialog-title">调整出勤情况</h2><span><CalendarCheck2 size={14}/>{formatDate(date)}</span></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
 
-      <fieldset className="attendance-field"><legend>这一天怎么过的？</legend><div className="attendance-switch"><button type="button" className={status === 'normal' ? 'active' : ''} aria-pressed={status === 'normal'} onClick={() => setStatus('normal')}>正常上班</button><button type="button" className={status === 'leave' ? 'active' : ''} aria-pressed={status === 'leave'} onClick={() => setStatus('leave')}>请假 / 特殊出勤</button></div></fieldset>
+      <fieldset className="attendance-field"><legend>这一天怎么过的？</legend><div className="attendance-switch attendance-status-switch"><button type="button" className={status === 'normal' ? 'active' : ''} aria-pressed={status === 'normal'} onClick={() => setStatus('normal')}>正常上班</button><button type="button" className={status === 'leave' ? 'active' : ''} aria-pressed={status === 'leave'} onClick={() => setStatus('leave')}>请假 / 特殊出勤</button><button type="button" className={status === 'holiday' ? 'active' : ''} aria-pressed={status === 'holiday'} onClick={() => setStatus('holiday')}>放假</button></div></fieldset>
 
-      {status === 'leave' && <div className="attendance-leave-fields">
-        <label><span>请假类型</span><select value={leaveType} onChange={event => setLeaveType(event.target.value as LeaveType)}>{LEAVE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <fieldset className="attendance-field"><legend>当天是否计薪？</legend><div className="attendance-switch"><button type="button" className={!paid ? 'active' : ''} aria-pressed={!paid} onClick={() => setPaid(false)}>不计薪</button><button type="button" className={paid ? 'active' : ''} aria-pressed={paid} onClick={() => setPaid(true)}>计薪</button></div></fieldset>
+      {status !== 'normal' && <div className="attendance-leave-fields">
+        {status === 'leave' && <label><span>请假类型</span><select value={leaveType} onChange={event => setLeaveType(event.target.value as LeaveType)}>{LEAVE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>}
+        <fieldset className="attendance-field"><legend>{status === 'holiday' ? '放假类型' : '当天是否计薪？'}</legend><div className="attendance-switch"><button type="button" className={!paid ? 'active' : ''} aria-pressed={!paid} onClick={() => setPaid(false)}>{status === 'holiday' ? '无薪假' : '不计薪'}</button><button type="button" className={paid ? 'active' : ''} aria-pressed={paid} onClick={() => setPaid(true)}>{status === 'holiday' ? '带薪假' : '计薪'}</button></div></fieldset>
         {paid && <div className="attendance-pay-card">
           <div className="attendance-pay-tabs" role="group" aria-label="计薪方式"><button type="button" className={payMode === 'multiplier' ? 'active' : ''} aria-pressed={payMode === 'multiplier'} onClick={() => setPayMode('multiplier')}>按工资倍率</button><button type="button" className={payMode === 'fixed' ? 'active' : ''} aria-pressed={payMode === 'fixed'} onClick={() => setPayMode('fixed')}>固定金额</button></div>
-          {payMode === 'multiplier' ? <label><span>工资倍率</span><div className="attendance-suffix-input"><input required type="number" inputMode="decimal" min="0.01" max="100" step="0.01" value={multiplier} onKeyDown={preventInvalidNumberKey} onChange={event => setMultiplier(normalizeDecimalInput(event.target.value))} placeholder="例如 0.8"/><i>倍</i></div><small>当天工作收入 = 正常日薪 × 这个倍率</small></label> : <label><span>当天固定收入</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => setFixedAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div><small>保存后，以这笔金额替换当天的自动工资。</small></label>}
+          {payMode === 'multiplier' ? <label><span>{status === 'holiday' ? '假期工资倍率' : '工资倍率'}</span><div className="attendance-suffix-input"><input required type="number" inputMode="decimal" min="0.01" max="100" step="0.01" value={multiplier} onKeyDown={preventInvalidNumberKey} onChange={event => setMultiplier(normalizeDecimalInput(event.target.value))} placeholder="例如 0.8"/><i>倍</i></div><small>{status === 'holiday' ? '当天假期工资' : '当天工作收入'} = 正常日薪 × 这个倍率</small></label> : <label><span>{status === 'holiday' ? '当天假期工资' : '当天固定收入'}</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => setFixedAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div><small>保存后，以这笔金额替换当天的自动工资。</small></label>}
         </div>}
       </div>}
 
