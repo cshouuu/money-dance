@@ -5,6 +5,7 @@ import { LedgerCalendar } from '../components/LedgerCalendar'
 import { LedgerEntryDialog, type LedgerEntryDraft } from '../components/LedgerEntryDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { toLocalDateValue, toLocalMonthValue } from '../lib/form'
+import { createId } from '../lib/id'
 import { loadAttendanceRecords } from '../lib/attendance'
 import { getSummaryRange, loadLedger, saveLedger, summarizeLedger, type SummaryDimension, type SummaryEntry } from '../lib/ledger'
 import { loadProfile } from '../lib/profile'
@@ -75,9 +76,9 @@ export function Summary() {
   const saveDraft = useCallback((draft: LedgerEntryDraft) => {
     let next: LedgerEntry[]
     if (!editingEntry) {
-      next = [{ id: crypto.randomUUID(), kind: 'manual', ...draft }, ...ledger]
+      next = [{ id: createId(), kind: 'manual', ...draft }, ...ledger]
     } else if (editingEntry.generated) {
-      next = [{ id: crypto.randomUUID(), kind: 'salary_override', replacesId: editingEntry.id, ...draft }, ...ledger]
+      next = [{ id: createId(), kind: 'salary_override', replacesId: editingEntry.id, ...draft }, ...ledger]
     } else {
       next = ledger.map(entry => entry.id === editingEntry.ledgerEntryId ? { ...entry, ...draft } : entry)
     }
@@ -91,7 +92,7 @@ export function Summary() {
     let next: LedgerEntry[]
     if (pendingDelete.generated) {
       next = [{
-        id: crypto.randomUUID(),
+        id: createId(),
         kind: 'salary_override',
         direction: pendingDelete.direction,
         amount: pendingDelete.amount,

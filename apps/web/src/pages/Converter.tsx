@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
+import { createId } from '../lib/id'
 import { appendLedgerEntry } from '../lib/ledger'
 import { loadProfile } from '../lib/profile'
 import { keys, loadJSON, saveJSON } from '../lib/storage'
@@ -31,14 +32,14 @@ export function Converter() {
   const currentPage = Math.min(page, getPageCount(wishlistItems.length))
   const visibleItems = getPageItems(wishlistItems, currentPage)
 
-  const add = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const n=parseNumberInput(price); if(!e.currentTarget.reportValidity() || !name.trim() || n===null || n<0 || n>MAX_MONEY_AMOUNT) return; const next=[{id:crypto.randomUUID(),name:name.trim(),price:n,createdAt:new Date().toISOString()},...items]; setItems(next); saveJSON(keys.wishes,next); setPage(1); setName(''); setPrice('') }
+  const add = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const n=parseNumberInput(price); if(!e.currentTarget.reportValidity() || !name.trim() || n===null || n<0 || n>MAX_MONEY_AMOUNT) return; const next=[{id:createId(),name:name.trim(),price:n,createdAt:new Date().toISOString()},...items]; setItems(next); saveJSON(keys.wishes,next); setPage(1); setName(''); setPrice('') }
   const remove=(item:WishItem)=>{const next=items.filter(i=>i.id!==item.id);setItems(next);saveJSON(keys.wishes,next);setPending(null)}
   const purchase=(item:WishItem)=>{
     if(item.purchasedAt){setPending(null);return}
     const purchasedAt=new Date().toISOString()
     const next=items.map(i=>i.id===item.id?{...i,purchasedAt}:i)
     setItems(next);saveJSON(keys.wishes,next)
-    appendLedgerEntry({id:crypto.randomUUID(),kind:'purchase',direction:'expense',amount:item.price,source:`已买 · ${item.name}`,occurredAt:purchasedAt,linkedId:item.id})
+    appendLedgerEntry({id:createId(),kind:'purchase',direction:'expense',amount:item.price,source:`已买 · ${item.name}`,occurredAt:purchasedAt,linkedId:item.id})
     setPending(null);setShowPurchaseToast(true)
   }
   const confirmAction=()=>{if(!pending)return;pending.type==='delete'?remove(pending.item):purchase(pending.item)}

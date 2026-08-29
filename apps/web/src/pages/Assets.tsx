@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { formatOwnershipDuration, MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
+import { createId } from '../lib/id'
 import { keys, loadJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import type { OwnedItem } from '../types'
@@ -12,7 +13,7 @@ import './Assets.css'
 export function Assets() {
   const now=useNow(60_000); const [items,setItems]=useState<OwnedItem[]>(()=>loadJSON(keys.assets,[])); const [page,setPage]=useState(1); const [name,setName]=useState(''); const [price,setPrice]=useState(''); const [date,setDate]=useState(()=>toLocalDateValue()); const [category,setCategory]=useState('数码'); const [pendingDelete,setPendingDelete]=useState<OwnedItem|null>(null)
   const currentPage=Math.min(page,getPageCount(items.length)); const visibleItems=getPageItems(items,currentPage)
-  const add=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const p=parseNumberInput(price);const d=new Date(`${date}T00:00:00`);if(!e.currentTarget.reportValidity()||!name.trim()||p===null||p<0||p>MAX_MONEY_AMOUNT||Number.isNaN(d.getTime())||d>now)return;const next=[{id:crypto.randomUUID(),name:name.trim(),price:p,purchaseDate:d.toISOString(),category,createdAt:new Date().toISOString()},...items];setItems(next);saveJSON(keys.assets,next);setPage(1);setName('');setPrice('')}
+  const add=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const p=parseNumberInput(price);const d=new Date(`${date}T00:00:00`);if(!e.currentTarget.reportValidity()||!name.trim()||p===null||p<0||p>MAX_MONEY_AMOUNT||Number.isNaN(d.getTime())||d>now)return;const next=[{id:createId(),name:name.trim(),price:p,purchaseDate:d.toISOString(),category,createdAt:new Date().toISOString()},...items];setItems(next);saveJSON(keys.assets,next);setPage(1);setName('');setPrice('')}
   const remove=()=>{if(!pendingDelete)return;const next=items.filter(i=>i.id!==pendingDelete.id);setItems(next);saveJSON(keys.assets,next);setPendingDelete(null)}
   return <section className="page"><header className="page-header"><div><p className="eyebrow">OWNERSHIP COST</p><h1>买得贵不贵，时间会给答案。</h1><p>持有时间越久，平均每小时成本越低。MVP 统计“持有成本”，不是实际使用时长。</p></div></header>
     <form className="input-card asset-form" onSubmit={add}><label><span>物品名称</span><input required maxLength={60} autoComplete="off" value={name} onChange={e=>setName(e.target.value)} placeholder="MacBook Pro"/></label><label><span>价格</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} onKeyDown={preventInvalidNumberKey} onChange={e=>setPrice(normalizeDecimalInput(e.target.value))} placeholder="14999"/></div></label><label><span>购买日期</span><input required type="date" max={toLocalDateValue()} value={date} onChange={e=>setDate(e.target.value)}/></label><label><span>分类</span><select required value={category} onChange={e=>setCategory(e.target.value)}><option>数码</option><option>家居</option><option>交通</option><option>兴趣</option><option>其他</option></select></label><button className="primary-button" type="submit"><Plus size={17}/> 添加物品</button></form>

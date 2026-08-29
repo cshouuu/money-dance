@@ -2,6 +2,7 @@ import { calculateRates, getWorkedPaidSeconds, type SalaryProfile, type SalaryRa
 import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, WorkSession } from '../types'
 import { isConfiguredWorkday } from './attendance'
 import { localDateWithTime, toLocalDateValue } from './form'
+import { createId } from './id'
 import { keys, loadJSON, saveJSON } from './storage'
 
 export interface TodayWorkSummary {
@@ -94,7 +95,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
 }
 
 export function startFlexibleWork(date: string, time: string, current?: DailyWorkRecord): DailyWorkRecord {
-  const session: WorkSession = { id: crypto.randomUUID(), startTime: localDateWithTime(date, time).toISOString() }
+  const session: WorkSession = { id: createId(), startTime: localDateWithTime(date, time).toISOString() }
   return {
     date,
     mode: 'flexible',
@@ -117,7 +118,7 @@ export function resumeFlexibleWork(record: DailyWorkRecord, now = new Date()): D
   return {
     ...record,
     status: 'working',
-    sessions: [...record.sessions, { id: crypto.randomUUID(), startTime: now.toISOString() }],
+    sessions: [...record.sessions, { id: createId(), startTime: now.toISOString() }],
     updatedAt: now.toISOString(),
   }
 }
@@ -129,7 +130,7 @@ export function replaceFlexibleWorkTime(date: string, startTime: string, endTime
     date,
     mode: 'flexible',
     status: end ? 'ended' : 'working',
-    sessions: [{ id: crypto.randomUUID(), startTime: start.toISOString(), endTime: end?.toISOString() }],
+    sessions: [{ id: createId(), startTime: start.toISOString(), endTime: end?.toISOString() }],
     updatedAt: new Date().toISOString(),
   }
 }
