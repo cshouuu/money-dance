@@ -1,7 +1,7 @@
 import { calculateRates, DEFAULT_PROFILE } from '@salary-flow/core'
 import { describe, expect, it } from 'vitest'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
-import { summarizeTodayWork } from './work'
+import { closeActiveWorkSession, getAutomaticFlexibleSettlementMode, summarizeTodayWork } from './work'
 
 const profile = {
   ...DEFAULT_PROFILE,
@@ -19,6 +19,18 @@ function scheduledRecord(): DailyWorkRecord {
 
 function attendance(record: Partial<AttendanceRecord>): AttendanceRecord[] {
   return [{ date: '2026-08-29', status: 'normal', updatedAt: saturday.toISOString(), ...record }]
+}
+
+function flexibleRecord(end: Date | undefined, status: DailyWorkRecord['status'], settlementMode?: NonNullable<DailyWorkRecord['settlementMode']>): DailyWorkRecord {
+  const start = new Date(2026, 7, 28, 9)
+  return {
+    date: '2026-08-28',
+    mode: 'flexible',
+    status,
+    sessions: [{ id: 'session-1', startTime: start.toISOString(), ...(end ? { endTime: end.toISOString() } : {}) }],
+    updatedAt: (end ?? start).toISOString(),
+    ...(settlementMode ? { settlementMode } : {}),
+  }
 }
 
 describe('today workday rules', () => {
@@ -92,5 +104,63 @@ describe('today workday rules', () => {
     const summary = summarizeTodayWork(profile, [], saturday, undefined, attendance({ status: 'holiday', payMode: 'fixed', fixedAmount: 88 }))
     expect(summary.dayType).toBe('holiday')
     expect(summary.earnedAmount).toBe(88)
+  })
+})
+
+describe('flexible work settlement', () => {
+  it('keeps live earnings based on actual worked time', () => {
+    const summary = summarizeTodayWork(profile, [flexibleRecord(undefined, 'working')], new Date(2026, 7, 28, 10))
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('settles an early finish using actual time', () => {
+    const summary = summarizeTodayWork(profile, [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'actual')], new Date(2026, 7, 28, 20))
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('settles an early finish as a full day without changing actual worked time', () => {
+    const summary = summarizeTodayWork(profile, [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'full-day')], new Date(2026, 7, 28, 20))
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBeCloseTo(100)
+  })
+
+  it('ignores a stale full-day marker for hourly or active work', () => {
+    const hourly = { ...profile, salary: 50, salaryType: 'hourly' as const }
+    const ended = summarizeTodayWork(hourly, [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'full-day')], new Date(2026, 7, 28, 20))
+    const active = summarizeTodayWork(profile, [flexibleRecord(undefined, 'working', 'full-day')], new Date(2026, 7, 28, 10))
+    expect(ended.earnedAmount).toBeCloseTo(50)
+    expect(active.earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('caps actual settlement at the daily target', () => {
+    const summary = summarizeTodayWork(profile, [flexibleRecord(new Date(2026, 7, 28, 22), 'ended', 'actual')], new Date(2026, 7, 28, 22))
+    expect(summary.workedSeconds).toBe(8 * 3600)
+    expect(summary.earnedAmount).toBeCloseTo(100)
+  })
+
+  it('keeps old records without a settlement mode on actual-time settlement', () => {
+    const legacy = flexibleRecord(new Date(2026, 7, 28, 10), 'ended')
+    expect(summarizeTodayWork(profile, [legacy], new Date(2026, 7, 28, 20)).earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('persists the selected settlement mode only when ending work', () => {
+    const active = flexibleRecord(undefined, 'working')
+    const end = new Date(2026, 7, 28, 10)
+    const ended = closeActiveWorkSession(active, 'ended', end, 'full-day')
+    expect(ended.settlementMode).toBe('full-day')
+    expect(ended.sessions.every(session => session.endTime === end.toISOString())).toBe(true)
+    expect(closeActiveWorkSession(active, 'paused', end).settlementMode).toBeUndefined()
+  })
+
+  it('automatically settles hourly work as actual time', () => {
+    expect(getAutomaticFlexibleSettlementMode('hourly', 3600, 8 * 3600)).toBe('actual')
+  })
+
+  it('settles completed non-hourly work as a full day and asks about an early finish', () => {
+    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600 - 1, 8 * 3600)).toBeNull()
+    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600, 8 * 3600)).toBe('full-day')
+    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600 + 1, 8 * 3600)).toBe('full-day')
   })
 })

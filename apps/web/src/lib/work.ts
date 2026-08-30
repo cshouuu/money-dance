@@ -1,5 +1,5 @@
 import { calculateRates, getWorkedPaidSeconds, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
-import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, WorkSession } from '../types'
+import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSettlementMode, WorkSession } from '../types'
 import { isConfiguredWorkday } from './attendance'
 import { localDateWithTime, toLocalDateValue } from './form'
 import { createId } from './id'
@@ -42,6 +42,26 @@ export function getFlexibleWorkedSeconds(record: DailyWorkRecord, now = new Date
     total += Math.max(0, (end.getTime() - start.getTime()) / 1000)
   }
   return Math.min(maximum, total)
+}
+
+export function getFlexibleEarnedAmount(
+  record: DailyWorkRecord,
+  rates: SalaryRates,
+  salaryType: SalaryProfile['salaryType'],
+  now = new Date(),
+): number {
+  if (salaryType !== 'hourly' && record.status === 'ended' && record.settlementMode === 'full-day') return rates.daily
+  return getFlexibleWorkedSeconds(record, now, rates.paidSecondsPerDay) * rates.second
+}
+
+export function getAutomaticFlexibleSettlementMode(
+  salaryType: SalaryProfile['salaryType'],
+  workedSeconds: number,
+  paidSecondsPerDay: number,
+): FlexibleWorkSettlementMode | null {
+  if (salaryType === 'hourly') return 'actual'
+  if (workedSeconds >= paidSecondsPerDay) return 'full-day'
+  return null
 }
 
 export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRecord[], now = new Date(), providedRates?: SalaryRates, attendanceRecords: AttendanceRecord[] = []): TodayWorkSummary {
@@ -89,7 +109,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     status: mode === 'flexible' ? record?.status ?? 'ready' : 'working',
     dayType: 'work',
     workedSeconds,
-    earnedAmount: workedSeconds * rates.second,
+    earnedAmount: mode === 'flexible' && record ? getFlexibleEarnedAmount(record, rates, profile.salaryType, now) : workedSeconds * rates.second,
     record,
   }
 }
@@ -105,11 +125,17 @@ export function startFlexibleWork(date: string, time: string, current?: DailyWor
   }
 }
 
-export function closeActiveWorkSession(record: DailyWorkRecord, status: 'paused' | 'ended', now = new Date()): DailyWorkRecord {
+export function closeActiveWorkSession(
+  record: DailyWorkRecord,
+  status: 'paused' | 'ended',
+  now = new Date(),
+  settlementMode: FlexibleWorkSettlementMode = 'actual',
+): DailyWorkRecord {
   return {
     ...record,
     status,
     sessions: record.sessions.map(session => session.endTime ? session : { ...session, endTime: now.toISOString() }),
+    settlementMode: status === 'ended' ? settlementMode : undefined,
     updatedAt: now.toISOString(),
   }
 }
@@ -119,6 +145,7 @@ export function resumeFlexibleWork(record: DailyWorkRecord, now = new Date()): D
     ...record,
     status: 'working',
     sessions: [...record.sessions, { id: createId(), startTime: now.toISOString() }],
+    settlementMode: undefined,
     updatedAt: now.toISOString(),
   }
 }

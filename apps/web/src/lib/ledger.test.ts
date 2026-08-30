@@ -1,6 +1,6 @@
 import { calculateRates, DEFAULT_PROFILE } from '@salary-flow/core'
 import { describe, expect, it } from 'vitest'
-import type { AttendanceRecord, LedgerEntry } from '../types'
+import type { AttendanceRecord, DailyWorkRecord, LedgerEntry } from '../types'
 import { summarizeLedger } from './ledger'
 
 const profile = {
@@ -15,6 +15,19 @@ const now = new Date(2026, 7, 28, 20)
 
 function attendance(record: Partial<AttendanceRecord>): AttendanceRecord[] {
   return [{ date: '2026-08-27', status: 'leave', leaveType: 'sick', payMode: 'unpaid', updatedAt: now.toISOString(), ...record }]
+}
+
+function historicalFlexibleRecord(settlementMode?: NonNullable<DailyWorkRecord['settlementMode']>, hours = 1): DailyWorkRecord {
+  const startedAt = new Date(2026, 7, 27, 9)
+  const endedAt = new Date(2026, 7, 27, 9 + hours)
+  return {
+    date: '2026-08-27',
+    mode: 'flexible',
+    status: 'ended',
+    sessions: [{ id: 'work-1', startTime: startedAt.toISOString(), endTime: endedAt.toISOString() }],
+    updatedAt: endedAt.toISOString(),
+    ...(settlementMode ? { settlementMode } : {}),
+  }
 }
 
 describe('attendance salary recalculation', () => {
@@ -123,6 +136,58 @@ describe('manual attendance before the salary history start date', () => {
     const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ status: 'holiday', leaveType: undefined, payMode: 'unpaid' }))
     expect(summary.income).toBe(0)
     expect(summary.entries).toHaveLength(0)
+  })
+})
+
+describe('historical flexible salary settlement', () => {
+  it('keeps an actual-time early finish in ledger history', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('actual')], [])
+    expect(summary.income).toBeCloseTo(12.5)
+    expect(summary.entries[0]?.id).toBe('salary-2026-8-27')
+  })
+
+  it('keeps a full-day early finish in ledger history', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('full-day')], [])
+    expect(summary.income).toBeCloseTo(100)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤')
+  })
+
+  it('treats legacy records without a settlement mode as actual time', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord()], [])
+    expect(summary.income).toBeCloseTo(12.5)
+  })
+
+  it('uses actual hourly pay even if a stale record says full day', () => {
+    const hourly = { ...profile, salary: 50, salaryType: 'hourly' as const }
+    const summary = summarizeLedger(hourly, [], start, end, now, [historicalFlexibleRecord('full-day')], [])
+    expect(summary.income).toBeCloseTo(50)
+    expect(summary.income).not.toBeCloseTo(calculateRates(hourly).daily)
+  })
+
+  it('caps historical actual-time settlement at one paid day', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('actual', 12)], [])
+    expect(summary.income).toBeCloseTo(100)
+  })
+
+  it('lets unpaid attendance override a saved full-day settlement', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('full-day')], attendance({ payMode: 'unpaid' }))
+    expect(summary.income).toBe(0)
+  })
+
+  it('lets a manual salary override replace a saved full-day settlement', () => {
+    const ledger: LedgerEntry[] = [{
+      id: 'manual-override',
+      kind: 'salary_override',
+      direction: 'income',
+      amount: 76,
+      source: '手工工资调整',
+      occurredAt: new Date(2026, 7, 27, 12).toISOString(),
+      replacesId: 'salary-2026-8-27',
+    }]
+    const summary = summarizeLedger(profile, ledger, start, end, now, [historicalFlexibleRecord('full-day')], [])
+    expect(summary.income).toBe(76)
+    expect(summary.entries).toHaveLength(1)
+    expect(summary.entries[0]?.source).toBe('手工工资调整')
   })
 })
 
