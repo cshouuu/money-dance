@@ -6,10 +6,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
+
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -217,14 +220,34 @@ public class AppUpdaterPlugin extends Plugin {
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context receiverContext, Intent intent) {
+                if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
                 long completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
                 if (completedId != downloadId) return;
+
+                int status;
+                try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(downloadId))) {
+                    if (cursor == null || !cursor.moveToFirst()) return;
+                    int statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
+                    if (statusColumn < 0) return;
+                    status = cursor.getInt(statusColumn);
+                }
+
+                // Keep listening when a spoofed/early broadcast arrives while
+                // DownloadManager still owns an unfinished request.
+                if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                    if (status != DownloadManager.STATUS_FAILED) return;
+                    try {
+                        context.unregisterReceiver(this);
+                    } catch (Exception ignored) {
+                    }
+                    return;
+                }
+
+                Uri apkUri = manager.getUriForDownloadedFile(downloadId);
                 try {
                     context.unregisterReceiver(this);
                 } catch (Exception ignored) {
                 }
-
-                Uri apkUri = manager.getUriForDownloadedFile(downloadId);
                 if (apkUri == null) return;
 
                 Intent installIntent = new Intent(Intent.ACTION_VIEW)
@@ -236,11 +259,10 @@ public class AppUpdaterPlugin extends Plugin {
         };
 
         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            context.registerReceiver(receiver, filter);
-        }
+        // DownloadManager is a system component outside this app process, so
+        // the receiver must be exported. The callback validates action, ID,
+        // final status and the app-scoped download URI before installing.
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED);
 
         JSObject result = new JSObject();
         result.put("status", "downloading");
