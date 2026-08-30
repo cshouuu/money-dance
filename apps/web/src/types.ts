@@ -34,6 +34,7 @@ export interface OvertimeSession extends ActiveOvertime {
 }
 
 export type DailyWorkStatus = 'ready' | 'working' | 'paused' | 'ended'
+export type FlexibleWorkSettlementMode = 'actual' | 'full-day'
 
 export interface WorkSession {
   id: string
@@ -46,6 +47,7 @@ export interface DailyWorkRecord {
   mode: 'scheduled' | 'flexible'
   status: DailyWorkStatus
   sessions: WorkSession[]
+  settlementMode?: FlexibleWorkSettlementMode
   updatedAt: string
 }
 

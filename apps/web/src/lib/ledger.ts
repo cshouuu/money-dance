@@ -4,7 +4,7 @@ import { attendanceStatusLabel, isConfiguredWorkday, loadAttendanceRecords } fro
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { migrateLegacyOvertimeLedgerDates } from './overtime'
-import { getFlexibleWorkedSeconds, loadWorkRecords } from './work'
+import { getFlexibleEarnedAmount, loadWorkRecords } from './work'
 
 export type SummaryDimension = 'day' | 'month' | 'year'
 
@@ -116,7 +116,10 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     } else {
       const workMode = workRecord?.mode ?? profile.defaultWorkMode
       if (workMode === 'flexible') {
-        if (workRecord) amount = getFlexibleWorkedSeconds(workRecord, now, rates.paidSecondsPerDay) * rates.second
+        if (workRecord) {
+          amount = getFlexibleEarnedAmount(workRecord, rates, profile.salaryType, now)
+          if (profile.salaryType !== 'hourly' && workRecord.status === 'ended' && workRecord.settlementMode === 'full-day') source = '工资收入 · 正常出勤'
+        }
         else if (attendance?.status === 'normal' && !sameCalendarDay(day, today)) amount = rates.daily
       } else {
         if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, profile)) continue
