@@ -13,7 +13,7 @@ Money Dance keeps the existing React/Vite application as the single UI/codebase 
 
 The repository contains `.github/workflows/build-android-apk.yml`.
 
-It builds the current web application, creates a Capacitor Android project on the CI runner, injects the native update bridge, synchronizes the web assets, builds an installable APK, verifies its signature, and generates a SHA-256 checksum.
+It builds the current web application, creates a Capacitor Android project on the CI runner, injects the maintained native bridges and Android resource templates, synchronizes the web assets, builds an installable APK, verifies its signature, and generates a SHA-256 checksum.
 
 ### Pull requests and manual builds
 
@@ -109,6 +109,42 @@ On Android 8+, the first in-app update may also require the user to enable **All
 
 The app automatically checks at most once every six hours and also exposes a manual **我的 → 应用更新 → 检查更新** action.
 
+### Android 4×2 home-screen widget
+
+The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. The implementation is complete in the source tree and is pending the next Android release; it is not part of v0.2.23.
+
+Its refresh behavior is intentionally on demand:
+
+- normal “today earned” display updates once per second only after the user explicitly enables real-time mode from the widget;
+- active slacking or overtime automatically enables once-per-second widget updates for the duration of that session;
+- the implementation uses a `specialUse` foreground service and a persistent Android notification while second-level updates are active;
+- widget redraws may pause while the screen is off and resume when it becomes interactive again;
+- OEM background policies and launcher refresh behavior can still delay a frame, so this is best-effort second-level display rather than a hard real-time guarantee.
+
+On Android 13 and later, Money Dance asks for notification permission once, only after at least one widget has been added and the app next resumes. If the user declines, the foreground ticker can still run and Android keeps it visible under **Active apps / Task Manager**, but the notification-drawer status and its stop action may be hidden. Real-time mode can still be turned off from the widget, and notification permission can be granted later in Android system settings.
+
+The 4×2 layout exposes these actions:
+
+- slacking can be started and stopped directly from the widget;
+- starting overtime opens MoneyDance and reuses the existing overtime pay-mode selector (unpaid, salary multiplier, or fixed amount);
+- active overtime can be stopped directly from the widget;
+- real-time display for normal work earnings can be toggled explicitly from the widget.
+
+The native widget does not reimplement salary, attendance, flexible-work, or calendar adjustment rules. The Web layer calculates and compresses the next 36 hours into earnings timeline slices, then sends the snapshot through the Capacitor bridge to Android `SharedPreferences`. The native layer evaluates the current slice to render the amount without loading the WebView on every tick.
+
+Widget actions are stored in an append-only native action queue with stable action IDs. On app startup or resume, the bridge exposes pending actions to the Web layer, which applies them idempotently to `localStorage` and acknowledges them only after the related session and ledger changes succeed. This keeps desktop actions recoverable across process restarts while preserving the existing local-first source of truth.
+
+### Slacking and overtime achievements
+
+Both timers have five permanent achievement levels:
+
+| Module | Level thresholds |
+| --- | --- |
+| Slacking | 30 minutes, 3 hours, 10 hours, 30 hours, 100 hours |
+| Overtime | 1 hour, 10 hours, 30 hours, 100 hours, 300 hours |
+
+Existing session records are used to initialize lifetime progress. New completed sessions continue adding to that lifetime total. Clearing or deleting session history does not subtract lifetime duration and does not relock an illuminated medal; history cleanup and achievement progress are deliberately separate operations.
+
 ### First migration from old debug APKs
 
 Previously generated Money Dance APKs used ephemeral debug signing. Those APKs do **not** share the permanent release certificate.
@@ -145,4 +181,4 @@ A Capacitor iOS project can also be generated later on macOS with Xcode using th
 
 ## Data behavior
 
-The mobile shell currently preserves the existing local-first model. Salary profile, wishes, slacking sessions, assets, and ledger records remain device-local. Installing the native APK does not automatically import localStorage data from the Cloudflare-hosted web version because the native WebView has its own storage container.
+The mobile shell currently preserves the existing local-first model. Salary profile, wishes, slacking and overtime sessions, achievement progress, assets, and ledger records remain device-local. Installing the native APK does not automatically import localStorage data from the Cloudflare-hosted web version because the native WebView has its own storage container.

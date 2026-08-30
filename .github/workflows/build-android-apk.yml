@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'package.json'
+      - 'package-lock.json'
       - 'apps/web/**'
       - 'packages/core/**'
       - '.github/workflows/build-android-apk.yml'
@@ -128,37 +130,71 @@ jobs:
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
           ANDROID_RELEASE_SIGNING: 'true'
         run: node apps/web/native/android/prepare-android.mjs
-      - name: Verify AppUpdater native registration
+      - name: Verify Android native injection
         shell: bash
         run: |
           set -euo pipefail
+          NATIVE_ROOT="apps/web/native/android"
+          JAVA_ROOT="apps/web/android/app/src/main/java/com/cshouuu/moneydance"
+          RES_ROOT="apps/web/android/app/src/main/res"
           MAIN_ACTIVITY="apps/web/android/app/src/main/java/com/cshouuu/moneydance/MainActivity.java"
-          PLUGIN_SOURCE="apps/web/android/app/src/main/java/com/cshouuu/moneydance/AppUpdaterPlugin.java"
+          MANIFEST="apps/web/android/app/src/main/AndroidManifest.xml"
+          PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_info.xml"
+          PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_info.xml"
+
           test -f "$MAIN_ACTIVITY"
-          test -f "$PLUGIN_SOURCE"
-          grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$PLUGIN_SOURCE"
-          node - "$MAIN_ACTIVITY" <<'NODE'
+          test -f "$MANIFEST"
+
+          for source in AppUpdaterPlugin WidgetBridgePlugin MoneyDanceWidgetProvider WidgetTickerService; do
+            test -f "$NATIVE_ROOT/${source}.java"
+            test -f "$JAVA_ROOT/${source}.java"
+            cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
+          done
+
+          test -f "$PROVIDER_TEMPLATE"
+          test -f "$PROVIDER_XML"
+          cmp "$PROVIDER_TEMPLATE" "$PROVIDER_XML"
+
+          grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$JAVA_ROOT/AppUpdaterPlugin.java"
+          grep -Fq '@CapacitorPlugin(name = "WidgetBridge")' "$JAVA_ROOT/WidgetBridgePlugin.java"
+          grep -Fq 'class MoneyDanceWidgetProvider' "$JAVA_ROOT/MoneyDanceWidgetProvider.java"
+          grep -Fq 'class WidgetTickerService' "$JAVA_ROOT/WidgetTickerService.java"
+          grep -Fq 'android:name=".MoneyDanceWidgetProvider"' "$MANIFEST"
+          grep -Fq 'android:name=".WidgetTickerService"' "$MANIFEST"
+          grep -Fq 'android.appwidget.action.APPWIDGET_UPDATE' "$MANIFEST"
+          grep -Fq 'android:name="android.appwidget.provider"' "$MANIFEST"
+          grep -Fq 'android:resource="@xml/money_dance_widget_info"' "$MANIFEST"
+          grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
+          grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
+          grep -Fq 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$MANIFEST"
+          grep -Fq 'android:initialLayout="@layout/money_dance_widget"' "$PROVIDER_XML"
+          grep -Fq 'android:updatePeriodMillis="0"' "$PROVIDER_XML"
+
+          node - "$MAIN_ACTIVITY" "$MANIFEST" <<'NODE'
           const fs = require('fs')
           const source = fs.readFileSync(process.argv[2], 'utf8')
-          const registerAt = source.indexOf('registerPlugin(AppUpdaterPlugin.class)')
+          const manifest = fs.readFileSync(process.argv[3], 'utf8')
           const superAt = source.indexOf('super.onCreate(savedInstanceState)')
-          if (registerAt < 0 || superAt < 0 || registerAt > superAt) {
-            console.error('AppUpdater must be registered before BridgeActivity creates the Capacitor Bridge')
+          for (const plugin of ['AppUpdaterPlugin', 'WidgetBridgePlugin']) {
+            const registerAt = source.indexOf(`registerPlugin(${plugin}.class)`)
+            if (registerAt < 0 || superAt < 0 || registerAt > superAt) {
+              console.error(`${plugin} must be registered before BridgeActivity creates the Capacitor Bridge`)
+              process.exit(1)
+            }
+          }
+          if (!/<receiver\s+android:name="\.MoneyDanceWidgetProvider"\s+android:exported="false">/.test(manifest)) {
+            console.error('MoneyDanceWidgetProvider must not be exported')
             process.exit(1)
           }
-          console.log('AppUpdater registration order verified')
+          console.log('Native plugin registration order verified')
           NODE
-      - name: Build APK
+      - name: Run Android checks and build APKs
         working-directory: apps/web/android
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          if [[ "${{ steps.version.outputs.is_release }}" == "true" ]]; then
-            ./gradlew assembleRelease --no-daemon
-          else
-            ./gradlew assembleDebug assembleRelease --no-daemon
-          fi
+          ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon
       - name: Prepare APK files
         id: package
         shell: bash
@@ -176,13 +212,18 @@ jobs:
           cp "$APK_SOURCE" "artifacts/${APK_BASENAME}.apk"
           sha256sum "artifacts/${APK_BASENAME}.apk" > "artifacts/${APK_BASENAME}.apk.sha256"
           echo "apk_name=${APK_BASENAME}.apk" >> "$GITHUB_OUTPUT"
-      - name: Verify APK signature
+      - name: Verify debug and release APK signatures
         shell: bash
         run: |
           set -euo pipefail
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "artifacts/${{ steps.package.outputs.apk_name }}"
+          DEBUG_APK="apps/web/android/app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_APK="apps/web/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$DEBUG_APK"
+          test -f "$RELEASE_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$DEBUG_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$RELEASE_APK"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: money-dance-android-apk

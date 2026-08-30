@@ -1,11 +1,22 @@
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { BadgeDollarSign, BriefcaseBusiness, Play, Square, Trash2 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { AchievementPanel } from '../components/AchievementPanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FinishToast } from '../components/FinishToast'
 import { OvertimeStartDialog } from '../components/OvertimeStartDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { createId } from '../lib/id'
+import {
+  elapsedSecondsSince,
+  formatTimerDuration,
+  getAchievementSnapshot,
+  loadAchievementState,
+  reconcileAchievementSessions,
+  saveAchievementState,
+  unlockAchievementLevel,
+} from '../lib/achievements'
 import { loadLedger, saveLedger } from '../lib/ledger'
 import { calculateOvertimeEarnings, createOvertimeLedgerEntries, overtimePayLabel } from '../lib/overtime'
 import { loadProfile } from '../lib/profile'
@@ -16,37 +27,62 @@ import './Overtime.css'
 
 type PendingDelete = { type: 'all' } | { type: 'session'; session: OvertimeSession } | null
 
-function formatTimer(totalSeconds: number): string {
-  const seconds = Math.max(0, Math.floor(totalSeconds))
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  const remainingSeconds = seconds % 60
-  return [hours, minutes, remainingSeconds].map(value => String(value).padStart(2, '0')).join(':')
-}
-
 function formatStart(value: string): string {
   const date = new Date(value)
   return `${date.toLocaleDateString('zh-CN')} ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export function Overtime() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [profile] = useState(() => loadProfile())
   const rates = useMemo(() => calculateRates(profile), [profile])
   const now = useNow(1000)
   const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
   const [sessions, setSessions] = useState<OvertimeSession[]>(() => loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
+  const [achievementState, setAchievementState] = useState(() => reconcileAchievementSessions(
+    'overtime',
+    loadAchievementState('overtime'),
+    sessions,
+    new Date().toISOString(),
+  ))
   const [startDialogOpen, setStartDialogOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   const [finishNotice, setFinishNotice] = useState<{ id: string; message: string } | null>(null)
   const [page, setPage] = useState(1)
   const stoppingRef = useRef(false)
 
-  const liveSeconds = active ? Math.max(0, (now.getTime() - new Date(active.startTime).getTime()) / 1000) : 0
+  const liveSeconds = active ? elapsedSecondsSince(active.startTime, now) : 0
   const liveMoney = active ? calculateOvertimeEarnings(active, liveSeconds, rates.second) : 0
   const currentPage = Math.min(page, getPageCount(sessions.length))
   const visibleSessions = getPageItems(sessions, currentPage)
   const totalSeconds = sessions.reduce((total, session) => total + session.durationSeconds, 0)
   const totalMoney = sessions.reduce((total, session) => total + session.earnedAmount, 0)
+  const achievementSnapshot = getAchievementSnapshot('overtime', achievementState, liveSeconds)
+
+  useEffect(() => {
+    setAchievementState(current => reconcileAchievementSessions('overtime', current, sessions, new Date().toISOString()))
+  }, [sessions])
+
+  useEffect(() => {
+    saveAchievementState('overtime', achievementState)
+  }, [achievementState])
+
+  useEffect(() => {
+    setAchievementState(current => unlockAchievementLevel(
+      'overtime',
+      current,
+      achievementSnapshot.highestLevel,
+      new Date().toISOString(),
+    ))
+  }, [achievementSnapshot.highestLevel])
+
+  useEffect(() => {
+    if (searchParams.get('start') !== '1') return
+    if (!active) setStartDialogOpen(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('start')
+    setSearchParams(next, { replace: true })
+  }, [active, searchParams, setSearchParams])
 
   const openStartDialog = useCallback(() => setStartDialogOpen(true), [])
   const closeStartDialog = useCallback(() => setStartDialogOpen(false), [])
@@ -64,7 +100,7 @@ export function Overtime() {
     stoppingRef.current = true
     try {
       const endTime = new Date().toISOString()
-      const durationSeconds = Math.max(0, (new Date(endTime).getTime() - new Date(active.startTime).getTime()) / 1000)
+      const durationSeconds = elapsedSecondsSince(active.startTime, new Date(endTime))
       const session: OvertimeSession = {
         ...active,
         id: createId(),
@@ -106,19 +142,21 @@ export function Overtime() {
     <div className={`timer-card overtime-timer${active ? ' running' : ''}`}>
       <div className="overtime-orbit"><BriefcaseBusiness size={32}/></div>
       <p>{active ? '正在加班……' : '今天又要加班吗？'}</p>
-      <div className="timer-number">{active ? formatTimer(liveSeconds) : '00:00:00'}</div>
+      <div className="timer-number">{active ? formatTimerDuration(liveSeconds) : '00:00:00'}</div>
       <small>{active?.payMode === 'unpaid' ? '这段时间没有加班费' : '本次预计加班收入'}</small>
       <div className="timer-money">¥{liveMoney.toFixed(2)}</div>
       {active ? <button type="button" className="stop-button" onClick={stop}><Square size={18}/>结束加班</button> : <button type="button" className="primary-button big" onClick={openStartDialog}><Play size={18}/>开始加班</button>}
       <span className="timer-rate">{active ? active.payMode === 'unpaid' ? '只计时间 · 不计收入' : active.payMode === 'fixed' ? `本次固定加班费 ¥${(active.fixedAmount ?? 0).toFixed(2)}` : `+ ¥${(rates.second * (active.multiplier ?? 1)).toFixed(5)} / 秒 · ${active.multiplier ?? 1} 倍工资` : '开始时再选择有没有加班费'}</span>
     </div>
 
-    <div className="summary-strip overtime-summary"><div><small>历史加班收入</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>历史加班时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-overtime-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+    <div className="summary-strip overtime-summary"><div><small>历史加班收入</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>当前保留的加班时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-overtime-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+
+    <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds}/>
 
     <div className="list-section"><div className="section-title"><h2>加班记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有加班记录。</div> : <><div className="item-list">{visibleSessions.map(session => <article className="list-card overtime-record" key={session.id}><div className="item-avatar overtime-avatar"><BadgeDollarSign size={19}/></div><div className="item-main"><b>{formatStart(session.startTime)}</b><span>{formatDuration(session.durationSeconds)} · {overtimePayLabel(session)}</span></div><div className="item-result"><small>本次加班</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button overtime-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次加班记录" title="删除"><Trash2 size={16}/></button></article>)}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
 
     <OvertimeStartDialog open={startDialogOpen} onStart={start} onCancel={closeStartDialog}/>
-    <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.type === 'all' ? '这些加班证据也要全部删掉吗？' : '真的要删掉这次加班记录吗？'} message={pendingDelete?.type === 'session' ? `${formatStart(pendingDelete.session.startTime)} · ${overtimePayLabel(pendingDelete.session)} · ¥${pendingDelete.session.earnedAmount.toFixed(2)}` : undefined} confirmLabel="删掉，当没加过" cancelLabel="留着，都是证据" onConfirm={confirmDelete} onCancel={cancelDelete}/>
+    <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.type === 'all' ? '这些加班证据也要全部删掉吗？' : '真的要删掉这次加班记录吗？'} message={pendingDelete ? `${pendingDelete.type === 'session' ? `${formatStart(pendingDelete.session.startTime)} · ${overtimePayLabel(pendingDelete.session)} · ¥${pendingDelete.session.earnedAmount.toFixed(2)}。` : ''}计时记录会被删除，但已点亮勋章和成就累计时长会永久保留。` : undefined} confirmLabel="删掉，当没加过" cancelLabel="留着，都是证据" onConfirm={confirmDelete} onCancel={cancelDelete}/>
     {finishNotice && <FinishToast key={finishNotice.id} message={finishNotice.message} onClose={closeFinishNotice}/>}
   </section>
 }
