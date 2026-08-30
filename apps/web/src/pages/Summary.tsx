@@ -1,5 +1,6 @@
-import { Pencil, Plus, Trash2, TrendingDown, TrendingUp, WalletCards } from 'lucide-react'
+import { CalendarCheck2, Pencil, Plus, Trash2, TrendingDown, TrendingUp, WalletCards } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { LedgerCalendar } from '../components/LedgerCalendar'
 import { LedgerEntryDialog, type LedgerEntryDraft } from '../components/LedgerEntryDialog'
@@ -7,7 +8,7 @@ import { getPageCount, getPageItems, Pagination } from '../components/Pagination
 import { toLocalDateValue, toLocalMonthValue } from '../lib/form'
 import { createId } from '../lib/id'
 import { loadAttendanceRecords } from '../lib/attendance'
-import { getSummaryRange, loadLedger, saveLedger, summarizeLedger, type SummaryDimension, type SummaryEntry } from '../lib/ledger'
+import { getSummaryRange, loadLedger, salaryEntryIdForDate, saveLedger, summarizeLedger, type SummaryDimension, type SummaryEntry } from '../lib/ledger'
 import { loadProfile } from '../lib/profile'
 import { loadWorkRecords } from '../lib/work'
 import type { AttendanceRecord, DailyWorkRecord, LedgerEntry } from '../types'
@@ -46,6 +47,7 @@ export function Summary() {
   }, [dimension, anchor, profile, ledger, workRecords, attendanceRecords])
   const currentPage = Math.min(page, getPageCount(summary.entries.length))
   const visibleEntries = getPageItems(summary.entries, currentPage)
+  const attendanceSalaryIds = useMemo(() => new Set(attendanceRecords.map(record => salaryEntryIdForDate(record.date))), [attendanceRecords])
 
   const updateLedger = useCallback((next: LedgerEntry[]) => {
     saveLedger(next)
@@ -113,7 +115,7 @@ export function Summary() {
   return <section className="page"><header className="page-header"><div><p className="eyebrow">MONEY LEDGER</p><h1>账本</h1><p>把薪资、已买物品和意外收支放到同一本账里，按日、月、年看清真实结余。</p></div></header>
     <LedgerCalendar profile={profile} ledger={ledger} workRecords={workRecords} attendanceRecords={attendanceRecords} dimension={dimension} anchor={anchor} onChange={changeSelection}/>
     <div className="summary-metrics"><article><span className="summary-icon income"><TrendingUp size={18}/></span><small>收入合计</small><strong>{formatMoney(summary.income)}</strong></article><article><span className="summary-icon expense"><TrendingDown size={18}/></span><small>支出合计</small><strong>{formatMoney(summary.expense)}</strong></article><article className="net"><span className="summary-icon"><WalletCards size={18}/></span><small>账本结余</small><strong className={summary.net<0?'negative':''}>{formatMoney(summary.net)}</strong></article></div>
-    <div className="list-section"><div className="section-title ledger-section-title"><div><h2>收支明细</h2><span>{summary.entries.length} 笔</span></div><button type="button" className="primary-button ledger-add-button" onClick={openAddDialog}><Plus size={16}/>新增明细</button></div>{summary.entries.length===0?<div className="empty ledger-empty"><p>这个时间范围还没有收支明细。</p><button type="button" className="ghost-button" onClick={openAddDialog}><Plus size={15}/>记一笔</button></div>:<><div className="ledger-list">{visibleEntries.map(entry=><article className="ledger-row" key={`${entry.id}-${entry.ledgerEntryId ?? 'generated'}`}><span className={`ledger-direction ${entry.direction}`}>{entry.direction==='income'?'+':'−'}</span><div className="ledger-source"><b>{entry.source}</b><span>{entry.category} · {formatDate(entry.occurredAt)}</span></div><strong className={entry.direction}>{entry.direction==='income'?'+':'−'}¥{entry.amount.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><div className="ledger-row-actions"><button type="button" className="icon-button" aria-label={`编辑${entry.source}`} onClick={()=>openEditDialog(entry)}><Pencil size={15}/></button><button type="button" className="icon-button danger" aria-label={`删除${entry.source}`} onClick={()=>setPendingDelete(entry)}><Trash2 size={15}/></button></div></article>)}</div><Pagination total={summary.entries.length} page={currentPage} onPageChange={setPage}/></>}</div>
+    <div className="list-section"><div className="section-title ledger-section-title"><div><h2>收支明细</h2><span>{summary.entries.length} 笔</span></div><button type="button" className="primary-button ledger-add-button" onClick={openAddDialog}><Plus size={16}/>新增明细</button></div>{summary.entries.length===0?<div className="empty ledger-empty"><p>这个时间范围还没有收支明细。</p><button type="button" className="ghost-button" onClick={openAddDialog}><Plus size={15}/>记一笔</button></div>:<><div className="ledger-list">{visibleEntries.map(entry=>{const attendanceManaged=entry.generated&&attendanceSalaryIds.has(entry.id);return <article className="ledger-row" key={`${entry.id}-${entry.ledgerEntryId ?? 'generated'}`}><span className={`ledger-direction ${entry.direction}`}>{entry.direction==='income'?'+':'−'}</span><div className="ledger-source"><b>{entry.source}</b><span>{entry.category} · {formatDate(entry.occurredAt)}</span></div><strong className={entry.direction}>{entry.direction==='income'?'+':'−'}¥{entry.amount.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><div className="ledger-row-actions">{attendanceManaged?<Link className="icon-button" to={`/attendance?date=${encodeURIComponent(toLocalDateValue(new Date(entry.occurredAt)))}`} aria-label={`在薪苦日历调整${entry.source}`} title="前往薪苦日历调整"><CalendarCheck2 size={15}/></Link>:<><button type="button" className="icon-button" aria-label={`编辑${entry.source}`} onClick={()=>openEditDialog(entry)}><Pencil size={15}/></button><button type="button" className="icon-button danger" aria-label={`删除${entry.source}`} onClick={()=>setPendingDelete(entry)}><Trash2 size={15}/></button></>}</div></article>})}</div><Pagination total={summary.entries.length} page={currentPage} onPageChange={setPage}/></>}</div>
     <LedgerEntryDialog open={dialogOpen} entry={editingEntry} initialDate={initialDateForSelection(dimension, anchor)} onSave={saveDraft} onCancel={closeDialog}/>
     <ConfirmDialog open={pendingDelete!==null} title="确定删除这笔收支明细吗？" message={pendingDelete ? `${pendingDelete.source} · ${formatDate(pendingDelete.occurredAt)}，删除后不会计入账本统计。` : undefined} confirmLabel="确定删除" cancelLabel="再想想" onConfirm={confirmDelete} onCancel={cancelDelete}/>
   </section>

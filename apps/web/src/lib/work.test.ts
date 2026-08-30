@@ -17,8 +17,8 @@ function scheduledRecord(): DailyWorkRecord {
   return { date: '2026-08-29', mode: 'scheduled', status: 'ended', sessions: [], updatedAt: saturday.toISOString() }
 }
 
-function attendance(record: Partial<AttendanceRecord>): AttendanceRecord[] {
-  return [{ date: '2026-08-29', status: 'normal', updatedAt: saturday.toISOString(), ...record }]
+function attendance(record: Partial<AttendanceRecord>, date = '2026-08-29'): AttendanceRecord[] {
+  return [{ date, status: 'normal', updatedAt: saturday.toISOString(), ...record }]
 }
 
 function flexibleRecord(end: Date | undefined, status: DailyWorkRecord['status'], settlementMode?: NonNullable<DailyWorkRecord['settlementMode']>): DailyWorkRecord {
@@ -76,6 +76,20 @@ describe('today workday rules', () => {
     expect(summary.earnedAmount).toBeGreaterThan(0)
   })
 
+  it('uses a full-day multiplier for explicit normal attendance', () => {
+    const summary = summarizeTodayWork(profile, [], saturday, undefined, attendance({ status: 'normal', payMode: 'multiplier', multiplier: 2 }))
+    expect(summary.dayType).toBe('work')
+    expect(summary.earnedAmount).toBeCloseTo(200)
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.attendance?.status).toBe('normal')
+  })
+
+  it('uses a fixed amount for explicit normal attendance', () => {
+    const summary = summarizeTodayWork(profile, [], saturday, undefined, attendance({ status: 'normal', payMode: 'fixed', fixedAmount: 88 }))
+    expect(summary.earnedAmount).toBe(88)
+    expect(summary.workedSeconds).toBe(3600)
+  })
+
   it('applies unpaid leave before the normal scheduled calculation', () => {
     const summary = summarizeTodayWork(profile, [scheduledRecord()], saturday, undefined, attendance({ status: 'leave', leaveType: 'personal', payMode: 'unpaid' }))
     expect(summary.dayType).toBe('leave')
@@ -112,6 +126,55 @@ describe('flexible work settlement', () => {
     const summary = summarizeTodayWork(profile, [flexibleRecord(undefined, 'working')], new Date(2026, 7, 28, 10))
     expect(summary.workedSeconds).toBe(3600)
     expect(summary.earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('lets a normal-attendance multiplier override live earnings without changing worked time', () => {
+    const summary = summarizeTodayWork(
+      profile,
+      [flexibleRecord(undefined, 'working')],
+      new Date(2026, 7, 28, 10),
+      undefined,
+      attendance({ status: 'normal', payMode: 'multiplier', multiplier: 2 }, '2026-08-28'),
+    )
+    expect(summary.status).toBe('working')
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBeCloseTo(200)
+  })
+
+  it('lets a normal-attendance fixed amount override an actual settlement', () => {
+    const summary = summarizeTodayWork(
+      profile,
+      [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'actual')],
+      new Date(2026, 7, 28, 20),
+      undefined,
+      attendance({ status: 'normal', payMode: 'fixed', fixedAmount: 88 }, '2026-08-28'),
+    )
+    expect(summary.status).toBe('ended')
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBe(88)
+  })
+
+  it('keeps a legacy normal-attendance record on the original flexible calculation', () => {
+    const summary = summarizeTodayWork(
+      profile,
+      [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'actual')],
+      new Date(2026, 7, 28, 20),
+      undefined,
+      attendance({ status: 'normal' }, '2026-08-28'),
+    )
+    expect(summary.earnedAmount).toBeCloseTo(12.5)
+  })
+
+  it('uses the standard daily amount as the multiplier base for hourly salary', () => {
+    const hourly = { ...profile, salary: 50, salaryType: 'hourly' as const }
+    const summary = summarizeTodayWork(
+      hourly,
+      [flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'actual')],
+      new Date(2026, 7, 28, 20),
+      undefined,
+      attendance({ status: 'normal', payMode: 'multiplier', multiplier: 2 }, '2026-08-28'),
+    )
+    expect(summary.earnedAmount).toBeCloseTo(800)
   })
 
   it('settles an early finish using actual time', () => {
@@ -156,6 +219,11 @@ describe('flexible work settlement', () => {
 
   it('automatically settles hourly work as actual time', () => {
     expect(getAutomaticFlexibleSettlementMode('hourly', 3600, 8 * 3600)).toBe('actual')
+  })
+
+  it('skips early-finish choices when attendance already overrides the day amount', () => {
+    expect(getAutomaticFlexibleSettlementMode('daily', 3600, 8 * 3600, true)).toBe('actual')
+    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600, 8 * 3600, true)).toBe('full-day')
   })
 
   it('settles completed non-hourly work as a full day and asks about an early finish', () => {

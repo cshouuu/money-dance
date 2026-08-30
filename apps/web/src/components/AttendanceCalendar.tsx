@@ -53,7 +53,10 @@ export function AttendanceCalendar({ profile, records, workRecords, dimension, a
   const stateForDate = (date: string): DayState => {
     if (date > today) return { label: '未到', tone: 'future', explicit: false }
     const record = recordByDate.get(date)
-    if (record?.status === 'normal') return { label: '正常', tone: 'normal', explicit: true }
+    if (record?.status === 'normal') {
+      const label = record.payMode === 'multiplier' ? `正常·${record.multiplier ?? 0}倍` : record.payMode === 'fixed' ? '正常·固定' : '正常'
+      return { label, tone: 'normal', explicit: true }
+    }
     if (record?.status === 'leave') return { label: leaveTypeLabel(record.leaveType), tone: 'leave', explicit: true }
     if (record?.status === 'holiday') return { label: record.payMode === 'unpaid' ? '无薪假' : '带薪假', tone: 'holiday', explicit: true }
     const day = toLocalDateTime(date)

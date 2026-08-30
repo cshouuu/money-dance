@@ -1,6 +1,6 @@
 import { calculateRates, getWorkedPaidSeconds, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSettlementMode, WorkSession } from '../types'
-import { isConfiguredWorkday } from './attendance'
+import { getCustomAttendanceAmount, isConfiguredWorkday } from './attendance'
 import { localDateWithTime, toLocalDateValue } from './form'
 import { createId } from './id'
 import { keys, loadJSON, saveJSON } from './storage'
@@ -58,9 +58,11 @@ export function getAutomaticFlexibleSettlementMode(
   salaryType: SalaryProfile['salaryType'],
   workedSeconds: number,
   paidSecondsPerDay: number,
+  hasAttendancePayOverride = false,
 ): FlexibleWorkSettlementMode | null {
   if (salaryType === 'hourly') return 'actual'
   if (workedSeconds >= paidSecondsPerDay) return 'full-day'
+  if (hasAttendancePayOverride) return 'actual'
   return null
 }
 
@@ -70,17 +72,15 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const attendance = attendanceRecords.find(item => item.date === today)
   const mode = record?.mode ?? profile.defaultWorkMode
   const rates = providedRates ?? calculateRates(profile)
+  const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
 
   if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
-    let earnedAmount = 0
-    if (attendance.payMode === 'multiplier') earnedAmount = rates.daily * Math.max(0, attendance.multiplier ?? 0)
-    if (attendance.payMode === 'fixed') earnedAmount = Math.max(0, attendance.fixedAmount ?? 0)
     return {
       mode,
       status: 'ended',
       dayType: attendance.status,
       workedSeconds: 0,
-      earnedAmount,
+      earnedAmount: customAttendanceAmount ?? 0,
       record,
       attendance,
     }
@@ -104,13 +104,17 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const workedSeconds = mode === 'flexible'
     ? record ? getFlexibleWorkedSeconds(record, now, rates.paidSecondsPerDay) : 0
     : getWorkedPaidSeconds(profile, now)
+  const automaticEarnedAmount = mode === 'flexible' && record
+    ? getFlexibleEarnedAmount(record, rates, profile.salaryType, now)
+    : workedSeconds * rates.second
   return {
     mode,
     status: mode === 'flexible' ? record?.status ?? 'ready' : 'working',
     dayType: 'work',
     workedSeconds,
-    earnedAmount: mode === 'flexible' && record ? getFlexibleEarnedAmount(record, rates, profile.salaryType, now) : workedSeconds * rates.second,
+    earnedAmount: attendance?.status === 'normal' && customAttendanceAmount !== null ? customAttendanceAmount : automaticEarnedAmount,
     record,
+    attendance,
   }
 }
 

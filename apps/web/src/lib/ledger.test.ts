@@ -17,6 +17,10 @@ function attendance(record: Partial<AttendanceRecord>): AttendanceRecord[] {
   return [{ date: '2026-08-27', status: 'leave', leaveType: 'sick', payMode: 'unpaid', updatedAt: now.toISOString(), ...record }]
 }
 
+function normalAttendance(record: Partial<AttendanceRecord> = {}, date = '2026-08-27'): AttendanceRecord[] {
+  return [{ date, status: 'normal', updatedAt: now.toISOString(), ...record }]
+}
+
 function historicalFlexibleRecord(settlementMode?: NonNullable<DailyWorkRecord['settlementMode']>, hours = 1): DailyWorkRecord {
   const startedAt = new Date(2026, 7, 27, 9)
   const endedAt = new Date(2026, 7, 27, 9 + hours)
@@ -99,6 +103,40 @@ describe('attendance salary recalculation', () => {
     expect(summary.income).toBe(66)
     expect(summary.entries[0]?.source).toBe('工资收入 · 带薪假')
   })
+
+  it('uses a multiplier for explicit normal attendance', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [], normalAttendance({ payMode: 'multiplier', multiplier: 2 }))
+    expect(summary.income).toBe(200)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤 · 2 倍计薪')
+  })
+
+  it('uses a fixed amount for explicit normal attendance', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [], normalAttendance({ payMode: 'fixed', fixedAmount: 88 }))
+    expect(summary.income).toBe(88)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤 · 固定 ¥88.00')
+  })
+
+  it('uses the full custom amount on the current day instead of salary progress', () => {
+    const todayStart = new Date(2026, 7, 28)
+    const todayEnd = new Date(2026, 7, 29)
+    const summary = summarizeLedger(profile, [], todayStart, todayEnd, now, [], normalAttendance({ payMode: 'multiplier', multiplier: 2 }, '2026-08-28'))
+    expect(summary.income).toBe(200)
+  })
+
+  it('lets explicit normal attendance take priority over an old salary override', () => {
+    const ledger: LedgerEntry[] = [{
+      id: 'old-override',
+      kind: 'salary_override',
+      direction: 'income',
+      amount: 999,
+      source: '旧工资调整',
+      occurredAt: new Date(2026, 7, 27, 12).toISOString(),
+      replacesId: 'salary-2026-8-27',
+    }]
+    const summary = summarizeLedger(profile, ledger, start, end, now, [], normalAttendance({ payMode: 'multiplier', multiplier: 2 }))
+    expect(summary.income).toBe(200)
+    expect(summary.entries).toHaveLength(1)
+  })
 })
 
 describe('manual attendance before the salary history start date', () => {
@@ -130,6 +168,12 @@ describe('manual attendance before the salary history start date', () => {
     const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], attendance({ status: 'normal', leaveType: undefined, payMode: undefined }))
     expect(summary.income).toBe(100)
     expect(summary.entries[0]?.source).toBe('工资收入')
+  })
+
+  it('uses a custom normal-attendance amount before the salary history start date', () => {
+    const summary = summarizeLedger(currentOnlyProfile, [], start, end, now, [], normalAttendance({ payMode: 'fixed', fixedAmount: 76 }))
+    expect(summary.income).toBe(76)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤 · 固定 ¥76.00')
   })
 
   it('keeps an explicit unpaid historical adjustment at zero', () => {
@@ -172,6 +216,18 @@ describe('historical flexible salary settlement', () => {
   it('lets unpaid attendance override a saved full-day settlement', () => {
     const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('full-day')], attendance({ payMode: 'unpaid' }))
     expect(summary.income).toBe(0)
+  })
+
+  it('lets a normal-attendance multiplier override an actual-time settlement', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('actual')], normalAttendance({ payMode: 'multiplier', multiplier: 2 }))
+    expect(summary.income).toBe(200)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤 · 2 倍计薪')
+  })
+
+  it('lets a normal-attendance fixed amount override a full-day settlement', () => {
+    const summary = summarizeLedger(profile, [], start, end, now, [historicalFlexibleRecord('full-day')], normalAttendance({ payMode: 'fixed', fixedAmount: 66 }))
+    expect(summary.income).toBe(66)
+    expect(summary.entries[0]?.source).toBe('工资收入 · 正常出勤 · 固定 ¥66.00')
   })
 
   it('lets a manual salary override replace a saved full-day settlement', () => {
