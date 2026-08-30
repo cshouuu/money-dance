@@ -113,10 +113,13 @@ The app automatically checks at most once every six hours and also exposes a man
 
 The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. The implementation is complete in the source tree and is pending the next Android release; it is not part of v0.2.23.
 
-Its refresh behavior is intentionally on demand:
+Its refresh behavior follows the current earning state:
 
-- normal “today earned” display updates once per second only after the user explicitly enables real-time mode from the widget;
+- when the visible app syncs during a paid work slice, normal “today earned” display automatically enters real-time mode unless the user stopped it for that day;
+- the user can also explicitly enable or stop the current day's real-time mode from the widget;
 - active slacking or overtime automatically enables once-per-second widget updates for the duration of that session;
+- zero-rate gaps such as lunch wait until the next same-day paid slice instead of redrawing `RemoteViews` once per second;
+- while real-time mode is off, Android requests a low-frequency widget redraw every 30 minutes so stale and cross-day displays do not remain frozen indefinitely;
 - the implementation uses a `specialUse` foreground service and a persistent Android notification while second-level updates are active;
 - widget redraws may pause while the screen is off and resume when it becomes interactive again;
 - OEM background policies and launcher refresh behavior can still delay a frame, so this is best-effort second-level display rather than a hard real-time guarantee.
@@ -128,7 +131,7 @@ The 4×2 layout exposes these actions:
 - slacking can be started and stopped directly from the widget;
 - starting overtime opens MoneyDance and reuses the existing overtime pay-mode selector (unpaid, salary multiplier, or fixed amount);
 - active overtime can be stopped directly from the widget;
-- real-time display for normal work earnings can be toggled explicitly from the widget.
+- real-time display for normal work earnings can be enabled or stopped explicitly from the widget.
 
 The native widget does not reimplement salary, attendance, flexible-work, or calendar adjustment rules. The Web layer calculates and compresses the next 36 hours into earnings timeline slices, then sends the snapshot through the Capacitor bridge to Android `SharedPreferences`. The native layer evaluates the current slice to render the amount without loading the WebView on every tick.
 

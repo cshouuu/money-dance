@@ -1,4 +1,5 @@
 node_modules
+/apps/web/android/
 **/node_modules
 **/dist
 .env

@@ -7,6 +7,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.Calendar;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -108,9 +109,11 @@ public final class WidgetStateStore {
     }
 
     public static void setLaunchTarget(Context context, String target) {
-        preferences(context).edit()
-                .putString(WidgetContract.KEY_LAUNCH_TARGET, target == null ? "" : target)
-                .commit();
+        synchronized (LOCK) {
+            preferences(context).edit()
+                    .putString(WidgetContract.KEY_LAUNCH_TARGET, target == null ? "" : target)
+                    .commit();
+        }
     }
 
     public static String consumeLaunchTarget(Context context) {
@@ -132,6 +135,23 @@ public final class WidgetStateStore {
                 .commit();
     }
 
+    public static void suppressRealtimeForDay(Context context, long now) {
+        preferences(context).edit()
+                .putInt(WidgetContract.KEY_REALTIME_SUPPRESSED_DAY, localDayToken(now))
+                .commit();
+    }
+
+    public static void clearRealtimeSuppression(Context context) {
+        preferences(context).edit()
+                .remove(WidgetContract.KEY_REALTIME_SUPPRESSED_DAY)
+                .commit();
+    }
+
+    public static boolean isRealtimeSuppressed(Context context, long now) {
+        return preferences(context).getInt(WidgetContract.KEY_REALTIME_SUPPRESSED_DAY, -1)
+                == localDayToken(now);
+    }
+
     public static boolean isTickerRunning(Context context) {
         return preferences(context).getBoolean(WidgetContract.KEY_TICKER_RUNNING, false);
     }
@@ -139,6 +159,16 @@ public final class WidgetStateStore {
     public static void setTickerRunning(Context context, boolean running) {
         preferences(context).edit()
                 .putBoolean(WidgetContract.KEY_TICKER_RUNNING, running)
+                .apply();
+    }
+
+    public static boolean didTickerStartFail(Context context) {
+        return preferences(context).getBoolean(WidgetContract.KEY_TICKER_START_FAILED, false);
+    }
+
+    public static void setTickerStartFailed(Context context, boolean failed) {
+        preferences(context).edit()
+                .putBoolean(WidgetContract.KEY_TICKER_START_FAILED, failed)
                 .apply();
     }
 
@@ -163,57 +193,100 @@ public final class WidgetStateStore {
         return isActive(getSnapshot(context), "overtime");
     }
 
-    public static boolean shouldTick(Context context) {
-        return isRealtimeEnabled(context) || hasActiveSlacking(context) || hasActiveOvertime(context);
+    public static long activeSlackingStartAt(Context context) {
+        return activeStartAt(getSnapshot(context), "slacking");
+    }
+
+    public static long activeOvertimeStartAt(Context context) {
+        return activeStartAt(getSnapshot(context), "overtime");
+    }
+
+    public static double currentWorkRate(Context context, long now) {
+        JSONObject snapshot = getSnapshot(context);
+        if (!hasUsableSnapshot(snapshot, now)) return 0D;
+        JSONArray timeline = snapshot.optJSONArray("workTimeline");
+        if (timeline == null) return 0D;
+        for (int index = 0; index < timeline.length(); index += 1) {
+            JSONObject segment = timeline.optJSONObject(index);
+            if (segment == null) continue;
+            long startAt = segment.optLong("startAt", -1L);
+            long endAt = segment.optLong("endAt", -1L);
+            if (now >= startAt && now < endAt) {
+                return finiteNonNegative(segment.optDouble("ratePerSecond", 0D));
+            }
+        }
+        return 0D;
+    }
+
+    public static long nextPaidWorkStartAt(Context context, long now) {
+        JSONObject snapshot = getSnapshot(context);
+        if (!hasUsableSnapshot(snapshot, now)) return -1L;
+        JSONArray timeline = snapshot.optJSONArray("workTimeline");
+        if (timeline == null) return -1L;
+        for (int index = 0; index < timeline.length(); index += 1) {
+            JSONObject segment = timeline.optJSONObject(index);
+            if (segment == null) continue;
+            long startAt = segment.optLong("startAt", -1L);
+            long endAt = segment.optLong("endAt", -1L);
+            double rate = finiteNonNegative(segment.optDouble("ratePerSecond", 0D));
+            if (rate <= 0D || endAt <= now) continue;
+            return Math.max(now, startAt);
+        }
+        return -1L;
+    }
+
+    /**
+     * Returns the next useful foreground wake-up delay. Timers and paid work use
+     * one-second rendering; a same-day zero-rate gap sleeps until the next paid
+     * slice instead of sending Binder/RemoteViews work every second.
+     */
+    public static long nextTickerDelayMillis(Context context, long now) {
+        if (hasActiveSlacking(context) || hasActiveOvertime(context)) return 1000L;
+        if (!isRealtimeEnabled(context) || !hasUsableSnapshot(context, now)) return -1L;
+        if (currentWorkRate(context, now) > 0D) return 1000L;
+        long nextPaidAt = nextPaidWorkStartAt(context, now);
+        if (nextPaidAt < 0L || !isSameLocalDay(now, nextPaidAt)) return -1L;
+        return Math.max(100L, nextPaidAt - now);
+    }
+
+    public static boolean shouldRunTicker(Context context, long now) {
+        return nextTickerDelayMillis(context, now) >= 0L;
     }
 
     public static boolean hasUsableSnapshot(Context context, long now) {
-        JSONObject snapshot = getSnapshot(context);
+        return hasUsableSnapshot(getSnapshot(context), now);
+    }
+
+    private static boolean hasUsableSnapshot(JSONObject snapshot, long now) {
         if (snapshot.optInt("version", -1) != WidgetContract.SNAPSHOT_VERSION) return false;
         long validUntil = snapshot.optLong("validUntil", -1L);
         return validUntil > now;
     }
 
-    public static boolean toggleSlacking(Context context, long occurredAt) {
+    public static boolean startSlacking(Context context, long occurredAt) {
         synchronized (LOCK) {
             SharedPreferences prefs = preferences(context);
             JSONObject snapshot = parseObject(prefs.getString(WidgetContract.KEY_SNAPSHOT_JSON, ""));
             JSONArray pending = parseArray(prefs.getString(WidgetContract.KEY_PENDING_ACTIONS_JSON, "[]"));
             JSONObject slacking = snapshot.optJSONObject("slacking");
-            boolean active = slacking != null && slacking.optBoolean("active", false);
-            String actionId = UUID.randomUUID().toString();
+            if (slacking != null && slacking.optBoolean("active", false)) return false;
             String sessionId = prefs.getString(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID, "");
             if (sessionId == null || sessionId.isEmpty()) sessionId = UUID.randomUUID().toString();
 
             JSONObject action = new JSONObject();
             try {
-                action.put("actionId", actionId);
+                action.put("actionId", UUID.randomUUID().toString());
                 action.put("occurredAt", occurredAt);
                 action.put("sessionId", sessionId);
-
-                SharedPreferences.Editor editor = prefs.edit();
-                if (active) {
-                    long startAt = Math.max(0L, slacking.optLong("startAt", occurredAt));
-                    long endAt = Math.max(startAt, occurredAt);
-                    double secondRate = finiteNonNegative(snapshot.optDouble("secondRate", 0D));
-                    double earnedAmount = ((endAt - startAt) / 1000D) * secondRate;
-                    action.put("type", WidgetContract.EVENT_SLACKING_STOP);
-                    action.put("startAt", startAt);
-                    action.put("endAt", endAt);
-                    action.put("earnedAmount", earnedAmount);
-                    snapshot.remove("slacking");
-                    editor.remove(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID);
-                } else {
-                    JSONObject nextSlacking = new JSONObject();
-                    nextSlacking.put("active", true);
-                    nextSlacking.put("startAt", occurredAt);
-                    snapshot.put("slacking", nextSlacking);
-                    action.put("type", WidgetContract.EVENT_SLACKING_START);
-                    action.put("startAt", occurredAt);
-                    editor.putString(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID, sessionId);
-                }
+                action.put("type", WidgetContract.EVENT_SLACKING_START);
+                action.put("startAt", occurredAt);
+                JSONObject nextSlacking = new JSONObject();
+                nextSlacking.put("active", true);
+                nextSlacking.put("startAt", occurredAt);
+                snapshot.put("slacking", nextSlacking);
                 pending.put(action);
-                return editor
+                return prefs.edit()
+                        .putString(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID, sessionId)
                         .putString(WidgetContract.KEY_SNAPSHOT_JSON, snapshot.toString())
                         .putString(WidgetContract.KEY_PENDING_ACTIONS_JSON, pending.toString())
                         .commit();
@@ -223,7 +296,43 @@ public final class WidgetStateStore {
         }
     }
 
-    public static boolean stopOvertime(Context context, long occurredAt) {
+    public static boolean stopSlacking(Context context, long occurredAt, long expectedStartAt) {
+        synchronized (LOCK) {
+            SharedPreferences prefs = preferences(context);
+            JSONObject snapshot = parseObject(prefs.getString(WidgetContract.KEY_SNAPSHOT_JSON, ""));
+            JSONObject slacking = snapshot.optJSONObject("slacking");
+            if (slacking == null || !slacking.optBoolean("active", false)) return false;
+            long startAt = Math.max(0L, slacking.optLong("startAt", occurredAt));
+            if (expectedStartAt < 0L || startAt != expectedStartAt) return false;
+            long endAt = Math.max(startAt, occurredAt);
+            String sessionId = prefs.getString(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID, "");
+            if (sessionId == null || sessionId.isEmpty()) sessionId = UUID.randomUUID().toString();
+
+            JSONObject action = new JSONObject();
+            try {
+                action.put("actionId", UUID.randomUUID().toString());
+                action.put("type", WidgetContract.EVENT_SLACKING_STOP);
+                action.put("occurredAt", occurredAt);
+                action.put("sessionId", sessionId);
+                action.put("startAt", startAt);
+                action.put("endAt", endAt);
+                action.put("earnedAmount", ((endAt - startAt) / 1000D)
+                        * finiteNonNegative(snapshot.optDouble("secondRate", 0D)));
+                JSONArray pending = parseArray(prefs.getString(WidgetContract.KEY_PENDING_ACTIONS_JSON, "[]"));
+                pending.put(action);
+                snapshot.remove("slacking");
+                return prefs.edit()
+                        .remove(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID)
+                        .putString(WidgetContract.KEY_SNAPSHOT_JSON, snapshot.toString())
+                        .putString(WidgetContract.KEY_PENDING_ACTIONS_JSON, pending.toString())
+                        .commit();
+            } catch (JSONException ignored) {
+                return false;
+            }
+        }
+    }
+
+    public static boolean stopOvertime(Context context, long occurredAt, long expectedStartAt) {
         synchronized (LOCK) {
             SharedPreferences prefs = preferences(context);
             JSONObject snapshot = parseObject(prefs.getString(WidgetContract.KEY_SNAPSHOT_JSON, ""));
@@ -231,6 +340,7 @@ public final class WidgetStateStore {
             if (overtime == null || !overtime.optBoolean("active", false)) return false;
 
             long startAt = Math.max(0L, overtime.optLong("startAt", occurredAt));
+            if (expectedStartAt < 0L || startAt != expectedStartAt) return false;
             long endAt = Math.max(startAt, occurredAt);
             String payMode = overtime.optString("payMode", "unpaid");
             if (!"fixed".equals(payMode)
@@ -269,6 +379,16 @@ public final class WidgetStateStore {
                 return false;
             }
         }
+    }
+
+    private static int localDayToken(long timestamp) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        return calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR);
+    }
+
+    private static boolean isSameLocalDay(long left, long right) {
+        return localDayToken(left) == localDayToken(right);
     }
 
     private static boolean isActive(JSONObject snapshot, String key) {

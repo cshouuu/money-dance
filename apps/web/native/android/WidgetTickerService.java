@@ -25,6 +25,7 @@ import android.os.SystemClock;
 public class WidgetTickerService extends Service {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean screenReceiverRegistered;
+    private String lastNotificationText = "";
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
@@ -35,16 +36,25 @@ public class WidgetTickerService extends Service {
                     && !WidgetStateStore.hasActiveOvertime(WidgetTickerService.this)) {
                 WidgetStateStore.setRealtimeEnabled(WidgetTickerService.this, false);
             }
-            if (!WidgetRenderer.hasWidgets(WidgetTickerService.this)
-                    || !WidgetStateStore.shouldTick(WidgetTickerService.this)) {
+            long nextDelay = WidgetStateStore.nextTickerDelayMillis(WidgetTickerService.this, now);
+            if (!WidgetRenderer.hasWidgets(WidgetTickerService.this) || nextDelay < 0L) {
+                if (!WidgetStateStore.hasActiveSlacking(WidgetTickerService.this)
+                        && !WidgetStateStore.hasActiveOvertime(WidgetTickerService.this)) {
+                    WidgetStateStore.setRealtimeEnabled(WidgetTickerService.this, false);
+                }
                 WidgetRenderer.updateAll(WidgetTickerService.this);
                 stopSelf();
                 return;
             }
             // Widget calculations always use wall-clock timestamps, never tick counts.
             WidgetRenderer.updateAll(WidgetTickerService.this);
-            long delay = 1000L - (SystemClock.uptimeMillis() % 1000L);
-            handler.postDelayed(this, Math.max(100L, delay));
+            refreshNotificationIfNeeded();
+            if (nextDelay <= 1000L) {
+                long alignedDelay = 1000L - (SystemClock.uptimeMillis() % 1000L);
+                handler.postDelayed(this, Math.max(100L, alignedDelay));
+            } else {
+                handler.postDelayed(this, nextDelay);
+            }
         }
     };
     private final BroadcastReceiver screenReceiver = new BroadcastReceiver() {
@@ -61,8 +71,18 @@ public class WidgetTickerService extends Service {
 
     public static void reconcile(Context context) {
         Context app = context.getApplicationContext();
-        if (!WidgetRenderer.hasWidgets(app) || !WidgetStateStore.shouldTick(app)) {
+        long now = System.currentTimeMillis();
+        if (!WidgetRenderer.hasWidgets(app)) {
             stop(app);
+            return;
+        }
+        if (!WidgetStateStore.shouldRunTicker(app, now)) {
+            if (!WidgetStateStore.hasActiveSlacking(app)
+                    && !WidgetStateStore.hasActiveOvertime(app)) {
+                WidgetStateStore.setRealtimeEnabled(app, false);
+            }
+            stop(app);
+            WidgetRenderer.updateAll(app);
             return;
         }
         Intent intent = new Intent(app, WidgetTickerService.class);
@@ -73,6 +93,8 @@ public class WidgetTickerService extends Service {
             // Some OEMs can still reject a background start. The timestamp model
             // remains correct and the next explicit widget/app action retries it.
             WidgetStateStore.setTickerRunning(app, false);
+            WidgetStateStore.setTickerStartFailed(app, true);
+            WidgetRenderer.updateAll(app);
         }
     }
 
@@ -80,6 +102,7 @@ public class WidgetTickerService extends Service {
         Context app = context.getApplicationContext();
         app.stopService(new Intent(app, WidgetTickerService.class));
         WidgetStateStore.setTickerRunning(app, false);
+        WidgetStateStore.setTickerStartFailed(app, false);
     }
 
     @Override
@@ -110,6 +133,7 @@ public class WidgetTickerService extends Service {
             startForeground(WidgetContract.NOTIFICATION_ID, notification);
         }
         WidgetStateStore.setTickerRunning(this, true);
+        WidgetStateStore.setTickerStartFailed(this, false);
         handler.removeCallbacks(tick);
         PowerManager power = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (power == null || power.isInteractive()) handler.post(tick);
@@ -150,10 +174,8 @@ public class WidgetTickerService extends Service {
     }
 
     private Notification notification() {
-        String text;
-        if (WidgetStateStore.hasActiveSlacking(this)) text = "正在每秒更新摸鱼收益";
-        else if (WidgetStateStore.hasActiveOvertime(this)) text = "正在每秒更新加班收益";
-        else text = "正在每秒更新桌面实时收益";
+        String text = notificationText();
+        lastNotificationText = text;
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, WidgetContract.NOTIFICATION_CHANNEL_ID)
@@ -175,6 +197,23 @@ public class WidgetTickerService extends Service {
             );
         }
         return builder.build();
+    }
+
+    private String notificationText() {
+        String text;
+        if (WidgetStateStore.hasActiveSlacking(this)) text = "正在每秒更新摸鱼收益";
+        else if (WidgetStateStore.hasActiveOvertime(this)) text = "正在每秒更新加班收益";
+        else if (WidgetStateStore.currentWorkRate(this, System.currentTimeMillis()) > 0D) {
+            text = "正在每秒更新桌面实时收益";
+        } else text = "实时收益将在下一计薪时段继续";
+        return text;
+    }
+
+    private void refreshNotificationIfNeeded() {
+        String nextText = notificationText();
+        if (nextText.equals(lastNotificationText)) return;
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.notify(WidgetContract.NOTIFICATION_ID, notification());
     }
 
     private PendingIntent openAppIntent() {

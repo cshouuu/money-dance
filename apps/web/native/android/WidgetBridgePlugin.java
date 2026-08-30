@@ -34,6 +34,15 @@ public class WidgetBridgePlugin extends Plugin {
             call.reject("INVALID_WIDGET_SNAPSHOT");
             return;
         }
+        long now = System.currentTimeMillis();
+        // A visible app sync during paid work is an eligible foreground-service
+        // start point. Respect a same-day manual stop so the app does not fight
+        // the user's explicit battery/notification choice.
+        if (WidgetRenderer.hasWidgets(getContext())
+                && WidgetStateStore.currentWorkRate(getContext(), now) > 0D
+                && !WidgetStateStore.isRealtimeSuppressed(getContext(), now)) {
+            WidgetStateStore.setRealtimeEnabled(getContext(), true);
+        }
         WidgetRenderer.updateAll(getContext());
         WidgetTickerService.reconcile(getContext());
         call.resolve(status());
@@ -70,6 +79,8 @@ public class WidgetBridgePlugin extends Plugin {
     public void setRealtimeEnabled(PluginCall call) {
         boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         WidgetStateStore.setRealtimeEnabled(getContext(), enabled);
+        if (enabled) WidgetStateStore.clearRealtimeSuppression(getContext());
+        else WidgetStateStore.suppressRealtimeForDay(getContext(), System.currentTimeMillis());
         WidgetRenderer.updateAll(getContext());
         WidgetTickerService.reconcile(getContext());
         call.resolve(status());

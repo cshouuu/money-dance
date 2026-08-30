@@ -214,7 +214,7 @@ export function getAchievementSnapshot(kind: AchievementKind, state: Achievement
     highestLevel,
     current,
     next,
-    remainingSeconds: next ? Math.max(0, next.thresholdSeconds - effectiveSeconds) : 0,
+    remainingSeconds: next ? Math.ceil(Math.max(0, next.thresholdSeconds - effectiveSeconds)) : 0,
     progress,
   }
 }

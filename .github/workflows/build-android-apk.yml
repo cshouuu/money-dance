@@ -145,7 +145,7 @@ jobs:
           test -f "$MAIN_ACTIVITY"
           test -f "$MANIFEST"
 
-          for source in AppUpdaterPlugin WidgetBridgePlugin MoneyDanceWidgetProvider WidgetTickerService; do
+          for source in AppUpdaterPlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider; do
             test -f "$NATIVE_ROOT/${source}.java"
             test -f "$JAVA_ROOT/${source}.java"
             cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
@@ -158,9 +158,11 @@ jobs:
           grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$JAVA_ROOT/AppUpdaterPlugin.java"
           grep -Fq '@CapacitorPlugin(name = "WidgetBridge")' "$JAVA_ROOT/WidgetBridgePlugin.java"
           grep -Fq 'class MoneyDanceWidgetProvider' "$JAVA_ROOT/MoneyDanceWidgetProvider.java"
+          grep -Fq 'class WidgetActionReceiver' "$JAVA_ROOT/WidgetActionReceiver.java"
           grep -Fq 'class WidgetTickerService' "$JAVA_ROOT/WidgetTickerService.java"
           grep -Fq 'android:name=".MoneyDanceWidgetProvider"' "$MANIFEST"
           grep -Fq 'android:name=".WidgetTickerService"' "$MANIFEST"
+          grep -Fq 'android:name=".WidgetActionReceiver"' "$MANIFEST"
           grep -Fq 'android.appwidget.action.APPWIDGET_UPDATE' "$MANIFEST"
           grep -Fq 'android:name="android.appwidget.provider"' "$MANIFEST"
           grep -Fq 'android:resource="@xml/money_dance_widget_info"' "$MANIFEST"
@@ -168,7 +170,12 @@ jobs:
           grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
           grep -Fq 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$MANIFEST"
           grep -Fq 'android:initialLayout="@layout/money_dance_widget"' "$PROVIDER_XML"
-          grep -Fq 'android:updatePeriodMillis="0"' "$PROVIDER_XML"
+          grep -Fq 'android:updatePeriodMillis="1800000"' "$PROVIDER_XML"
+          grep -Fq 'ACTION_SLACKING_START' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq 'ACTION_SLACKING_STOP' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq 'EXTRA_EXPECTED_START_AT' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq '.appendPath(Long.toString(expectedStartAt))' "$JAVA_ROOT/WidgetRenderer.java"
+          grep -Fq ': openTargetIntent(context, WidgetContract.OVERTIME_LAUNCH_TARGET, 7102)' "$JAVA_ROOT/WidgetRenderer.java"
 
           node - "$MAIN_ACTIVITY" "$MANIFEST" <<'NODE'
           const fs = require('fs')

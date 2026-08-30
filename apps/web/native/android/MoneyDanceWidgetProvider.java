@@ -36,6 +36,8 @@ public class MoneyDanceWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onDisabled(Context context) {
+        WidgetStateStore.setRealtimeEnabled(context, false);
+        WidgetStateStore.clearRealtimeSuppression(context);
         WidgetTickerService.stop(context);
     }
 }

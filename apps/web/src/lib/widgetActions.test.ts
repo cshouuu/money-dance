@@ -5,6 +5,8 @@ import {
   applyWidgetActions,
   loadWidgetActionState,
   parseWidgetActions,
+  prepareOvertimeWebStop,
+  prepareSlackingWebStop,
   type WidgetAction,
   type WidgetStorage,
 } from './widgetActions'
@@ -168,6 +170,119 @@ describe('widget action persistence', () => {
 
     applyWidgetActions([action], storage)
     expect(loadWidgetActionState(storage).activeSlacking).toBe(new Date(newerStart).toISOString())
+  })
+
+  it('deduplicates a native slacking stop when the Web page already ended the same timer', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(keys.sessions, JSON.stringify([{
+      id: 'web-session',
+      startTime: new Date(startAt).toISOString(),
+      endTime: new Date(endAt + 500).toISOString(),
+      durationSeconds: 3600.5,
+      earnedAmount: 12.6,
+    }]))
+    const action: WidgetAction = {
+      actionId: 'native-stop',
+      type: 'slacking_stop',
+      occurredAt: endAt,
+      sessionId: 'native-session',
+      startAt,
+      endAt,
+      earnedAmount: 12.5,
+    }
+
+    expect(applyWidgetActions([action], storage).success).toBe(true)
+    expect(loadWidgetActionState(storage).slackingSessions).toEqual([
+      expect.objectContaining({ id: 'web-session', earnedAmount: 12.6 }),
+    ])
+  })
+
+  it('deduplicates a native overtime stop and its ledger after the Web page already ended the timer', () => {
+    const storage = new MemoryStorage()
+    storage.setItem(keys.overtimeSessions, JSON.stringify([{
+      id: 'web-overtime',
+      startTime: new Date(startAt).toISOString(),
+      endTime: new Date(endAt + 500).toISOString(),
+      durationSeconds: 3600.5,
+      earnedAmount: 31,
+      payMode: 'multiplier',
+      multiplier: 1.5,
+    }]))
+    storage.setItem(keys.ledger, JSON.stringify([{
+      id: 'web-ledger',
+      kind: 'overtime',
+      direction: 'income',
+      amount: 31,
+      source: '加班收入',
+      occurredAt: new Date(startAt).toISOString(),
+      linkedId: 'web-overtime',
+    }]))
+    const action: WidgetAction = {
+      actionId: 'native-overtime-stop',
+      type: 'overtime_stop',
+      occurredAt: endAt,
+      sessionId: 'native-overtime',
+      startAt,
+      endAt,
+      earnedAmount: 30,
+      payMode: 'multiplier',
+      multiplier: 1.5,
+    }
+
+    expect(applyWidgetActions([action], storage).success).toBe(true)
+    const state = loadWidgetActionState(storage)
+    expect(state.overtimeSessions).toHaveLength(1)
+    expect(state.overtimeSessions[0]?.id).toBe('web-overtime')
+    expect(state.ledger).toHaveLength(1)
+    expect(state.ledger[0]?.linkedId).toBe('web-overtime')
+  })
+
+  it('blocks a stale Web stop after the native widget already finished the same timers', () => {
+    const storage = new MemoryStorage()
+    const startTime = new Date(startAt).toISOString()
+    storage.setItem(keys.activeSlacking, JSON.stringify(startTime))
+    storage.setItem(keys.activeOvertime, JSON.stringify({
+      startTime,
+      payMode: 'multiplier',
+      multiplier: 2,
+    }))
+    const actions: WidgetAction[] = [{
+      actionId: 'native-slacking-stop-first',
+      type: 'slacking_stop',
+      occurredAt: endAt,
+      sessionId: 'native-slacking-session',
+      startAt,
+      endAt,
+      earnedAmount: 10,
+    }, {
+      actionId: 'native-overtime-stop-first',
+      type: 'overtime_stop',
+      occurredAt: endAt,
+      sessionId: 'native-overtime-session',
+      startAt,
+      endAt,
+      earnedAmount: 40,
+      payMode: 'multiplier',
+      multiplier: 2,
+    }]
+
+    expect(applyWidgetActions(actions, storage).success).toBe(true)
+    const slacking = prepareSlackingWebStop(startTime, storage)
+    const overtime = prepareOvertimeWebStop(startTime, storage)
+
+    expect(slacking).toMatchObject({
+      shouldStop: false,
+      active: null,
+      completedSession: { id: 'native-slacking-session' },
+    })
+    expect(overtime).toMatchObject({
+      shouldStop: false,
+      active: null,
+      completedSession: { id: 'native-overtime-session' },
+    })
+    expect(overtime.sessions).toHaveLength(1)
+    expect(overtime.ledger).toHaveLength(1)
+    expect(overtime.ledger[0]?.linkedId).toBe('native-overtime-session')
   })
 
   it('recovers from damaged stored arrays before applying a valid action', () => {

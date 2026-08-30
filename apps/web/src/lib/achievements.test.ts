@@ -100,6 +100,14 @@ describe('active achievement previews', () => {
     expect(snapshot.current?.name).toBe('鱼苗试水')
   })
 
+  it('does not report zero seconds remaining before the exact threshold', () => {
+    const snapshot = getAchievementSnapshot('slacking', createEmptyAchievementState(), 1799.5)
+
+    expect(snapshot.highestLevel).toBe(0)
+    expect(snapshot.remainingSeconds).toBe(1)
+    expect(snapshot.progress).toBeLessThan(1)
+  })
+
   it('persists a previewed level permanently without inflating lifetime', () => {
     const initial = { ...createEmptyAchievementState(), lifetimeSeconds: 1700 }
     const unlocked = unlockAchievementLevel('slacking', initial, 1, '2026-08-30T12:00:00.000Z')

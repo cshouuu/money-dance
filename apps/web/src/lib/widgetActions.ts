@@ -47,6 +47,21 @@ export interface ApplyWidgetActionsResult {
   actionIds: string[]
 }
 
+export interface SlackingWebStopContext {
+  shouldStop: boolean
+  active: string | null
+  sessions: SlackingSession[]
+  completedSession: SlackingSession | null
+}
+
+export interface OvertimeWebStopContext {
+  shouldStop: boolean
+  active: ActiveOvertime | null
+  sessions: OvertimeSession[]
+  ledger: LedgerEntry[]
+  completedSession: OvertimeSession | null
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -137,6 +152,10 @@ function sameStart(value: string | undefined, startAt: number): boolean {
   return new Date(value).getTime() === startAt
 }
 
+function sessionWithStart<T extends { startTime: string }>(sessions: readonly T[], startAt: number): T | undefined {
+  return sessions.find(session => sameStart(session.startTime, startAt))
+}
+
 function durationSeconds(startAt: number, endAt: number): number {
   return Math.max(0, endAt - startAt) / 1000
 }
@@ -180,7 +199,9 @@ export function reduceWidgetActions(initial: WidgetActionState, actions: WidgetA
     }
 
     if (action.type === 'slacking_stop') {
-      if (!slackingSessions.some(session => session.id === action.sessionId)) {
+      const existing = slackingSessions.find(session => session.id === action.sessionId)
+        ?? sessionWithStart(slackingSessions, action.startAt)
+      if (!existing) {
         slackingSessions = [{
           id: action.sessionId,
           startTime: isoTime(action.startAt),
@@ -193,7 +214,11 @@ export function reduceWidgetActions(initial: WidgetActionState, actions: WidgetA
       continue
     }
 
+    // Native and Web stops can race before the bridge has acknowledged the
+    // native journal. The start timestamp identifies the same logical timer
+    // even when each layer generated a different session ID.
     const existing = overtimeSessions.find(session => session.id === action.sessionId)
+      ?? sessionWithStart(overtimeSessions, action.startAt)
     const session = existing ?? overtimeSessionFromAction(action)
     if (!existing) overtimeSessions = [session, ...overtimeSessions]
     // A previous partial write may already contain the session but not its
@@ -236,6 +261,50 @@ export function loadWidgetActionState(storage: WidgetStorage): WidgetActionState
     ledger: Array.isArray(ledger)
       ? ledger.filter((entry): entry is LedgerEntry => isRecord(entry) && isNonEmptyString(entry.id))
       : [],
+  }
+}
+
+/**
+ * Re-reads storage immediately before a Web stop. Native widget actions can be
+ * applied while React still holds the previous render, so captured component
+ * state is not authoritative at this boundary.
+ */
+export function prepareSlackingWebStop(
+  expectedStartTime: string,
+  providedStorage?: WidgetStorage,
+): SlackingWebStopContext {
+  const storage = providedStorage ?? globalThis.localStorage
+  const state = loadWidgetActionState(storage)
+  const startAt = new Date(expectedStartTime).getTime()
+  const completedSession = Number.isFinite(startAt)
+    ? sessionWithStart(state.slackingSessions, startAt) ?? null
+    : null
+  return {
+    shouldStop: completedSession === null && sameStart(state.activeSlacking ?? undefined, startAt),
+    active: state.activeSlacking,
+    sessions: state.slackingSessions,
+    completedSession,
+  }
+}
+
+/** Same guard as above, including the current ledger so a Web stop never
+ * overwrites a native ledger entry written just before the click. */
+export function prepareOvertimeWebStop(
+  expectedStartTime: string,
+  providedStorage?: WidgetStorage,
+): OvertimeWebStopContext {
+  const storage = providedStorage ?? globalThis.localStorage
+  const state = loadWidgetActionState(storage)
+  const startAt = new Date(expectedStartTime).getTime()
+  const completedSession = Number.isFinite(startAt)
+    ? sessionWithStart(state.overtimeSessions, startAt) ?? null
+    : null
+  return {
+    shouldStop: completedSession === null && sameStart(state.activeOvertime?.startTime, startAt),
+    active: state.activeOvertime,
+    sessions: state.overtimeSessions,
+    ledger: state.ledger,
+    completedSession,
   }
 }
 

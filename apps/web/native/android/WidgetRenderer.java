@@ -57,6 +57,10 @@ public final class WidgetRenderer {
                 || slacking.optLong("startAt", 0L) >= overtime.optLong("startAt", 0L));
         boolean showOvertime = overtimeActive && !showSlacking;
         double secondRate = nonNegative(snapshot.optDouble("secondRate", 0D));
+        boolean realtimeEnabled = WidgetStateStore.isRealtimeEnabled(context);
+        boolean tickerRunning = WidgetStateStore.isTickerRunning(context);
+        boolean tickerStartFailed = WidgetStateStore.didTickerStartFail(context);
+        boolean paidWorkNow = WidgetStateStore.currentWorkRate(context, now) > 0D;
 
         String title;
         String detail;
@@ -102,32 +106,56 @@ public final class WidgetRenderer {
                 ? money(amount)
                 : "--");
         views.setTextViewText(R.id.widget_detail, detail);
-        views.setTextViewText(
-                R.id.widget_live_badge,
-                WidgetStateStore.isRealtimeEnabled(context)
-                        ? "实时开"
-                        : slackingActive || overtimeActive ? "计时中" : "实时关"
-        );
+        String liveBadge;
+        if (tickerStartFailed) liveBadge = "点此恢复";
+        else if (slackingActive || overtimeActive) liveBadge = tickerRunning ? "计时中" : "启动中";
+        else if (realtimeEnabled) {
+            liveBadge = tickerRunning ? (paidWorkNow ? "实时中" : "实时待机") : "启动中";
+        } else liveBadge = paidWorkNow ? "开启实时" : "实时关";
+        views.setTextViewText(R.id.widget_live_badge, liveBadge);
         views.setTextViewText(R.id.widget_slacking_button, slackingActive ? "结束摸鱼" : "开始摸鱼");
         views.setTextViewText(R.id.widget_overtime_button, overtimeActive ? "结束加班" : "开始加班");
 
         views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context));
-        views.setOnClickPendingIntent(
-                R.id.widget_live_badge,
-                WidgetStateStore.isRealtimeEnabled(context) || snapshotValid && !stale
-                        ? actionIntent(context, WidgetContract.ACTION_TOGGLE_REALTIME, 7103)
-                        : openTargetIntent(context, WidgetContract.ROOT_LAUNCH_TARGET, 7103)
-        );
+        PendingIntent liveIntent;
+        if (slackingActive || overtimeActive) {
+            liveIntent = openTargetIntent(context, WidgetContract.ROOT_LAUNCH_TARGET, 7103);
+        } else if (tickerStartFailed) {
+            liveIntent = actionIntent(context, WidgetContract.ACTION_ENABLE_REALTIME, 7103);
+        } else if (realtimeEnabled) {
+            liveIntent = actionIntent(context, WidgetContract.ACTION_DISABLE_REALTIME, 7103);
+        } else if (snapshotValid && !stale) {
+            liveIntent = actionIntent(context, WidgetContract.ACTION_ENABLE_REALTIME, 7103);
+        } else {
+            liveIntent = openTargetIntent(context, WidgetContract.ROOT_LAUNCH_TARGET, 7103);
+        }
+        views.setOnClickPendingIntent(R.id.widget_live_badge, liveIntent);
         views.setOnClickPendingIntent(
                 R.id.widget_slacking_button,
-                slackingActive || snapshotValid && !stale
-                        ? actionIntent(context, WidgetContract.ACTION_SLACKING_TOGGLE, 7101)
+                slackingActive
+                        ? actionIntent(
+                                context,
+                                WidgetContract.ACTION_SLACKING_STOP,
+                                7101,
+                                slacking.optLong("startAt", -1L)
+                        )
+                        : snapshotValid && !stale
+                        ? actionIntent(context, WidgetContract.ACTION_SLACKING_START, 7101)
                         : openTargetIntent(context, WidgetContract.SLACKING_LAUNCH_TARGET, 7101)
         );
         views.setOnClickPendingIntent(
                 R.id.widget_overtime_button,
                 overtimeActive
-                        ? actionIntent(context, WidgetContract.ACTION_OVERTIME, 7102)
+                        ? actionIntent(
+                                context,
+                                WidgetContract.ACTION_OVERTIME_STOP,
+                                7102,
+                                overtime.optLong("startAt", -1L)
+                        )
+                        // Opening the pay-mode selector must be a direct activity
+                        // PendingIntent. Android 12+ can block receiver-to-activity
+                        // trampolines, and overtime cannot safely choose a pay mode
+                        // without asking the user first.
                         : openTargetIntent(context, WidgetContract.OVERTIME_LAUNCH_TARGET, 7102)
         );
         return views;
@@ -146,9 +174,31 @@ public final class WidgetRenderer {
     }
 
     private static PendingIntent actionIntent(Context context, String action, int requestCode) {
+        return actionIntent(context, action, requestCode, -1L);
+    }
+
+    private static PendingIntent actionIntent(
+            Context context,
+            String action,
+            int requestCode,
+            long expectedStartAt
+    ) {
         Intent intent = new Intent(context, WidgetActionReceiver.class)
                 .setAction(action)
+                // PendingIntent identity deliberately includes the timer start.
+                // Extras are ignored when Android compares PendingIntents, so an
+                // old launcher token could otherwise be updated to stop a newer
+                // timer that reused the same request code.
+                .setData(new Uri.Builder()
+                        .scheme("moneydance")
+                        .authority("widget-action")
+                        .appendPath(action)
+                        .appendPath(Long.toString(expectedStartAt))
+                        .build())
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND);
+        if (expectedStartAt >= 0L) {
+            intent.putExtra(WidgetContract.EXTRA_EXPECTED_START_AT, expectedStartAt);
+        }
         return PendingIntent.getBroadcast(context, requestCode, intent, pendingIntentFlags());
     }
 

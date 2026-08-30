@@ -15,12 +15,17 @@ public final class WidgetContract {
     // Internal keys. These are deliberately not part of the JavaScript contract.
     static final String KEY_ACTIVE_SLACKING_SESSION_ID = "active_slacking_session_id";
     static final String KEY_TICKER_RUNNING = "ticker_running";
+    static final String KEY_TICKER_START_FAILED = "ticker_start_failed";
     static final String KEY_NOTIFICATION_PERMISSION_REQUESTED = "notification_permission_requested";
+    static final String KEY_REALTIME_SUPPRESSED_DAY = "realtime_suppressed_day";
 
-    public static final String ACTION_SLACKING_TOGGLE = "com.cshouuu.moneydance.widget.SLACKING_TOGGLE";
-    public static final String ACTION_OVERTIME = "com.cshouuu.moneydance.widget.OVERTIME";
-    public static final String ACTION_TOGGLE_REALTIME = "com.cshouuu.moneydance.widget.TOGGLE_REALTIME";
+    public static final String ACTION_SLACKING_START = "com.cshouuu.moneydance.widget.SLACKING_START";
+    public static final String ACTION_SLACKING_STOP = "com.cshouuu.moneydance.widget.SLACKING_STOP";
+    public static final String ACTION_OVERTIME_STOP = "com.cshouuu.moneydance.widget.OVERTIME_STOP";
+    public static final String ACTION_ENABLE_REALTIME = "com.cshouuu.moneydance.widget.ENABLE_REALTIME";
+    public static final String ACTION_DISABLE_REALTIME = "com.cshouuu.moneydance.widget.DISABLE_REALTIME";
     public static final String ACTION_STOP_REALTIME = "com.cshouuu.moneydance.widget.STOP_REALTIME";
+    public static final String EXTRA_EXPECTED_START_AT = "expected_start_at";
 
     public static final String EVENT_SLACKING_START = "slacking_start";
     public static final String EVENT_SLACKING_STOP = "slacking_stop";

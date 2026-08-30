@@ -11,17 +11,16 @@ import { createId } from '../lib/id'
 import {
   elapsedSecondsSince,
   formatTimerDuration,
-  getAchievementSnapshot,
   loadAchievementState,
   reconcileAchievementSessions,
   saveAchievementState,
-  unlockAchievementLevel,
 } from '../lib/achievements'
 import { loadLedger, saveLedger } from '../lib/ledger'
 import { calculateOvertimeEarnings, createOvertimeLedgerEntries, overtimePayLabel } from '../lib/overtime'
 import { loadProfile } from '../lib/profile'
 import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
+import { prepareOvertimeWebStop } from '../lib/widgetActions'
 import type { ActiveOvertime, OvertimeSession, OvertimeStartOption } from '../types'
 import './Overtime.css'
 
@@ -48,6 +47,7 @@ export function Overtime() {
   const [startDialogOpen, setStartDialogOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   const [finishNotice, setFinishNotice] = useState<{ id: string; message: string } | null>(null)
+  const [achievementSaveFailed, setAchievementSaveFailed] = useState(false)
   const [page, setPage] = useState(1)
   const stoppingRef = useRef(false)
 
@@ -57,24 +57,13 @@ export function Overtime() {
   const visibleSessions = getPageItems(sessions, currentPage)
   const totalSeconds = sessions.reduce((total, session) => total + session.durationSeconds, 0)
   const totalMoney = sessions.reduce((total, session) => total + session.earnedAmount, 0)
-  const achievementSnapshot = getAchievementSnapshot('overtime', achievementState, liveSeconds)
-
   useEffect(() => {
     setAchievementState(current => reconcileAchievementSessions('overtime', current, sessions, new Date().toISOString()))
   }, [sessions])
 
   useEffect(() => {
-    saveAchievementState('overtime', achievementState)
+    setAchievementSaveFailed(!saveAchievementState('overtime', achievementState))
   }, [achievementState])
-
-  useEffect(() => {
-    setAchievementState(current => unlockAchievementLevel(
-      'overtime',
-      current,
-      achievementSnapshot.highestLevel,
-      new Date().toISOString(),
-    ))
-  }, [achievementSnapshot.highestLevel])
 
   useEffect(() => {
     if (searchParams.get('start') !== '1') return
@@ -99,33 +88,68 @@ export function Overtime() {
     if (!active || stoppingRef.current) return
     stoppingRef.current = true
     try {
+      // Native widget actions are applied outside React's render cycle. Treat
+      // persisted state as authoritative immediately before creating a session
+      // or ledger entry so a stale page cannot record the same stop twice.
+      const latest = prepareOvertimeWebStop(active.startTime)
+      if (!latest.shouldStop) {
+        const expectedStartAt = new Date(active.startTime).getTime()
+        const storedActiveMatches = latest.active !== null
+          && new Date(latest.active.startTime).getTime() === expectedStartAt
+        if (latest.completedSession && storedActiveMatches) removeJSON(keys.activeOvertime)
+        setActive(latest.completedSession && storedActiveMatches ? null : latest.active)
+        setSessions(latest.sessions)
+        setPage(1)
+        return
+      }
       const endTime = new Date().toISOString()
-      const durationSeconds = elapsedSecondsSince(active.startTime, new Date(endTime))
+      const stopActive = latest.active ?? active
+      const durationSeconds = elapsedSecondsSince(stopActive.startTime, new Date(endTime))
       const session: OvertimeSession = {
-        ...active,
+        ...stopActive,
         id: createId(),
         endTime,
         durationSeconds,
-        earnedAmount: calculateOvertimeEarnings(active, durationSeconds, rates.second),
+        earnedAmount: calculateOvertimeEarnings(stopActive, durationSeconds, rates.second),
       }
-      const next = [session, ...sessions]
+      const next = [session, ...latest.sessions]
+      const nextAchievementState = reconcileAchievementSessions(
+        'overtime',
+        achievementState,
+        [session],
+        endTime,
+      )
       setActive(null)
       setSessions(next)
+      setAchievementState(nextAchievementState)
       setPage(1)
       removeJSON(keys.activeOvertime)
       saveJSON(keys.overtimeSessions, next)
+      setAchievementSaveFailed(!saveAchievementState('overtime', nextAchievementState))
       if (session.earnedAmount > 0) {
-        const ledger = loadLedger()
-        saveLedger([...createOvertimeLedgerEntries(session, createId), ...ledger])
+        saveLedger([...createOvertimeLedgerEntries(session, createId), ...latest.ledger])
       }
       setFinishNotice({ id: session.id, message: `终于结束了，这次加班赚了¥${session.earnedAmount.toFixed(2)}，赶紧去犒劳一下自己吧` })
     } finally {
       stoppingRef.current = false
     }
-  }, [active, rates.second, sessions])
+  }, [active, achievementState, rates.second])
 
   const confirmDelete = useCallback(() => {
     if (!pendingDelete) return
+    const reconciled = reconcileAchievementSessions(
+      'overtime',
+      achievementState,
+      sessions,
+      new Date().toISOString(),
+    )
+    if (!saveAchievementState('overtime', reconciled)) {
+      setAchievementSaveFailed(true)
+      setPendingDelete(null)
+      return
+    }
+    setAchievementState(reconciled)
+    setAchievementSaveFailed(false)
     const removed = pendingDelete.type === 'all' ? sessions : [pendingDelete.session]
     const removedIds = new Set(removed.map(session => session.id))
     const next = pendingDelete.type === 'all' ? [] : sessions.filter(session => !removedIds.has(session.id))
@@ -134,7 +158,7 @@ export function Overtime() {
     saveLedger(loadLedger().filter(entry => entry.kind !== 'overtime' || !entry.linkedId || !removedIds.has(entry.linkedId)))
     setPage(1)
     setPendingDelete(null)
-  }, [pendingDelete, sessions])
+  }, [achievementState, pendingDelete, sessions])
 
   return <section className="page overtime-page">
     <header className="page-header"><div><p className="eyebrow">OVERTIME TIMER</p><h1>加班，也得算得明白。</h1><p>有钱就算钱，没钱也把时间记下来。刷新、锁屏或切换页面都不会丢失计时。</p></div></header>
@@ -151,7 +175,7 @@ export function Overtime() {
 
     <div className="summary-strip overtime-summary"><div><small>历史加班收入</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>当前保留的加班时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-overtime-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
 
-    <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds}/>
+    <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds} saveFailed={achievementSaveFailed}/>
 
     <div className="list-section"><div className="section-title"><h2>加班记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有加班记录。</div> : <><div className="item-list">{visibleSessions.map(session => <article className="list-card overtime-record" key={session.id}><div className="item-avatar overtime-avatar"><BadgeDollarSign size={19}/></div><div className="item-main"><b>{formatStart(session.startTime)}</b><span>{formatDuration(session.durationSeconds)} · {overtimePayLabel(session)}</span></div><div className="item-result"><small>本次加班</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button overtime-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次加班记录" title="删除"><Trash2 size={16}/></button></article>)}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
 

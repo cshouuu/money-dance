@@ -7,6 +7,7 @@ interface AchievementPanelProps {
   kind: AchievementKind
   state: AchievementState
   activeSeconds?: number
+  saveFailed?: boolean
 }
 
 const PANEL_COPY: Record<AchievementKind, { eyebrow: string; title: string }> = {
@@ -14,7 +15,7 @@ const PANEL_COPY: Record<AchievementKind, { eyebrow: string; title: string }> = 
   overtime: { eyebrow: 'OVERTIME ACHIEVEMENTS', title: '加班成就' },
 }
 
-export function AchievementPanel({ kind, state, activeSeconds = 0 }: AchievementPanelProps) {
+export function AchievementPanel({ kind, state, activeSeconds = 0, saveFailed = false }: AchievementPanelProps) {
   const snapshot = getAchievementSnapshot(kind, state, activeSeconds)
   const copy = PANEL_COPY[kind]
   const levelLabel = snapshot.current ? `Lv.${snapshot.current.level} ${snapshot.current.name}` : '等待第一枚勋章'
@@ -26,7 +27,7 @@ export function AchievementPanel({ kind, state, activeSeconds = 0 }: Achievement
         <p>{copy.eyebrow}</p>
         <h2 id={`${kind}-achievement-title`}>{copy.title}</h2>
       </div>
-      <div className="achievement-current"><small>当前等级</small><strong>{levelLabel}</strong></div>
+      <div className="achievement-current"><small>当前等级</small><strong aria-live="polite">{levelLabel}</strong></div>
     </div>
 
     <div className="achievement-progress-copy">
@@ -39,12 +40,12 @@ export function AchievementPanel({ kind, state, activeSeconds = 0 }: Achievement
       aria-label={snapshot.next ? `通往${snapshot.next.name}的进度` : '成就进度'}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={Math.round(snapshot.progress * 100)}
+      aria-valuenow={Math.floor(snapshot.progress * 100)}
     >
       <span style={{ width: `${snapshot.progress * 100}%` }}/>
     </div>
 
-    <ol className="achievement-medals">
+    <ol className="achievement-medals" role="list">
       {snapshot.definitions.map(achievement => {
         const unlocked = achievement.level <= snapshot.highestLevel
         return <li className={unlocked ? 'unlocked' : 'locked'} data-level={achievement.level} key={achievement.id}>
@@ -59,6 +60,7 @@ export function AchievementPanel({ kind, state, activeSeconds = 0 }: Achievement
         </li>
       })}
     </ol>
+    {saveFailed ? <p className="achievement-save-error" role="alert">成就进度暂未保存，请释放设备存储空间后重试。</p> : null}
     <p className="achievement-footnote">勋章点亮后永久保留；删除计时记录不会清除累计成就。</p>
   </section>
 }
