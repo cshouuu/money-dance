@@ -6,7 +6,7 @@
 
 实时薪资 · 心愿清单 · 摸鱼 · 加班 · 账本 · 薪苦日历 · 物品持有成本
 
-[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.22（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.22.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
+[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.23（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.23.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
 
 ![CI](https://github.com/cshouuu/money-dance/actions/workflows/ci.yml/badge.svg)
 ![Android APK](https://github.com/cshouuu/money-dance/actions/workflows/build-android-apk.yml/badge.svg)
@@ -24,7 +24,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.2.22**
+**当前稳定版：v0.2.23**
 
 ## 当前功能
 
@@ -33,14 +33,15 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | 💰 今日 | 根据薪资、作息、午休、生活成本和出勤情况，实时计算今日已赚金额与工作进度 |
 | 🕘 固定 / 弹性上班 | 固定作息自动计薪；弹性作息可在实际开工时开始，也能只调整当天的计薪方式 |
 | 🎯 心愿清单 | 把价格换算成连续纯工时和实际工作日；首页只展示心愿，增删改在清单页面完成 |
-| 🐟 摸鱼 | 开始、结束和删除摸鱼记录，统计每次及历史摸鱼收益 |
-| 💼 加班 | 记录无加班费、工资倍率或固定金额的加班；支持历史记录与收益统计 |
+| 🐟 摸鱼 | 开始、结束和删除摸鱼记录，统计每次及历史摸鱼收益；按永久累计时长点亮五级成就勋章 |
+| 💼 加班 | 记录无加班费、工资倍率或固定金额的加班；支持历史记录、收益统计及五级永久成就勋章 |
 | 📒 账本 | 按日 / 月 / 年查看收入、支出和结余，通过收支日历筛选明细，并手工新增、编辑或删除记录 |
 | 📅 薪苦日历 | 调整每天的正常上班、请假 / 特殊出勤或放假状态，并同步重算历史工作收入 |
 | ⚡ 意外收支 | 记录不会改变工资速度、但需要进入账本统计的临时收入或花费 |
 | 📦 我的好物 | 记录已购买物品及持有时间，持续观察每小时使用成本 |
 | 📱 多端使用 | 支持 Web、iPhone / iPad PWA 和 Android APK |
 | 🔄 Android 更新 | 应用内检查新版本，通过 Cloudflare R2 下载 APK，并由 Android 系统确认覆盖安装 |
+| 🧩 Android 桌面组件（待发布） | 4×2 主屏幕组件展示实时收益，并提供摸鱼直控和加班快捷操作；将随下一 Android 版本发布 |
 
 ## 关键业务规则
 
@@ -57,6 +58,11 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 - 请假 / 特殊出勤支持事假、病假、年假、调休、婚假、产假、产检假、陪产假、育儿假、丧假和远程工作。
 - 放假支持带薪假和无薪假；计薪时可按工资倍率或固定金额计算。
 - 加班收入统一归属到加班开始当天，不因跨日而拆分到多个日期。
+- Android 4×2 桌面组件仅面向系统主屏幕（`home_screen`），不扩展到锁屏、iOS 或 PWA；应用在计薪时段同步数据后会自动按秒刷新，用户也可从组件主动开启或停止当日实时模式。未启用实时模式时由系统约每 30 分钟低频刷新。
+- 摸鱼可从桌面组件直接开始或结束；开始加班时进入应用并沿用现有计薪方式选择，进行中的加班可从桌面组件直接结束。
+- 组件秒级更新依赖 `specialUse` 前台服务和常驻通知；午休等零费率区间会等待到下一计薪时间片，息屏时暂停组件重绘，亮屏后恢复。不同厂商的系统调度和 Launcher 仍可能产生延迟，因此秒级刷新属于尽力保证而非硬实时承诺。
+- 摸鱼成就按累计 30 分钟、3 小时、10 小时、30 小时、100 小时分为五级；加班成就按累计 1 小时、10 小时、30 小时、100 小时、300 小时分为五级。
+- 成就按历史记录初始化并持续累计；删除摸鱼或加班历史不会扣减累计时长，也不会撤销已点亮的勋章。
 - 用户手工编辑或删除过的历史账本明细不会被自动迁移逻辑强行覆盖。
 - 删除记录、清空历史和删除物品等破坏性操作必须经过二次确认。
 
@@ -83,7 +89,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 国内用户推荐通过 Cloudflare R2 下载当前正式版：
 
-**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.22.apk**
+**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.23.apk**
 
 也可以在 [GitHub Releases](https://github.com/cshouuu/money-dance/releases/latest) 查看版本说明和校验文件。
 
@@ -121,7 +127,7 @@ MoneyDance
 ├── apps/web                 React + Vite + TypeScript
 │   ├── Web / PWA
 │   ├── Cloudflare Pages Functions（R2 下载代理）
-│   └── Capacitor Android UI + 原生更新桥接
+│   └── Capacitor Android UI + 原生更新桥接 + 桌面组件
 │
 ├── apps/api                 Hono + TypeScript
 │   └── Vercel
@@ -184,7 +190,7 @@ npm audit
 
 Android 复用现有 React / Vite 前端作为唯一 UI，通过 Capacitor 生成原生 Android 工程，不维护另一套 React Native 或 Flutter 代码。
 
-原生层只承担 Android 专属能力，包括读取应用版本、下载安装包、校验下载来源以及调用系统安装器。详细说明见 [`docs/MOBILE.md`](docs/MOBILE.md)。
+原生层只承担 Android 专属能力，包括读取应用版本、下载安装包、校验下载来源以及调用系统安装器；桌面组件也由原生层负责秒级重绘与桌面操作桥接。详细说明见 [`docs/MOBILE.md`](docs/MOBILE.md)。
 
 ## 发布流程
 
@@ -268,12 +274,12 @@ MoneyDance 当前采用 local-first 策略，以下数据默认保存在当前�
 - 薪资、生活成本与工作时间设置
 - 固定工作周 / 大小周和弹性作息状态
 - 心愿清单与已购买记录
-- 摸鱼和加班记录
+- 摸鱼和加班记录，以及对应的永久成就累计
 - 出勤、请假与放假调整
 - 意外收支与手工账本明细
 - 物品及持有成本记录
 
-这些数据不会因为打开 Web 页面就自动上传到服务器。
+这些数据不会因为打开 Web 页面就自动上传到服务器。Android 桌面组件只会把收益时间片和待处理动作保存在应用自己的 `SharedPreferences` 中，不会改变 local-first 边界。
 
 Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不会自动跨设备同步。卸载应用、清除浏览器数据或更换设备前，请留意本地数据可能丢失。
 
@@ -291,9 +297,10 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 - [x] 心愿清单、摸鱼、加班、账本与薪苦日历
 - [x] 固定工作周、大小周和历史收入重算
 - [x] Android 固定签名、应用内更新和 Cloudflare R2 分发
+- [x] 摸鱼 / 加班五级永久成就与勋章点亮
+- [x] Android 4×2 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作（待随下一 Android 版本发布）
 - [ ] 数据导入 / 导出
 - [ ] 可选云同步
-- [ ] Android 桌面小组件与实时金额展示
 - [ ] 更完整的 iOS 原生能力
 
 ---

@@ -1,0 +1,33 @@
+.achievement-panel{margin-top:18px;padding:22px;border:1px solid #dedbd1;border-radius:22px;background:linear-gradient(145deg,rgba(252,250,245,.96),rgba(238,237,224,.86));box-shadow:0 10px 30px rgba(36,41,32,.04)}
+.achievement-heading{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:12px}
+.achievement-title-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:#e2e6c9;color:#53634f}
+.achievement-heading p{margin:0 0 3px;font:500 11px 'DM Mono';letter-spacing:.09em;color:#62685e}
+.achievement-heading h2{margin:0;font-size:18px}
+.achievement-current{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
+.achievement-current small{font-size:11px;color:#62685e}
+.achievement-current strong{font-size:13px;color:#43523f}
+.achievement-progress-copy{display:flex;justify-content:space-between;gap:16px;margin:20px 0 8px;font-size:12px;color:#5d635a}
+.achievement-progress-copy b{color:#5c6858;text-align:right}
+.achievement-progress-track{height:6px;overflow:hidden;border-radius:100px;background:#dcdcd1}
+.achievement-progress-track>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#75866c,#b1bd80);transition:width .35s ease}
+.achievement-medals{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:20px 0 0;padding:0;list-style:none}
+.achievement-medals li{min-width:0;padding:14px 8px 12px;border:1px solid #dedcd3;border-radius:15px;text-align:center;background:rgba(250,248,242,.72)}
+.achievement-medal{position:relative;width:50px;height:50px;margin:0 auto 9px;border-radius:50%;display:grid;place-items:center;background:#dfded7;color:#9b9e96}
+.achievement-medal>span{position:absolute;top:17px;font:700 11px 'DM Mono'}
+.achievement-medal>i{position:absolute;right:-2px;bottom:-1px;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:#f3f1ea;border:1px solid #d5d3ca;color:#93968e}
+.achievement-medals li>b,.achievement-medals li>small,.achievement-medals li>em{display:block;overflow-wrap:anywhere}
+.achievement-medals li>b{font-size:12px}
+.achievement-medals li>small{min-height:34px;margin-top:4px;font-size:11px;line-height:1.45;color:#5f655c}
+.achievement-medals li>em{margin-top:7px;font-size:11px;font-style:normal;color:#62685f}
+.achievement-medals li.unlocked{border-color:#cfd6b4;background:#f2f3e4}
+.achievement-medals li.unlocked .achievement-medal{color:#43513f;background:linear-gradient(145deg,#e5eabf,#bac88a);box-shadow:0 7px 18px rgba(84,105,75,.18)}
+.achievement-medals li.unlocked>em{color:#5b6b55;font-weight:650}
+.achievement-medals li.unlocked[data-level="4"] .achievement-medal{background:linear-gradient(145deg,#dce4e4,#9eb6b1)}
+.achievement-medals li.unlocked[data-level="5"] .achievement-medal{background:linear-gradient(145deg,#f4d9ae,#d59159);color:#563a28}
+.achievement-save-error{margin:14px 0 0;padding:9px 11px;border:1px solid #d9a99f;border-radius:10px;background:#fff4f1;color:#7a3026;font-size:12px;text-align:center}
+.achievement-footnote{margin:14px 0 0;font-size:11px;line-height:1.5;color:#5f655d;text-align:center}
+.achievement-panel.overtime .achievement-title-icon{background:#e7e4cf;color:#665f49}
+.achievement-panel.overtime .achievement-progress-track>span{background:linear-gradient(90deg,#727b68,#c0ad72)}
+@media(max-width:720px){.achievement-medals{grid-template-columns:repeat(2,minmax(0,1fr))}.achievement-medals li:last-child:nth-child(odd){grid-column:1/-1}}
+@media(max-width:560px){.achievement-panel{padding:18px 15px;border-radius:19px}.achievement-heading{grid-template-columns:38px 1fr}.achievement-title-icon{width:38px;height:38px}.achievement-current{grid-column:1/3;align-items:flex-start;text-align:left;padding-top:10px;border-top:1px solid var(--line)}.achievement-progress-copy{flex-direction:column;gap:5px}.achievement-progress-copy b{text-align:left}}
+@media(prefers-reduced-motion:reduce){.achievement-progress-track>span{transition:none}}
