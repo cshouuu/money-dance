@@ -42,6 +42,18 @@ export function attendanceStatusLabel(record: AttendanceRecord): string {
   return '正常上班'
 }
 
+export function getCustomAttendanceAmount(record: AttendanceRecord | undefined, dailyAmount: number): number | null {
+  if (record?.payMode === 'multiplier') return Math.max(0, dailyAmount) * Math.max(0, record.multiplier ?? 0)
+  if (record?.payMode === 'fixed') return Math.max(0, record.fixedAmount ?? 0)
+  return null
+}
+
+export function attendancePayModeLabel(record: AttendanceRecord): string | null {
+  if (record.payMode === 'multiplier') return `${record.multiplier ?? 0} 倍计薪`
+  if (record.payMode === 'fixed') return `固定 ¥${(record.fixedAmount ?? 0).toFixed(2)}`
+  return null
+}
+
 function weekStart(date: Date): Date {
   const result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12)
   const mondayBasedIndex = (result.getDay() + 6) % 7

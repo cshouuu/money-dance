@@ -83,10 +83,10 @@ export function Attendance() {
   }, [closeSelectedDate, selectedDate, records])
 
   return <section className="page attendance-page">
-    <header className="page-header"><div><p className="eyebrow">ATTENDANCE & SALARY</p><h1>薪苦日历</h1><p>上班、请假还是放假，每一天都按真实出勤算钱。平常无需打卡，只有特殊日期才需要调整。</p></div></header>
+    <header className="page-header"><div><p className="eyebrow">ATTENDANCE & SALARY</p><h1>薪苦日历</h1><p>上班、请假还是放假，每一天都按真实出勤算钱；正常出勤也可以按倍率或固定金额调整当天工资。</p></div></header>
     <AttendanceCalendar profile={profile} records={records} workRecords={workRecords} dimension={dimension} anchor={anchor} onChange={(nextDimension, nextAnchor) => { setDimension(nextDimension); setAnchor(nextAnchor) }} onSelectDate={selectDate}/>
     <div className="attendance-stats"><article><span><CalendarDays size={17}/></span><small>本月手工调整</small><strong>{monthStats.adjusted}<i>天</i></strong></article><article><span><CalendarClock size={17}/></span><small>本月请假 / 特殊出勤</small><strong>{monthStats.leave}<i>天</i></strong></article><article><span><Coffee size={17}/></span><small>本月放假</small><strong>{monthStats.holiday}<i>天</i></strong></article><article><span><CircleOff size={17}/></span><small>本月不计薪</small><strong>{monthStats.unpaid}<i>天</i></strong></article></div>
-    <p className="attendance-help">没有手工调整的日期，会继续按照你的默认上班方式和每周工作天数自动计算。调整历史日期后，账本中的对应工资收入会同步重算。</p>
+    <p className="attendance-help">没有手工调整的日期，会继续按照你的默认上班方式和每周工作天数自动计算。倍率与固定金额按整天工资覆盖，真实工作时长仍会保留。</p>
     <AttendanceDialog open={selectedDate !== null} date={selectedDate ?? toLocalDateValue()} record={selectedRecord} onSave={saveRecord} onReset={resetRecord} onCancel={closeSelectedDate}/>
   </section>
 }

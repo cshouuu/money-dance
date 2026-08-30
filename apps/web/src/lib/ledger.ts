@@ -1,6 +1,6 @@
 import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind, OvertimeSession } from '../types'
-import { attendanceStatusLabel, isConfiguredWorkday, loadAttendanceRecords } from './attendance'
+import { attendancePayModeLabel, attendanceStatusLabel, getCustomAttendanceAmount, isConfiguredWorkday, loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { migrateLegacyOvertimeLedgerDates } from './overtime'
@@ -109,10 +109,13 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     if (day < effectiveDate && !attendance) continue
     let amount = 0
     let source = '工资收入'
+    const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
     if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
       source = `工资收入 · ${attendanceStatusLabel(attendance)}`
-      if (attendance.payMode === 'multiplier') amount = rates.daily * Math.max(0, attendance.multiplier ?? 0)
-      if (attendance.payMode === 'fixed') amount = Math.max(0, attendance.fixedAmount ?? 0)
+      amount = customAttendanceAmount ?? 0
+    } else if (attendance?.status === 'normal' && customAttendanceAmount !== null) {
+      amount = customAttendanceAmount
+      source = `工资收入 · 正常出勤 · ${attendancePayModeLabel(attendance)}`
     } else {
       const workMode = workRecord?.mode ?? profile.defaultWorkMode
       if (workMode === 'flexible') {
