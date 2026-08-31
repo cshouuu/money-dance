@@ -20,6 +20,17 @@ describe('salary calculations', () => {
     expect(rates.second).toBe(0)
   })
 
+  it('keeps gross rates when living cost is recorded as daily ledger expenses', () => {
+    const rates = calculateRates({
+      ...DEFAULT_PROFILE,
+      includeLivingCost: true,
+      monthlyLivingCost: 3000,
+      livingCostMode: 'daily-ledger',
+    })
+    expect(rates.daily).toBeCloseTo(15000 / 21.75, 8)
+    expect(rates.hourly).toBeCloseTo((15000 / 21.75) / 8, 8)
+  })
+
   it('does not count unpaid lunch as worked time', () => {
     const now = new Date(2026, 7, 25, 12, 30, 0)
     expect(getWorkedPaidSeconds(DEFAULT_PROFILE, now)).toBe(3 * 3600)

@@ -8,7 +8,7 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f5f2ea",
-  "theme_color": "#1e281f",
+  "theme_color": "#f5f2ea",
   "icons": [
     {
       "src": "/money-dance-icon.svg",

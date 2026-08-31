@@ -121,7 +121,7 @@
   form.input-card .live-result.converter-live-result{padding:12px 14px 12px 18px;border-left:0}
   .converter-actions .icon-button{display:grid!important;width:36px;height:36px}
   .buy-button{height:36px}
-  .purchase-toast{right:15px;bottom:96px}
+  .purchase-toast{right:15px;bottom:calc(96px + var(--md-safe-area-bottom))}
 }
 
 @media(max-width:560px){

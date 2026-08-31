@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ActiveOvertime } from '../types'
+import { captureSessionStartBusinessDate } from './sessionBusinessDate'
 import { keys } from './storage'
 import {
   applyWidgetActions,
@@ -33,10 +34,14 @@ class MemoryStorage implements WidgetStorage {
 const startAt = new Date(2026, 7, 28, 18).getTime()
 const endAt = startAt + 3_600_000
 
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe('native widget action parsing', () => {
   it('accepts a JSON action journal and filters damaged entries', () => {
     const actions = parseWidgetActions(JSON.stringify([
-      { actionId: 'start-1', type: 'slacking_start', occurredAt: startAt, sessionId: 'session-1' },
+      { actionId: 'start-1', type: 'slacking_start', occurredAt: startAt, sessionId: 'session-1', startLocalDate: '2026-08-28', startTimezoneOffsetMinutes: -840 },
       { actionId: 'missing-session', type: 'slacking_start', occurredAt: startAt },
       { actionId: 'bad-time', type: 'slacking_stop', occurredAt: startAt, sessionId: 'session-2', startAt: 'no', endAt, earnedAmount: 1 },
       { actionId: 'unknown', type: 'other', occurredAt: startAt, sessionId: 'session-3' },
@@ -47,6 +52,8 @@ describe('native widget action parsing', () => {
       type: 'slacking_start',
       occurredAt: startAt,
       sessionId: 'session-1',
+      startLocalDate: '2026-08-28',
+      startTimezoneOffsetMinutes: -840,
     }])
     expect(parseWidgetActions('{bad json')).toEqual([])
   })
@@ -79,6 +86,7 @@ describe('widget action persistence', () => {
     expect(loadWidgetActionState(storage).slackingSessions).toEqual([{
       id: 'slacking-1',
       startTime: new Date(startAt).toISOString(),
+      ...captureSessionStartBusinessDate(new Date(startAt).toISOString()),
       endTime: new Date(endAt).toISOString(),
       durationSeconds: 3600,
       earnedAmount: 12.5,
@@ -169,7 +177,10 @@ describe('widget action persistence', () => {
     }
 
     applyWidgetActions([action], storage)
-    expect(loadWidgetActionState(storage).activeSlacking).toBe(new Date(newerStart).toISOString())
+    expect(loadWidgetActionState(storage).activeSlacking).toEqual({
+      startTime: new Date(newerStart).toISOString(),
+      ...captureSessionStartBusinessDate(new Date(newerStart).toISOString()),
+    })
   })
 
   it('deduplicates a native slacking stop when the Web page already ended the same timer', () => {
@@ -301,5 +312,93 @@ describe('widget action persistence', () => {
 
     expect(() => applyWidgetActions([action], storage)).not.toThrow()
     expect(loadWidgetActionState(storage).slackingSessions).toHaveLength(1)
+  })
+
+  it('keeps existing original-zone metadata when replaying legacy stop actions', () => {
+    vi.stubEnv('TZ', 'Etc/GMT+12')
+    const storage = new MemoryStorage()
+    const originalStart = '2026-08-31T09:30:00.000Z'
+    const originalEnd = '2026-08-31T10:30:00.000Z'
+    storage.setItem(keys.sessions, JSON.stringify([{
+      id: 'existing-slacking',
+      startTime: originalStart,
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+      endTime: originalEnd,
+      durationSeconds: 3600,
+      earnedAmount: 10,
+    }]))
+    storage.setItem(keys.overtimeSessions, JSON.stringify([{
+      id: 'existing-overtime',
+      startTime: originalStart,
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+      endTime: originalEnd,
+      durationSeconds: 3600,
+      earnedAmount: 20,
+      payMode: 'fixed',
+      fixedAmount: 20,
+    }]))
+
+    const startAt = new Date(originalStart).getTime()
+    const endAt = new Date(originalEnd).getTime()
+    const legacyActions: WidgetAction[] = [{
+      actionId: 'legacy-slacking-replay',
+      type: 'slacking_stop',
+      occurredAt: endAt,
+      sessionId: 'existing-slacking',
+      startAt,
+      endAt,
+      earnedAmount: 10,
+    }, {
+      actionId: 'legacy-overtime-replay',
+      type: 'overtime_stop',
+      occurredAt: endAt,
+      sessionId: 'existing-overtime',
+      startAt,
+      endAt,
+      earnedAmount: 20,
+      payMode: 'fixed',
+      fixedAmount: 20,
+    }]
+
+    expect(applyWidgetActions(legacyActions, storage).success).toBe(true)
+    const state = loadWidgetActionState(storage)
+    expect(state.slackingSessions[0]).toMatchObject({
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+    })
+    expect(state.overtimeSessions[0]).toMatchObject({
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+    })
+  })
+
+  it('uses native start-zone metadata for sessions and overtime ledger dates', () => {
+    vi.stubEnv('TZ', 'Etc/GMT+12')
+    const storage = new MemoryStorage()
+    const originalStart = '2026-08-31T09:30:00.000Z'
+    const originalEnd = '2026-08-31T10:30:00.000Z'
+    const action: WidgetAction = {
+      actionId: 'zoned-overtime-stop',
+      type: 'overtime_stop',
+      occurredAt: new Date(originalEnd).getTime(),
+      sessionId: 'zoned-overtime',
+      startAt: new Date(originalStart).getTime(),
+      endAt: new Date(originalEnd).getTime(),
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+      earnedAmount: 20,
+      payMode: 'fixed',
+      fixedAmount: 20,
+    }
+
+    expect(applyWidgetActions([action], storage).success).toBe(true)
+    const state = loadWidgetActionState(storage)
+    expect(state.overtimeSessions[0]).toMatchObject({
+      startLocalDate: '2026-08-31',
+      startTimezoneOffsetMinutes: -840,
+    })
+    expect(state.ledger[0]?.localDate).toBe('2026-08-31')
   })
 })

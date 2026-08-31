@@ -1,4 +1,67 @@
-.work-dialog-backdrop{position:fixed;inset:0;z-index:100;background:rgba(23,29,23,.34);backdrop-filter:blur(6px);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));overscroll-behavior:contain;animation:dialog-backdrop-in .22s ease both}.work-time-dialog{width:min(460px,100%);max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;background:var(--paper);border:1px solid #ddd9cf;border-radius:22px;padding:24px;box-shadow:0 24px 70px rgba(23,29,23,.2);animation:dialog-card-in .28s cubic-bezier(.22,.8,.24,1) both}.work-dialog-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.work-dialog-header h2{font-size:24px;letter-spacing:-.5px;margin:5px 0 0}.work-dialog-header>button{border:0;background:#ece9e1;color:var(--muted);border-radius:10px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer}.work-dialog-copy{font-size:11px;line-height:1.6;color:var(--muted);margin:15px 0}.work-quick-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.work-quick-actions button{border:1px solid #dedbd1;background:#efede6;color:var(--ink);border-radius:13px;min-height:62px;padding:11px 13px;display:flex;align-items:center;justify-content:center;gap:9px;cursor:pointer}.work-quick-actions button.work-now-button{background:var(--dark);border-color:var(--dark);color:#f8f6eb}.work-quick-actions span{display:flex;flex-direction:column;gap:3px}.work-quick-actions b{font-size:11px}.work-quick-actions small{font:10px 'DM Mono';opacity:.68}.work-dialog-divider{display:flex;align-items:center;gap:10px;color:#9a9e96;font-size:9px;margin:18px 0}.work-dialog-divider::before,.work-dialog-divider::after{content:'';height:1px;background:var(--line);flex:1}.work-time-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.work-time-fields label{display:flex;flex-direction:column;gap:7px}.work-time-fields label>span{font-size:10px;color:var(--muted);font-weight:600}.work-time-fields label>span small{font-size:8px;font-weight:400}.work-time-fields input{height:43px;border:1px solid #dbd8cf;background:#f8f6f0;border-radius:11px;padding:0 12px;outline:none;color:var(--ink)}.work-time-fields input:focus{border-color:#8e9b80;box-shadow:0 0 0 3px rgba(115,136,103,.1)}.work-dialog-error{font-size:10px;color:#985e4b;background:#eee1da;border-radius:9px;padding:9px 11px;margin:12px 0 0}.work-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}.work-dialog-actions button{height:44px;border:0;border-radius:12px;font-size:12px;font-weight:600;cursor:pointer}.work-cancel-button{background:#ece9e1;color:var(--ink)}.work-confirm-button{background:var(--dark);color:#f8f6eb}
-@keyframes dialog-backdrop-in{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(6px)}}@keyframes dialog-card-in{from{opacity:0;transform:translateY(12px) scale(.975)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(max-width:480px){.work-time-dialog{padding:20px;border-radius:19px}.work-dialog-header h2{font-size:21px}.work-quick-actions,.work-dialog-actions,.work-time-fields{grid-template-columns:1fr}.work-quick-actions button{min-height:56px}.work-time-fields label:first-child:last-child{grid-column:auto}}
-@media(prefers-reduced-motion:reduce){.work-dialog-backdrop,.work-time-dialog{animation:none}}
+.work-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: max(16px, var(--md-safe-area-top)) max(16px, var(--md-safe-area-right)) max(16px, var(--md-safe-area-bottom)) max(16px, var(--md-safe-area-left));
+  background: rgba(23, 29, 23, .34);
+  backdrop-filter: blur(6px);
+  overscroll-behavior: contain;
+  animation: dialog-backdrop-in .22s ease both;
+}
+
+.work-time-dialog {
+  width: min(460px, 100%);
+  max-height: calc(100dvh - 32px - var(--md-safe-area-top) - var(--md-safe-area-bottom));
+  overflow-y: auto;
+  padding: 24px;
+  border: 1px solid #ddd9cf;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: 0 24px 70px rgba(23, 29, 23, .2);
+  overscroll-behavior: contain;
+  animation: dialog-card-in .28s cubic-bezier(.22, .8, .24, 1) both;
+}
+
+.work-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.work-dialog-header h2 { margin: 5px 0 0; font-size: 24px; letter-spacing: -.5px; }
+.work-dialog-header > button { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 10px; background: #ece9e1; color: var(--muted); cursor: pointer; }
+.work-dialog-copy { margin: 15px 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.work-quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.work-quick-actions button { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 62px; padding: 11px 13px; border: 1px solid #dedbd1; border-radius: 13px; background: #efede6; color: var(--ink); cursor: pointer; }
+.work-quick-actions button:disabled { opacity: .52; cursor: not-allowed; }
+.work-quick-actions button.work-now-button { border-color: var(--dark); background: var(--dark); color: #f8f6eb; }
+.work-quick-actions span { display: flex; flex-direction: column; gap: 3px; }
+.work-quick-actions b { font-size: 11px; }
+.work-quick-actions small { opacity: .68; font: 10px 'DM Mono'; }
+.work-dialog-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: #9a9e96; font-size: 9px; }
+.work-dialog-divider::before, .work-dialog-divider::after { flex: 1; height: 1px; background: var(--line); content: ''; }
+.work-time-fields, .work-planned-end-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.work-time-fields label, .work-planned-end-fields label { display: flex; flex-direction: column; gap: 7px; }
+.work-time-fields label > span, .work-planned-end-fields label > span { color: var(--muted); font-size: 10px; font-weight: 600; }
+.work-time-fields label > span small, .work-planned-end-fields label > span small { font-size: 8px; font-weight: 400; }
+.work-time-fields input, .work-planned-end-fields input { height: 44px; padding: 0 12px; border: 1px solid #dbd8cf; border-radius: 11px; outline: none; background: #f8f6f0; color: var(--ink); }
+.work-time-fields input:focus, .work-planned-end-fields input:focus { border-color: #8e9b80; box-shadow: 0 0 0 3px rgba(115, 136, 103, .1); }
+.work-planned-end-fields input:disabled { opacity: .55; cursor: not-allowed; }
+.work-planned-end-note { display: block; margin-top: 8px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.work-dialog-error { margin: 12px 0 0; padding: 9px 11px; border-radius: 9px; background: #eee1da; color: #985e4b; font-size: 10px; }
+.work-dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+.work-dialog-actions button { height: 44px; border: 0; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.work-cancel-button { background: #ece9e1; color: var(--ink); }
+.work-confirm-button { background: var(--dark); color: #f8f6eb; }
+
+@keyframes dialog-backdrop-in { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(6px); } }
+@keyframes dialog-card-in { from { opacity: 0; transform: translateY(12px) scale(.975); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+@media (max-width: 480px) {
+  .work-time-dialog { padding: 20px; border-radius: 19px; }
+  .work-dialog-header h2 { font-size: 21px; }
+  .work-quick-actions, .work-dialog-actions, .work-time-fields, .work-planned-end-fields { grid-template-columns: 1fr; }
+  .work-quick-actions button { min-height: 56px; }
+  .work-time-fields label:first-child:last-child { grid-column: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-dialog-backdrop, .work-time-dialog { animation: none; }
+}

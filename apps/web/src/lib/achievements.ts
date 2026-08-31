@@ -14,6 +14,8 @@ export interface AchievementDefinition {
 export interface AchievementState {
   lifetimeSeconds: number
   processedSessionIds: string[]
+  /** Highest duration already credited for each session; enables idempotent corrections. */
+  creditedSecondsBySessionId: Record<string, number>
   highestLevel: number
   unlockedAt: Record<string, string>
 }
@@ -58,7 +60,7 @@ export const ACHIEVEMENTS: Record<AchievementKind, readonly AchievementDefinitio
 }
 
 export function createEmptyAchievementState(): AchievementState {
-  return { lifetimeSeconds: 0, processedSessionIds: [], highestLevel: 0, unlockedAt: {} }
+  return { lifetimeSeconds: 0, processedSessionIds: [], creditedSecondsBySessionId: {}, highestLevel: 0, unlockedAt: {} }
 }
 
 function createEmptyAchievementStore(): AchievementStore {
@@ -79,6 +81,12 @@ function normalizeState(kind: AchievementKind, value: unknown): AchievementState
   const processedSessionIds = Array.isArray(candidate.processedSessionIds)
     ? [...new Set(candidate.processedSessionIds.filter((id): id is string => typeof id === 'string' && id.length > 0))]
     : []
+  const creditedSecondsBySessionId = candidate.creditedSecondsBySessionId
+    && typeof candidate.creditedSecondsBySessionId === 'object'
+    ? Object.fromEntries(Object.entries(candidate.creditedSecondsBySessionId)
+      .filter((entry): entry is [string, number] => entry[0].length > 0 && typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+      .map(([id, seconds]) => [id, Math.max(0, seconds)]))
+    : {}
   const unlockedAt = candidate.unlockedAt && typeof candidate.unlockedAt === 'object'
     ? Object.fromEntries(Object.entries(candidate.unlockedAt).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
     : {}
@@ -89,6 +97,7 @@ function normalizeState(kind: AchievementKind, value: unknown): AchievementState
   return {
     lifetimeSeconds: safeSeconds(candidate.lifetimeSeconds),
     processedSessionIds,
+    creditedSecondsBySessionId,
     highestLevel,
     unlockedAt,
   }
@@ -171,19 +180,39 @@ export function reconcileAchievementSessions(
 ): AchievementState {
   const processed = new Set(state.processedSessionIds)
   const pending = sessions
-    .filter(session => typeof session.id === 'string' && session.id.length > 0 && !processed.has(session.id))
+    .filter(session => typeof session.id === 'string' && session.id.length > 0)
     .slice()
     .sort((left, right) => new Date(left.endTime).getTime() - new Date(right.endTime).getTime())
   if (pending.length === 0) {
     return withUnlockedLevels(kind, state, achievementLevelAt(kind, state.lifetimeSeconds), validTimestamp(reconciledAt, new Date().toISOString()))
   }
 
-  let next: AchievementState = { ...state, processedSessionIds: [...state.processedSessionIds] }
+  let next: AchievementState = {
+    ...state,
+    processedSessionIds: [...state.processedSessionIds],
+    creditedSecondsBySessionId: { ...state.creditedSecondsBySessionId },
+  }
   for (const session of pending) {
-    if (processed.has(session.id)) continue
-    processed.add(session.id)
-    next.processedSessionIds.push(session.id)
-    next = { ...next, lifetimeSeconds: next.lifetimeSeconds + safeSeconds(session.durationSeconds) }
+    const wasProcessed = processed.has(session.id)
+    const hadCredit = Object.prototype.hasOwnProperty.call(next.creditedSecondsBySessionId, session.id)
+    const creditedSeconds = hadCredit ? next.creditedSecondsBySessionId[session.id] ?? 0 : 0
+    const currentSeconds = safeSeconds(session.durationSeconds)
+    if (!wasProcessed) {
+      processed.add(session.id)
+      next.processedSessionIds.push(session.id)
+    }
+
+    // Stores created before duration credits existed already included every
+    // processed ID in lifetimeSeconds. Register their current duration without
+    // adding it a second time. Later increases only add the positive delta.
+    const addedSeconds = !wasProcessed
+      ? currentSeconds
+      : hadCredit
+        ? Math.max(0, currentSeconds - creditedSeconds)
+        : 0
+    next.creditedSecondsBySessionId[session.id] = Math.max(creditedSeconds, currentSeconds)
+    if (addedSeconds <= 0) continue
+    next = { ...next, lifetimeSeconds: next.lifetimeSeconds + addedSeconds }
     next = withUnlockedLevels(
       kind,
       next,

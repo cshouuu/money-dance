@@ -102,19 +102,44 @@ public final class WidgetRenderer {
         }
 
         views.setTextViewText(R.id.widget_title, title);
-        views.setTextViewText(R.id.widget_amount, (snapshotValid && !stale) || slackingActive || overtimeActive
+        String amountText = (snapshotValid && !stale) || slackingActive || overtimeActive
                 ? money(amount)
-                : "--");
+                : "--";
+        views.setTextViewText(R.id.widget_amount, amountText);
         views.setTextViewText(R.id.widget_detail, detail);
         String liveBadge;
-        if (tickerStartFailed) liveBadge = "点此恢复";
-        else if (slackingActive || overtimeActive) liveBadge = tickerRunning ? "计时中" : "启动中";
-        else if (realtimeEnabled) {
-            liveBadge = tickerRunning ? (paidWorkNow ? "实时中" : "实时待机") : "启动中";
-        } else liveBadge = paidWorkNow ? "开启实时" : "实时关";
+        String liveDescription;
+        if (tickerStartFailed) {
+            liveBadge = "恢复";
+            liveDescription = "恢复桌面实时刷新";
+        } else if (slackingActive || overtimeActive) {
+            liveBadge = tickerRunning ? "计时" : "启动";
+            liveDescription = tickerRunning ? "计时正在实时刷新" : "正在启动实时刷新";
+        } else if (realtimeEnabled) {
+            liveBadge = tickerRunning ? (paidWorkNow ? "实时" : "待机") : "启动";
+            liveDescription = tickerRunning
+                    ? (paidWorkNow ? "实时刷新已开启，点按可关闭" : "实时刷新待机，点按可关闭")
+                    : "正在启动实时刷新";
+        } else {
+            liveBadge = paidWorkNow ? "开启" : "实时关";
+            liveDescription = snapshotValid && !stale ? "开启桌面实时刷新" : "打开应用同步工资数据";
+        }
         views.setTextViewText(R.id.widget_live_badge, liveBadge);
-        views.setTextViewText(R.id.widget_slacking_button, slackingActive ? "结束摸鱼" : "开始摸鱼");
-        views.setTextViewText(R.id.widget_overtime_button, overtimeActive ? "结束加班" : "开始加班");
+        views.setTextViewText(R.id.widget_slacking_button, slackingActive ? "结束" : "摸鱼");
+        views.setTextViewText(R.id.widget_overtime_button, overtimeActive ? "结束" : "加班");
+        views.setContentDescription(
+                R.id.widget_root,
+                "打开 Money Dance。" + title + "，" + amountText + "，" + detail
+        );
+        views.setContentDescription(R.id.widget_live_badge, liveDescription);
+        views.setContentDescription(
+                R.id.widget_slacking_button,
+                slackingActive ? "结束摸鱼计时" : "开始摸鱼计时"
+        );
+        views.setContentDescription(
+                R.id.widget_overtime_button,
+                overtimeActive ? "结束加班计时" : "开始加班计时并选择计薪方式"
+        );
 
         views.setOnClickPendingIntent(R.id.widget_root, openAppIntent(context));
         PendingIntent liveIntent;

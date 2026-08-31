@@ -1,7 +1,9 @@
 import { calculateRates, type SalaryProfile, type SalaryRates } from '@salary-flow/core'
-import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, OvertimePayMode } from '../types'
-import { toLocalDateValue } from './form'
-import { summarizeTodayWork } from './work'
+import type { ActiveOvertime, ActiveSlacking, AttendanceRecord, DailyWorkRecord, OvertimePayMode } from '../types'
+import { toLocalDateTime, toLocalDateValue } from './form'
+import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
+import { normalizeActiveSlacking } from './slacking'
+import { getScheduledBusinessDate, summarizeTodayWork } from './work'
 
 export const WIDGET_SNAPSHOT_VERSION = 1 as const
 export const WIDGET_SNAPSHOT_HORIZON_MS = 36 * 60 * 60 * 1000
@@ -16,11 +18,15 @@ export interface WidgetTimelineSegment {
 export interface WidgetActiveSlacking {
   active: true
   startAt: number
+  startLocalDate: string
+  startTimezoneOffsetMinutes?: number
 }
 
 export interface WidgetActiveOvertime {
   active: true
   startAt: number
+  startLocalDate: string
+  startTimezoneOffsetMinutes?: number
   payMode: OvertimePayMode
   multiplier?: number
   fixedAmount?: number
@@ -40,7 +46,7 @@ export interface BuildWidgetSnapshotOptions {
   profile: SalaryProfile
   workRecords: DailyWorkRecord[]
   attendanceRecords: AttendanceRecord[]
-  activeSlacking?: string | null
+  activeSlacking?: ActiveSlacking | string | null
   activeOvertime?: ActiveOvertime | null
   now?: Date
   rates?: SalaryRates
@@ -83,6 +89,15 @@ function relevantDateValues(startAt: number, endAt: number): Set<string> {
   return values
 }
 
+function flexibleRecordTouchesRange(record: DailyWorkRecord, _startAt: number, endAt: number): boolean {
+  if (record.mode !== 'flexible' || (record.status !== 'working' && record.status !== 'paused' && !record.settlementPending)) return false
+  const firstStartAt = timestamp(record.sessions[0]?.startTime)
+  // Match getCurrentWorkRecord: a carried paused/pending shift still owns its
+  // frozen salary after every session (or planned stop) is before this range.
+  // Requiring interval overlap would make the native widget fall back to ¥0.
+  return firstStartAt !== null && firstStartAt < endAt
+}
+
 function samplePoints(startAt: number, endAt: number, boundaries: readonly number[] = []): number[] {
   const points = new Set<number>([startAt, endAt])
   let cursor = (Math.floor(startAt / MINUTE_MS) + 1) * MINUTE_MS
@@ -110,6 +125,10 @@ function flexibleWorkBoundaries(
   const boundaries: number[] = []
   for (const record of records) {
     if (record.mode !== 'flexible') continue
+    const plannedEndAt = timestamp(record.plannedEndTime)
+    if (plannedEndAt !== null && plannedEndAt > startAt && plannedEndAt < endAt) {
+      boundaries.push(plannedEndAt)
+    }
     let completedSeconds = 0
     let activeStartAt: number | null = null
     for (const session of record.sessions) {
@@ -152,8 +171,21 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
   if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) return []
 
   const relevantDates = relevantDateValues(startAt, endAt)
-  const workRecords = options.workRecords.filter(record => relevantDates.has(record.date))
-  const attendanceRecords = options.attendanceRecords.filter(record => relevantDates.has(record.date))
+  const workRecords = options.workRecords.filter(record => (
+    relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt)
+  ))
+  const relevantAttendanceDates = new Set(relevantDates)
+  if (profile.defaultWorkMode === 'scheduled') {
+    // An overnight fixed shift still belongs to the date on which it started.
+    // Include that prior date before filtering the snapshot payload, otherwise
+    // the Android widget could silently lose a manual attendance override that
+    // the Dashboard correctly applies after midnight.
+    for (const date of relevantDates) {
+      relevantAttendanceDates.add(getScheduledBusinessDate(profile, toLocalDateTime(date)))
+    }
+  }
+  for (const record of workRecords) relevantAttendanceDates.add(record.date)
+  const attendanceRecords = options.attendanceRecords.filter(record => relevantAttendanceDates.has(record.date))
   const amountCache = new Map<number, number>()
   const amountAt = (time: number) => {
     const cached = amountCache.get(time)
@@ -212,10 +244,17 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
 function widgetOvertime(active: ActiveOvertime | null | undefined): WidgetActiveOvertime | undefined {
   const startAt = timestamp(active?.startTime)
   if (!active || startAt === null) return undefined
+  const businessDate = resolveSessionStartBusinessDate(
+    active.startTime,
+    active.startLocalDate,
+    active.startTimezoneOffsetMinutes,
+  )
+  if (!businessDate) return undefined
   if (active.payMode === 'fixed') {
     return {
       active: true,
       startAt,
+      ...businessDate,
       payMode: active.payMode,
       fixedAmount: finiteNonNegative(active.fixedAmount ?? 0),
     }
@@ -224,11 +263,12 @@ function widgetOvertime(active: ActiveOvertime | null | undefined): WidgetActive
     return {
       active: true,
       startAt,
+      ...businessDate,
       payMode: active.payMode,
       multiplier: finiteNonNegative(active.multiplier ?? 1),
     }
   }
-  return { active: true, startAt, payMode: 'unpaid' }
+  return { active: true, startAt, ...businessDate, payMode: 'unpaid' }
 }
 
 export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): WidgetSnapshot {
@@ -238,7 +278,15 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
   const horizonMs = Number.isFinite(requestedHorizon) ? Math.max(1000, requestedHorizon) : WIDGET_SNAPSHOT_HORIZON_MS
   const validUntil = safeSyncedAt + horizonMs
   const rates = options.rates ?? calculateRates(options.profile)
-  const slackingStartAt = timestamp(options.activeSlacking ?? undefined)
+  const activeSlacking = normalizeActiveSlacking(options.activeSlacking)
+  const slackingStartAt = timestamp(activeSlacking?.startTime)
+  const slackingBusinessDate = slackingStartAt === null || !activeSlacking
+    ? null
+    : resolveSessionStartBusinessDate(
+      activeSlacking.startTime,
+      activeSlacking.startLocalDate,
+      activeSlacking.startTimezoneOffsetMinutes,
+    )
   const overtime = widgetOvertime(options.activeOvertime)
 
   return {
@@ -254,7 +302,9 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
       startAt: safeSyncedAt,
       endAt: validUntil,
     }),
-    ...(slackingStartAt === null ? {} : { slacking: { active: true as const, startAt: slackingStartAt } }),
+    ...(slackingStartAt === null || !slackingBusinessDate
+      ? {}
+      : { slacking: { active: true as const, startAt: slackingStartAt, ...slackingBusinessDate } }),
     ...(overtime ? { overtime } : {}),
   }
 }

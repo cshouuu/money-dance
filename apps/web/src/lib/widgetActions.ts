@@ -1,11 +1,15 @@
-import type { ActiveOvertime, LedgerEntry, OvertimePayMode, OvertimeSession, SlackingSession } from '../types'
-import { createOvertimeLedgerEntries } from './overtime'
+import type { ActiveOvertime, ActiveSlacking, LedgerEntry, OvertimePayMode, OvertimeSession, SlackingSession } from '../types'
+import { createOvertimeLedgerEntries, migrateLegacyOvertimeLedgerDates, migrateLegacyOvertimeSessionLocalDates } from './overtime'
+import { isSessionLocalDate, isSessionTimezoneOffsetMinutes, resolveSessionStartBusinessDate } from './sessionBusinessDate'
+import { migrateLegacySlackingSessionLocalDates, normalizeActiveSlacking } from './slacking'
 import { keys } from './storage'
 
 export interface WidgetActionBase {
   actionId: string
   occurredAt: number
   sessionId: string
+  startLocalDate?: string
+  startTimezoneOffsetMinutes?: number
 }
 
 export interface WidgetSlackingStartAction extends WidgetActionBase {
@@ -32,7 +36,7 @@ export interface WidgetOvertimeStopAction extends WidgetActionBase {
 export type WidgetAction = WidgetSlackingStartAction | WidgetSlackingStopAction | WidgetOvertimeStopAction
 
 export interface WidgetActionState {
-  activeSlacking: string | null
+  activeSlacking: ActiveSlacking | null
   slackingSessions: SlackingSession[]
   activeOvertime: ActiveOvertime | null
   overtimeSessions: OvertimeSession[]
@@ -49,7 +53,7 @@ export interface ApplyWidgetActionsResult {
 
 export interface SlackingWebStopContext {
   shouldStop: boolean
-  active: string | null
+  active: ActiveSlacking | null
   sessions: SlackingSession[]
   completedSession: SlackingSession | null
 }
@@ -92,6 +96,10 @@ function parseAction(value: unknown): WidgetAction | null {
     actionId: value.actionId,
     occurredAt: value.occurredAt,
     sessionId: value.sessionId,
+    ...(isSessionLocalDate(value.startLocalDate) ? { startLocalDate: value.startLocalDate } : {}),
+    ...(isSessionTimezoneOffsetMinutes(value.startTimezoneOffsetMinutes)
+      ? { startTimezoneOffsetMinutes: value.startTimezoneOffsetMinutes }
+      : {}),
   }
   if (value.type === 'slacking_start') return { ...base, type: value.type }
 
@@ -160,6 +168,27 @@ function durationSeconds(startAt: number, endAt: number): number {
   return Math.max(0, endAt - startAt) / 1000
 }
 
+function actionBusinessDate(
+  action: WidgetActionBase & { startAt: number },
+  fallback?: { startLocalDate?: string; startTimezoneOffsetMinutes?: number } | null,
+) {
+  const hasActionDate = isSessionLocalDate(action.startLocalDate)
+  const hasActionOffset = isSessionTimezoneOffsetMinutes(action.startTimezoneOffsetMinutes)
+  if (!hasActionDate && !hasActionOffset && fallback && isSessionLocalDate(fallback.startLocalDate)) {
+    return {
+      startLocalDate: fallback.startLocalDate,
+      ...(isSessionTimezoneOffsetMinutes(fallback.startTimezoneOffsetMinutes)
+        ? { startTimezoneOffsetMinutes: fallback.startTimezoneOffsetMinutes }
+        : {}),
+    }
+  }
+  return resolveSessionStartBusinessDate(
+    isoTime(action.startAt),
+    hasActionDate ? action.startLocalDate : fallback?.startLocalDate,
+    hasActionOffset ? action.startTimezoneOffsetMinutes : fallback?.startTimezoneOffsetMinutes,
+  )
+}
+
 function overtimeSessionFromAction(action: WidgetOvertimeStopAction): OvertimeSession {
   const payOption = action.payMode === 'fixed'
     ? { payMode: action.payMode, fixedAmount: nonNegative(action.fixedAmount ?? 0) }
@@ -170,6 +199,7 @@ function overtimeSessionFromAction(action: WidgetOvertimeStopAction): OvertimeSe
     ...payOption,
     id: action.sessionId,
     startTime: isoTime(action.startAt),
+    ...actionBusinessDate(action),
     endTime: isoTime(action.endAt),
     durationSeconds: durationSeconds(action.startAt, action.endAt),
     earnedAmount: action.payMode === 'unpaid' ? 0 : nonNegative(action.earnedAmount),
@@ -178,9 +208,10 @@ function overtimeSessionFromAction(action: WidgetOvertimeStopAction): OvertimeSe
 
 function ensureOvertimeLedger(ledger: LedgerEntry[], session: OvertimeSession): LedgerEntry[] {
   if (session.earnedAmount <= 0) return ledger
-  if (ledger.some(entry => entry.kind === 'overtime' && entry.linkedId === session.id)) return ledger
+  const migrated = migrateLegacyOvertimeLedgerDates(ledger, [session])
+  if (migrated.some(entry => entry.kind === 'overtime' && entry.linkedId === session.id)) return migrated
   const entries = createOvertimeLedgerEntries(session, () => `widget-overtime-ledger-${session.id}`)
-  return entries.length === 0 ? ledger : [...entries, ...ledger]
+  return entries.length === 0 ? migrated : [...entries, ...migrated]
 }
 
 /** Pure reducer. Keeping this separate makes replay and idempotency testable. */
@@ -194,23 +225,36 @@ export function reduceWidgetActions(initial: WidgetActionState, actions: WidgetA
   for (const action of actions) {
     if (action.type === 'slacking_start') {
       const alreadyFinished = slackingSessions.some(session => session.id === action.sessionId)
-      if (!alreadyFinished && !activeSlacking) activeSlacking = isoTime(action.occurredAt)
+      if (!alreadyFinished && !activeSlacking) {
+        const startTime = isoTime(action.occurredAt)
+        const businessDate = resolveSessionStartBusinessDate(
+          startTime,
+          action.startLocalDate,
+          action.startTimezoneOffsetMinutes,
+        )
+        if (businessDate) activeSlacking = { startTime, ...businessDate }
+      }
       continue
     }
 
     if (action.type === 'slacking_stop') {
       const existing = slackingSessions.find(session => session.id === action.sessionId)
         ?? sessionWithStart(slackingSessions, action.startAt)
-      if (!existing) {
-        slackingSessions = [{
+      const matchingActive = sameStart(activeSlacking?.startTime, action.startAt) ? activeSlacking : null
+      const session: SlackingSession = {
+        ...(existing ?? {
           id: action.sessionId,
           startTime: isoTime(action.startAt),
           endTime: isoTime(action.endAt),
           durationSeconds: durationSeconds(action.startAt, action.endAt),
           earnedAmount: nonNegative(action.earnedAmount),
-        }, ...slackingSessions]
+        }),
+        ...actionBusinessDate(action, matchingActive ?? existing),
       }
-      if (sameStart(activeSlacking ?? undefined, action.startAt)) activeSlacking = null
+      slackingSessions = existing
+        ? slackingSessions.map(item => item === existing ? session : item)
+        : [session, ...slackingSessions]
+      if (matchingActive) activeSlacking = null
       continue
     }
 
@@ -219,12 +263,18 @@ export function reduceWidgetActions(initial: WidgetActionState, actions: WidgetA
     // even when each layer generated a different session ID.
     const existing = overtimeSessions.find(session => session.id === action.sessionId)
       ?? sessionWithStart(overtimeSessions, action.startAt)
-    const session = existing ?? overtimeSessionFromAction(action)
-    if (!existing) overtimeSessions = [session, ...overtimeSessions]
+    const matchingActive = sameStart(activeOvertime?.startTime, action.startAt) ? activeOvertime : null
+    const session = {
+      ...(existing ?? overtimeSessionFromAction(action)),
+      ...actionBusinessDate(action, matchingActive ?? existing),
+    }
+    overtimeSessions = existing
+      ? overtimeSessions.map(item => item === existing ? session : item)
+      : [session, ...overtimeSessions]
     // A previous partial write may already contain the session but not its
     // ledger entry, so ledger reconciliation must also run during a replay.
     ledger = ensureOvertimeLedger(ledger, session)
-    if (sameStart(activeOvertime?.startTime, action.startAt)) activeOvertime = null
+    if (matchingActive) activeOvertime = null
   }
 
   return { activeSlacking, slackingSessions, activeOvertime, overtimeSessions, ledger }
@@ -245,22 +295,26 @@ export function loadWidgetActionState(storage: WidgetStorage): WidgetActionState
   const activeOvertime = readJSON<unknown>(storage, keys.activeOvertime, null)
   const overtimeSessions = readJSON<unknown>(storage, keys.overtimeSessions, [])
   const ledger = readJSON<unknown>(storage, keys.ledger, [])
+  const validLedger = Array.isArray(ledger)
+    ? ledger.filter((entry): entry is LedgerEntry => isRecord(entry) && isNonEmptyString(entry.id))
+    : []
+  const validSlackingSessions = Array.isArray(slackingSessions)
+    ? slackingSessions.filter((session): session is SlackingSession => isRecord(session) && isNonEmptyString(session.id))
+    : []
+  const validOvertimeSessions = Array.isArray(overtimeSessions)
+    ? overtimeSessions.filter((session): session is OvertimeSession => isRecord(session) && isNonEmptyString(session.id))
+    : []
+  const migratedOvertimeSessions = migrateLegacyOvertimeSessionLocalDates(validOvertimeSessions, validLedger)
   return {
-    activeSlacking: typeof activeSlacking === 'string' ? activeSlacking : null,
-    slackingSessions: Array.isArray(slackingSessions)
-      ? slackingSessions.filter((session): session is SlackingSession => isRecord(session) && isNonEmptyString(session.id))
-      : [],
+    activeSlacking: normalizeActiveSlacking(activeSlacking),
+    slackingSessions: migrateLegacySlackingSessionLocalDates(validSlackingSessions),
     activeOvertime: isRecord(activeOvertime)
       && typeof activeOvertime.startTime === 'string'
       && isPayMode(activeOvertime.payMode)
       ? activeOvertime as unknown as ActiveOvertime
       : null,
-    overtimeSessions: Array.isArray(overtimeSessions)
-      ? overtimeSessions.filter((session): session is OvertimeSession => isRecord(session) && isNonEmptyString(session.id))
-      : [],
-    ledger: Array.isArray(ledger)
-      ? ledger.filter((entry): entry is LedgerEntry => isRecord(entry) && isNonEmptyString(entry.id))
-      : [],
+    overtimeSessions: migratedOvertimeSessions,
+    ledger: migrateLegacyOvertimeLedgerDates(validLedger, migratedOvertimeSessions),
   }
 }
 
@@ -280,7 +334,7 @@ export function prepareSlackingWebStop(
     ? sessionWithStart(state.slackingSessions, startAt) ?? null
     : null
   return {
-    shouldStop: completedSession === null && sameStart(state.activeSlacking ?? undefined, startAt),
+    shouldStop: completedSession === null && sameStart(state.activeSlacking?.startTime, startAt),
     active: state.activeSlacking,
     sessions: state.slackingSessions,
     completedSession,

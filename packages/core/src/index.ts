@@ -3,6 +3,15 @@ export type SalaryHistoryMode = 'none' | 'custom'
 export type WorkMode = 'scheduled' | 'flexible'
 export type WorkWeekMode = 'fixed' | 'alternating'
 export type AlternatingWeekType = 'big' | 'small'
+export type LivingCostMode = 'deduct' | 'daily-ledger'
+export type LivingCostHistoryMode = 'off' | LivingCostMode
+
+export interface LivingCostHistoryEvent {
+  version: 1
+  effectiveFrom: string
+  mode: LivingCostHistoryMode
+  monthlyAmount: number
+}
 
 export interface SalaryProfile {
   salary: number
@@ -14,6 +23,8 @@ export interface SalaryProfile {
   paidBreak: boolean
   includeLivingCost: boolean
   monthlyLivingCost: number
+  livingCostMode: LivingCostMode
+  livingCostHistory: LivingCostHistoryEvent[]
   monthlyWorkDays: number
   workDaysPerWeek: number
   workWeekMode: WorkWeekMode
@@ -43,6 +54,8 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   paidBreak: false,
   includeLivingCost: false,
   monthlyLivingCost: 0,
+  livingCostMode: 'deduct',
+  livingCostHistory: [],
   monthlyWorkDays: 21.75,
   workDaysPerWeek: 5,
   workWeekMode: 'fixed',
@@ -91,8 +104,12 @@ export function getPaidSecondsPerDay(profile: SalaryProfile): number {
 export function calculateRates(profile: SalaryProfile): SalaryRates {
   if (!Number.isFinite(profile.salary) || profile.salary < 0) throw new Error('Salary must be non-negative')
   if (!Number.isFinite(profile.monthlyWorkDays) || profile.monthlyWorkDays <= 0) throw new Error('Monthly work days must be positive')
-  const monthlyLivingCost = profile.includeLivingCost ? profile.monthlyLivingCost ?? 0 : 0
-  if (!Number.isFinite(monthlyLivingCost) || monthlyLivingCost < 0) throw new Error('Living cost must be non-negative')
+  // Legacy profiles do not have livingCostMode. Treating a missing value as
+  // "deduct" preserves the original disposable-rate calculation.
+  const deductLivingCost = profile.includeLivingCost && profile.livingCostMode !== 'daily-ledger'
+  const configuredLivingCost = profile.includeLivingCost ? profile.monthlyLivingCost ?? 0 : 0
+  if (!Number.isFinite(configuredLivingCost) || configuredLivingCost < 0) throw new Error('Living cost must be non-negative')
+  const monthlyLivingCost = deductLivingCost ? configuredLivingCost : 0
 
   const paidSecondsPerDay = getPaidSecondsPerDay(profile)
   if (paidSecondsPerDay <= 0) throw new Error('Paid work duration must be positive')

@@ -1,20 +1,35 @@
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
-import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, loadAttendanceRecords } from '../lib/attendance'
+import { loadAchievementState, reconcileAchievementSessions, saveAchievementState } from '../lib/achievements'
+import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isHalfDayLeave, loadAttendanceRecords } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
-import { loadProfile } from '../lib/profile'
-import { calculateOvertimeEarnings, splitOvertimeSessionByLocalDay } from '../lib/overtime'
-import { keys, loadJSON } from '../lib/storage'
+import { createId } from '../lib/id'
+import { loadLedger, saveLedger } from '../lib/ledger'
+import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
+import { calculateOvertimeEarnings, createCompletedOvertimeSession, createOvertimeLedgerEntries, loadOvertimeSessions, overtimeIntervalsOverlap, splitOvertimeSessionByLocalDay } from '../lib/overtime'
+import { keys, loadJSON, saveJSON } from '../lib/storage'
+import { sessionStartLocalDate } from '../lib/sessionBusinessDate'
+import { loadSlackingSessions } from '../lib/slacking'
 import { useNow } from '../lib/useNow'
-import { closeActiveWorkSession, getAutomaticFlexibleSettlementMode, getFlexibleEarnedAmount, getFlexibleWorkedSeconds, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
-import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, SlackingSession, WishItem } from '../types'
+import { closeActiveWorkSession, commitFlexibleOvertimeSettlement, commitFlexibleWorkCorrection, commitFlexibleWorkStart, freezeFlexibleWorkForSettlement, getAutomaticFlexibleSettlementMode, getCurrentWorkRecord, getFlexibleBaseSettlementAmount, getFlexibleEarnedAmount, getFlexibleOvertimeWindow, getFlexibleSettlementRequirement, getFlexibleWorkedSeconds, hasFlexiblePlannedEndReached, isFlexibleFullDaySettlement, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, settleFlexibleWorkRecord, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
+import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession, WishItem } from '../types'
 import './Dashboard.css'
 
 const money = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+function overtimeOverlapsSegments(session: OvertimeSession, segments: readonly { startTime: string; endTime: string }[]): boolean {
+  const sessionSegments = session.segments?.length ? session.segments : [{ startTime: session.startTime, endTime: session.endTime }]
+  return segments.some(segment => sessionSegments.some(existing => overtimeIntervalsOverlap(
+    segment.startTime,
+    segment.endTime,
+    existing.startTime,
+    existing.endTime,
+  )))
+}
 
 const statusLabels = {
   ready: '等待开始',
@@ -31,29 +46,38 @@ export function Dashboard() {
   const workRecordsRef = useRef(workRecords)
   const settledActionRef = useRef<HTMLButtonElement>(null)
   const [attendanceRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
-  const [slackingSessions] = useState<SlackingSession[]>(() => loadJSON<SlackingSession[]>(keys.sessions, []))
-  const [overtimeSessions] = useState<OvertimeSession[]>(() => loadJSON<OvertimeSession[]>(keys.overtimeSessions, []))
+  const [slackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
+  const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [activeOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
   const [wishes] = useState<WishItem[]>(() => loadJSON<WishItem[]>(keys.wishes, []))
   const [dialogPurpose, setDialogPurpose] = useState<'start' | 'adjust' | null>(null)
-  const [pendingEndRecord, setPendingEndRecord] = useState<DailyWorkRecord | null>(null)
+  const [pendingEndRecord, setPendingEndRecord] = useState<DailyWorkRecord | null>(() => {
+    const currentRecord = getCurrentWorkRecord(workRecords, new Date())
+    return currentRecord?.settlementPending ? currentRecord : null
+  })
+  const [settlementError, setSettlementError] = useState('')
+  const settlingRef = useRef(false)
   const rates = useMemo(() => calculateRates(profile), [profile])
-  const work = summarizeTodayWork(profile, workRecords, now, rates, attendanceRecords)
+  const work = summarizeTodayWork(profile, workRecords, now, undefined, attendanceRecords)
+  const workRates = useMemo(() => calculateRates(salaryProfileForBusinessDate(profile, work.businessDate)), [profile, work.businessDate])
+  const targetSeconds = workRates.paidSecondsPerDay * attendanceWorkedFraction(work.attendance)
   const earned = work.earnedAmount
   const worked = work.workedSeconds
-  const progress = Math.max(0, Math.min(100, (worked / rates.paidSecondsPerDay) * 100))
+  const progress = targetSeconds > 0 ? Math.max(0, Math.min(100, (worked / targetSeconds) * 100)) : 0
+  const hasReachedFlexibleTarget = work.mode === 'flexible' && worked >= targetSeconds
   const today = toLocalDateValue(now)
-  const todaySlacking = useMemo(() => slackingSessions.filter(session => toLocalDateValue(new Date(session.startTime)) === today), [slackingSessions, today])
+  const workDate = work.record?.date ?? today
+  const todaySlacking = useMemo(() => slackingSessions.filter(session => sessionStartLocalDate(session) === today), [slackingSessions, today])
   const slackingSeconds = useMemo(() => todaySlacking.reduce((total, session) => total + session.durationSeconds, 0), [todaySlacking])
   const slackingMoney = useMemo(() => todaySlacking.reduce((total, session) => total + session.earnedAmount, 0), [todaySlacking])
   const completedOvertimeToday = useMemo(() => overtimeSessions.flatMap(splitOvertimeSessionByLocalDay).filter(slice => slice.date === today), [overtimeSessions, today])
-  const completedOvertimeMoney = useMemo(() => overtimeSessions.filter(session => toLocalDateValue(new Date(session.startTime)) === today).reduce((total, session) => total + session.earnedAmount, 0), [overtimeSessions, today])
+  const completedOvertimeMoney = useMemo(() => overtimeSessions.filter(session => sessionStartLocalDate(session) === today).reduce((total, session) => total + session.earnedAmount, 0), [overtimeSessions, today])
   const activeOvertimeSlice = useMemo(() => {
     if (!activeOvertime) return null
     const endTime = now.toISOString()
-    return splitOvertimeSessionByLocalDay({ startTime: activeOvertime.startTime, endTime }).find(slice => slice.date === today) ?? null
+    return splitOvertimeSessionByLocalDay({ ...activeOvertime, endTime }).find(slice => slice.date === today) ?? null
   }, [activeOvertime, now, today])
-  const activeOvertimeMoney = activeOvertime && toLocalDateValue(new Date(activeOvertime.startTime)) === today
+  const activeOvertimeMoney = activeOvertime && sessionStartLocalDate(activeOvertime) === today
     ? calculateOvertimeEarnings(activeOvertime, Math.max(0, (now.getTime() - new Date(activeOvertime.startTime).getTime()) / 1000), rates.second)
     : 0
   const overtimeSeconds = completedOvertimeToday.reduce((total, slice) => total + slice.durationSeconds, 0) + (activeOvertimeSlice?.durationSeconds ?? 0)
@@ -61,80 +85,245 @@ export function Dashboard() {
   const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
   const featuredWishes = wishlistItems.slice(0, 3)
   const firstStart = work.record?.sessions[0]?.startTime
-  const attendanceLabel = work.attendance ? attendanceStatusLabel(work.attendance) : ''
+  const plannedEndLabel = work.record?.plannedEndTime
+    ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`
+    : null
+  const attendanceLabel = work.attendance ? attendanceStatusLabel(work.attendance) : work.officialHolidayName ?? ''
   const customAttendancePayLabel = work.attendance ? attendancePayModeLabel(work.attendance) : null
-  const attendancePayLabel = customAttendancePayLabel ?? (work.attendance ? '不计薪' : '')
+  const attendancePayLabel = customAttendancePayLabel ?? (work.attendance ? '不计薪' : work.dayType === 'holiday' ? earned > 0 ? '正常日薪' : '不计薪' : '')
   const isNormalPayOverride = work.attendance?.status === 'normal' && customAttendancePayLabel !== null
-  const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride
-  const isFullDaySettlement = profile.salaryType !== 'hourly' && work.record?.status === 'ended' && work.record.settlementMode === 'full-day'
-  const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride
+  const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride || isHalfDayLeave(work.attendance)
+  const isFullDaySettlement = isFlexibleFullDaySettlement(work.record, profile.salaryType)
+  const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride || isHalfDayLeave(work.attendance)
   const heroLabel = work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
   const modeStatus = work.dayType === 'rest'
     ? '非工作日 · 不自动计薪'
     : isAttendanceOverride
       ? `${attendanceLabel} · ${attendancePayLabel}`
       : work.mode === 'flexible'
-        ? isFullDaySettlement ? '正常出勤 · 全天计薪' : statusLabels[work.status]
+        ? work.record?.settlementPending
+          ? '已停止 · 等待结算'
+          : isFullDaySettlement ? '正常出勤 · 全天计薪' : statusLabels[work.status]
         : profile.workWeekMode === 'alternating'
           ? `${alternatingWeekTypeForDate(now, profile) === 'big' ? '大周' : '小周'} · 自动计薪`
           : '固定作息 · 自动计薪'
 
-  const persistRecord = useCallback((record: DailyWorkRecord) => {
+  const persistRecord = useCallback((record: DailyWorkRecord, keepInMemoryOnFailure = false): boolean => {
     const next = upsertWorkRecord(workRecordsRef.current, record)
-    workRecordsRef.current = next
-    saveWorkRecords(next)
-    setWorkRecords(next)
+    const saved = saveWorkRecords(next)
+    if (saved || keepInMemoryOnFailure) {
+      workRecordsRef.current = next
+      setWorkRecords(next)
+    }
+    return saved
   }, [])
   const focusSettledAction = useCallback(() => window.setTimeout(() => settledActionRef.current?.focus(), 0), [])
 
-  const closeDialog = useCallback(() => setDialogPurpose(null), [])
+  const removeLinkedFlexibleOvertime = useCallback((record: DailyWorkRecord): boolean => {
+    if (!record.overtimeSessionId) return true
+    const latestSessions = loadOvertimeSessions()
+    const nextSessions = latestSessions.filter(session => session.id !== record.overtimeSessionId)
+    if (nextSessions.length !== latestSessions.length) {
+      if (!saveJSON(keys.overtimeSessions, nextSessions)) return false
+      setOvertimeSessions(nextSessions)
+    }
+    const latestLedger = loadLedger()
+    const nextLedger = latestLedger.filter(entry => entry.kind !== 'overtime' || entry.linkedId !== record.overtimeSessionId)
+    if (nextLedger.length !== latestLedger.length && !saveLedger(nextLedger)) return false
+    return true
+  }, [])
+
+  const closeDialog = useCallback(() => {
+    setDialogPurpose(null)
+    setSettlementError('')
+  }, [])
   const requestSettlement = useCallback((record: DailyWorkRecord) => {
-    const endedAt = new Date(record.updatedAt)
-    const workedSeconds = getFlexibleWorkedSeconds(record, endedAt, rates.paidSecondsPerDay)
-    const automaticMode = getAutomaticFlexibleSettlementMode(profile.salaryType, workedSeconds, rates.paidSecondsPerDay, isNormalPayOverride)
+    const frozen = record.settlementPending ? record : freezeFlexibleWorkForSettlement(record)
+    const frozenSaved = persistRecord(frozen, true)
+    if (!frozenSaved) {
+      setPendingEndRecord(frozen)
+      setSettlementError('工时已经停止，但暂时无法保存。请释放设备存储空间后重试结算。')
+      return
+    }
+    const workedSeconds = getFlexibleWorkedSeconds(frozen, new Date(frozen.updatedAt))
+    const automaticMode = getAutomaticFlexibleSettlementMode(profile.salaryType, workedSeconds, targetSeconds, isAttendanceOverride)
     if (automaticMode) {
-      persistRecord({ ...record, settlementMode: automaticMode })
+      if (!removeLinkedFlexibleOvertime(frozen)) {
+        setPendingEndRecord(frozen)
+        setSettlementError('旧的加班结算暂时无法更新，请稍后重试。')
+        return
+      }
+      if (!persistRecord(settleFlexibleWorkRecord(frozen, automaticMode))) {
+        setPendingEndRecord(frozen)
+        setSettlementError('结算暂时无法保存，工时仍保持冻结，请重试。')
+        return
+      }
+      setPendingEndRecord(null)
+      setSettlementError('')
       focusSettledAction()
       return
     }
-    setPendingEndRecord(record)
-  }, [focusSettledAction, isNormalPayOverride, persistRecord, profile.salaryType, rates.paidSecondsPerDay])
-  const startAt = useCallback((time: string) => {
-    persistRecord(startFlexibleWork(today, time, work.record))
+    setSettlementError('')
+    setPendingEndRecord(frozen)
+  }, [focusSettledAction, isAttendanceOverride, persistRecord, profile.salaryType, removeLinkedFlexibleOvertime, targetSeconds])
+  const startAt = useCallback((time: string, plannedEndTime?: string) => {
+    const started = startFlexibleWork(today, time, work.record, plannedEndTime)
+    if (!commitFlexibleWorkStart(() => persistRecord(started))) {
+      setSettlementError('开始工作暂时无法保存，计时尚未启动。请释放设备存储空间后重试。')
+      return
+    }
+    setSettlementError('')
     setDialogPurpose(null)
   }, [persistRecord, today, work.record])
-  const adjustTime = useCallback((startTime: string, endTime?: string) => {
-    const record = replaceFlexibleWorkTime(today, startTime, endTime)
+  const adjustTime = useCallback((startTime: string, endTime?: string, endDate?: string) => {
+    const record = replaceFlexibleWorkTime(workDate, startTime, endTime, endDate ?? workDate, work.record)
+    if (record.status === 'ended') {
+      setDialogPurpose(null)
+      requestSettlement(record)
+      return
+    }
+    const committed = commitFlexibleWorkCorrection({
+      removeLinkedOvertime: () => removeLinkedFlexibleOvertime(record),
+      saveWorkRecord: () => persistRecord(record),
+    })
+    if (!committed.success) {
+      setSettlementError(committed.stage === 'overtime-cleanup'
+        ? '旧的加班结算暂时无法删除，原工作记录仍保持不变。请释放设备存储空间后重试。'
+        : '修正后的工作时间暂时无法保存，原工作记录仍保持不变。请释放设备存储空间后重试。')
+      return
+    }
+    setSettlementError('')
     setDialogPurpose(null)
-    if (record.status === 'ended') requestSettlement(record)
-    else persistRecord(record)
-  }, [persistRecord, requestSettlement, today])
+  }, [persistRecord, removeLinkedFlexibleOvertime, requestSettlement, work.record, workDate])
   const pauseWork = useCallback(() => {
     if (work.record?.mode === 'flexible') persistRecord(closeActiveWorkSession(work.record, 'paused'))
   }, [work.record, persistRecord])
   const endWork = useCallback(() => {
     if (work.record?.mode !== 'flexible') return
-    requestSettlement(closeActiveWorkSession(work.record, 'ended', new Date(), 'actual'))
+    requestSettlement(freezeFlexibleWorkForSettlement(work.record))
   }, [work.record, requestSettlement])
   const resumeWork = useCallback(() => {
     if (work.record?.mode === 'flexible') persistRecord(resumeFlexibleWork(work.record))
   }, [work.record, persistRecord])
   const useScheduledToday = useCallback(() => persistRecord(scheduledOverride(today)), [persistRecord, today])
   const settlePendingRecord = useCallback((settlementMode: FlexibleWorkSettlementMode) => {
-    if (!pendingEndRecord) return
-    persistRecord({ ...pendingEndRecord, settlementMode })
-    setPendingEndRecord(null)
-    focusSettledAction()
-  }, [focusSettledAction, pendingEndRecord, persistRecord])
+    if (!pendingEndRecord || settlingRef.current) return
+    settlingRef.current = true
+    try {
+      if (!removeLinkedFlexibleOvertime(pendingEndRecord)) {
+        setSettlementError('旧的加班结算暂时无法更新，请稍后重试。')
+        return
+      }
+      if (!persistRecord(settleFlexibleWorkRecord(pendingEndRecord, settlementMode))) {
+        setSettlementError('结算暂时无法保存，工时仍保持冻结，请重试。')
+        return
+      }
+      setPendingEndRecord(null)
+      setSettlementError('')
+      focusSettledAction()
+    } finally {
+      settlingRef.current = false
+    }
+  }, [focusSettledAction, pendingEndRecord, persistRecord, removeLinkedFlexibleOvertime])
+  const settleFlexibleOvertime = useCallback((option: OvertimeStartOption) => {
+    if (!pendingEndRecord || settlingRef.current) return
+    const window = getFlexibleOvertimeWindow(pendingEndRecord, targetSeconds, new Date(pendingEndRecord.updatedAt))
+    if (!window || !pendingEndRecord.overtimeSessionId) {
+      setSettlementError('没有找到有效的超出工时，请修正工作时间后重试。')
+      return
+    }
+
+    const latestSessions = loadOvertimeSessions()
+    const otherSessions = latestSessions.filter(session => session.id !== pendingEndRecord.overtimeSessionId)
+    const hasCompletedOverlap = otherSessions.some(session => overtimeOverlapsSegments(session, window.segments))
+    const latestActiveOvertime = loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)
+    const activeStart = latestActiveOvertime ? new Date(latestActiveOvertime.startTime).getTime() : Number.NaN
+    const hasActiveOverlap = Number.isFinite(activeStart) && window.segments.some(segment => (
+      activeStart < new Date(segment.endTime).getTime()
+      && new Date(pendingEndRecord.updatedAt).getTime() > new Date(segment.startTime).getTime()
+    ))
+    if (hasCompletedOverlap || hasActiveOverlap) {
+      setSettlementError('超出时段与已有加班记录重叠。请先到加班页修正或结束现有记录，再回来结算。')
+      return
+    }
+
+    const session = createCompletedOvertimeSession({
+      ...option,
+      id: pendingEndRecord.overtimeSessionId,
+      startTime: window.startTime,
+      endTime: window.endTime,
+      segments: window.segments,
+    }, workRates.second)
+    if (!session) {
+      setSettlementError('加班结算数据无效，请修正工作时间后重试。')
+      return
+    }
+
+    const nextSessions = [session, ...otherSessions]
+    const latestLedger = loadLedger().filter(entry => entry.kind !== 'overtime' || entry.linkedId !== session.id)
+    const generatedLedger = createOvertimeLedgerEntries(session, () => `flex-overtime-ledger-${session.id}`)
+    const achievementState = reconcileAchievementSessions(
+      'overtime',
+      loadAchievementState('overtime'),
+      [session],
+      new Date().toISOString(),
+    )
+    const settledRecord = settleFlexibleWorkRecord(pendingEndRecord, 'full-day')
+
+    settlingRef.current = true
+    try {
+      const committed = commitFlexibleOvertimeSettlement({
+        saveOvertimeSession: () => saveJSON(keys.overtimeSessions, nextSessions),
+        saveLedger: () => saveLedger([...generatedLedger, ...latestLedger]),
+        saveAchievement: () => saveAchievementState('overtime', achievementState),
+        saveWorkRecord: () => persistRecord(settledRecord),
+      })
+      if (!committed.success) {
+        const stageLabel = committed.stage === 'overtime-session'
+          ? '加班记录'
+          : committed.stage === 'ledger'
+            ? '账本'
+            : committed.stage === 'achievement'
+              ? '成就进度'
+              : '工作结算'
+        setSettlementError(`${stageLabel}暂时无法保存，工时仍保持冻结。请释放设备存储空间后重试。`)
+        return
+      }
+      setOvertimeSessions(nextSessions)
+      setPendingEndRecord(null)
+      setSettlementError('')
+      focusSettledAction()
+    } finally {
+      settlingRef.current = false
+    }
+  }, [focusSettledAction, pendingEndRecord, persistRecord, targetSeconds, workRates.second])
   const adjustAttendance = useCallback(() => {
     if (!pendingEndRecord) return
-    persistRecord({ ...pendingEndRecord, settlementMode: 'actual' })
+    if (!removeLinkedFlexibleOvertime(pendingEndRecord)) {
+      setSettlementError('旧的加班结算暂时无法更新，请稍后重试。')
+      return
+    }
+    if (!persistRecord(settleFlexibleWorkRecord(pendingEndRecord, 'actual'))) {
+      setSettlementError('结算暂时无法保存，工时仍保持冻结，请重试。')
+      return
+    }
     setPendingEndRecord(null)
+    setSettlementError('')
     navigate(`/attendance?date=${encodeURIComponent(pendingEndRecord.date)}`)
-  }, [navigate, pendingEndRecord, persistRecord])
-  const cancelPendingSettlement = useCallback(() => setPendingEndRecord(null), [])
-  const pendingWorkedSeconds = pendingEndRecord ? getFlexibleWorkedSeconds(pendingEndRecord, new Date(pendingEndRecord.updatedAt), rates.paidSecondsPerDay) : 0
-  const pendingActualAmount = pendingEndRecord ? getFlexibleEarnedAmount({ ...pendingEndRecord, settlementMode: 'actual' }, rates, profile.salaryType, new Date(pendingEndRecord.updatedAt)) : 0
+  }, [navigate, pendingEndRecord, persistRecord, removeLinkedFlexibleOvertime])
+  const cancelPendingSettlement = useCallback(() => {
+    setPendingEndRecord(null)
+    setSettlementError('')
+  }, [])
+  const pendingWorkedSeconds = pendingEndRecord ? getFlexibleWorkedSeconds(pendingEndRecord, new Date(pendingEndRecord.updatedAt)) : 0
+  const pendingRequirement = getFlexibleSettlementRequirement(pendingWorkedSeconds, targetSeconds)
+  const pendingActualAmount = pendingEndRecord ? getFlexibleEarnedAmount({ ...pendingEndRecord, settlementMode: 'actual' }, workRates, profile.salaryType, new Date(pendingEndRecord.updatedAt)) : 0
+  const pendingBaseAmount = getFlexibleBaseSettlementAmount(work.attendance, workRates.daily)
+
+  useEffect(() => {
+    if (work.record?.mode !== 'flexible' || !hasFlexiblePlannedEndReached(work.record, now)) return
+    requestSettlement(freezeFlexibleWorkForSettlement(work.record, now))
+  }, [now, requestSettlement, work.record])
 
   return <section className="page dashboard-page">
     <header className="page-header"><div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'long' })}</p><h1>今天的时间，正在变成钱。</h1></div><Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16}/></Link></header>
@@ -143,26 +332,38 @@ export function Dashboard() {
       <div className="hero-glow" />
       <div className="hero-heading-row"><p className="hero-label"><Sparkles size={16}/> {heroLabel}</p><span className="hero-mode-status">{modeStatus}</span></div>
       <div className="money-ticker">{money(earned)}</div>
-      <p className="rate-line">{work.dayType === 'rest' ? '休息日不自动计薪' : isAttendanceOverride ? '已按照薪苦日历中的出勤设置计算' : isFullDaySettlement ? '已按正常出勤结算完整日薪' : `+ ¥${rates.second.toFixed(5)} / 秒`}</p>
+      <p className="rate-line">{work.dayType === 'rest'
+        ? '休息日不自动计薪'
+        : work.officialHolidayName
+          ? '已按中国大陆节假日日历计算'
+          : isAttendanceOverride
+            ? '已按照薪苦日历中的出勤设置计算'
+          : work.record?.settlementPending
+            ? '工作时间已冻结，等待选择结算方式'
+            : isFullDaySettlement
+              ? '已按正常出勤结算完整日薪'
+              : hasReachedFlexibleTarget
+                ? '已达到目标工时，超出部分在结束时选择是否按加班结算'
+                : `+ ¥${workRates.second.toFixed(5)} / 秒`}</p>
 
       {work.dayType === 'work' && work.mode === 'flexible' && <div className="work-controls">
         {work.status === 'ready' && <><button type="button" className="hero-work-primary" onClick={()=>setDialogPurpose('start')}><Play size={16}/>开始工作</button><button type="button" className="hero-work-link" onClick={useScheduledToday}>今天按固定作息</button></>}
         {work.status === 'working' && <><button type="button" className="hero-work-primary" onClick={pauseWork}><Pause size={16}/>暂停</button><button type="button" className="hero-work-secondary" onClick={endWork}><Square size={15}/>结束工作</button><button type="button" className="hero-work-link" onClick={()=>setDialogPurpose('adjust')}>修正时间</button></>}
         {work.status === 'paused' && <><button type="button" className="hero-work-primary" onClick={resumeWork}><Play size={16}/>继续工作</button><button type="button" className="hero-work-secondary" onClick={endWork}><Square size={15}/>结束今天</button><button type="button" className="hero-work-link" onClick={()=>setDialogPurpose('adjust')}>修正时间</button></>}
-        {work.status === 'ended' && <><span className="work-ended-label">今天辛苦了</span><button ref={settledActionRef} type="button" className="hero-work-link" onClick={()=>setDialogPurpose('adjust')}><RotateCcw size={13}/>修正时间</button></>}
+        {work.status === 'ended' && <><span className="work-ended-label">{work.record?.settlementPending ? '工时已冻结，待结算' : '今天辛苦了'}</span>{work.record?.settlementPending && <button type="button" className="hero-work-primary" onClick={()=>{if(work.record)requestSettlement(work.record)}}>继续结算</button>}<button ref={settledActionRef} type="button" className="hero-work-link" onClick={()=>setDialogPurpose('adjust')}><RotateCcw size={13}/>修正时间</button></>}
       </div>}
 
       {work.dayType === 'work' ? <>
-        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{work.mode === 'flexible' ? firstStart ? toLocalTimeValue(new Date(firstStart)) : '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? `目标 ${formatDuration(rates.paidSecondsPerDay)}` : profile.workEndTime}</span></div>
-        <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>{isSettledDailyAmount ? '实际记录' : '已计薪'} <b>{formatDuration(worked)}</b></span><span>{isSettledDailyAmount ? '今日结算' : work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(isSettledDailyAmount ? earned : rates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
+        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{work.mode === 'flexible' ? firstStart ? toLocalTimeValue(new Date(firstStart)) : '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? plannedEndLabel ? `预计 ${plannedEndLabel}` : `目标 ${formatDuration(targetSeconds)}` : profile.workEndTime}</span></div>
+        <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>{work.mode === 'flexible' || isSettledDailyAmount ? '实际记录' : '已计薪'} <b>{formatDuration(worked)}</b></span><span>{isSettledDailyAmount ? '今日结算' : work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(isSettledDailyAmount ? earned : workRates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
       </> : <>
-        <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
+        <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : work.officialHolidayName ? `已自动识别为${work.officialHolidayName}假期；你仍可在薪苦日历中手工覆盖。` : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
         <div className="hero-meta"><span>今日状态 <b>{work.dayType === 'rest' ? '休息' : attendanceLabel}</b></span><span>计薪方式 <b>{work.dayType === 'rest' ? '不自动计薪' : attendancePayLabel}</b></span><span>今日收入 <b>{money(earned)}</b></span>{work.dayType === 'rest' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天也上班</button>}</div>
       </>}
     </div>
 
     <div className="metric-grid dashboard-metric-grid">
-      <article className="metric-card"><div className="metric-icon"><Clock3 size={18}/></div><p>你的时间单价</p><h3>{money(rates.hourly)}<small> / 小时</small></h3><span>{money(rates.minute)} / 分钟 · ¥{rates.second.toFixed(4)} / 秒</span></article>
+      <article className="metric-card"><div className="metric-icon"><Clock3 size={18}/></div><p>你的时间单价</p><h3>{money(workRates.hourly)}<small> / 小时</small></h3><span>{money(workRates.minute)} / 分钟 · ¥{workRates.second.toFixed(4)} / 秒</span></article>
       <article className="metric-card accent"><div className="metric-icon"><Fish size={18}/></div><p>今日摸鱼收益</p><h3>{money(slackingMoney)}</h3><span>{formatDuration(slackingSeconds)} · {earned ? (slackingMoney / earned * 100).toFixed(1) : '0.0'}% 今日收入</span><Link to="/slacking">去摸鱼计时 →</Link></article>
       <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
     </div>
@@ -175,7 +376,21 @@ export function Dashboard() {
       })}
     </div>}
 
-    <WorkTimeDialog open={dialogPurpose!==null} purpose={dialogPurpose ?? 'start'} date={today} plannedStart={profile.workStartTime} record={work.record?.mode === 'flexible' ? work.record : undefined} onStart={startAt} onAdjust={adjustTime} onCancel={closeDialog}/>
-    <EarlyFinishDialog open={pendingEndRecord!==null} workedSeconds={pendingWorkedSeconds} targetSeconds={rates.paidSecondsPerDay} actualAmount={pendingActualAmount} fullDayAmount={rates.daily} onActual={()=>settlePendingRecord('actual')} onFullDay={()=>settlePendingRecord('full-day')} onAttendance={adjustAttendance} onCancel={cancelPendingSettlement}/>
+    <WorkTimeDialog open={dialogPurpose!==null} purpose={dialogPurpose ?? 'start'} date={dialogPurpose === 'adjust' ? workDate : today} plannedStart={profile.workStartTime} record={work.record?.mode === 'flexible' ? work.record : undefined} storageError={settlementError} onStart={startAt} onAdjust={adjustTime} onCancel={closeDialog}/>
+    <EarlyFinishDialog
+      open={pendingEndRecord!==null}
+      settlementKind={pendingRequirement === 'over-target' ? 'over-target' : 'under-target'}
+      workedSeconds={pendingWorkedSeconds}
+      targetSeconds={targetSeconds}
+      actualAmount={pendingActualAmount}
+      fullDayAmount={pendingBaseAmount}
+      secondRate={workRates.second}
+      error={settlementError}
+      onActual={()=>settlePendingRecord('actual')}
+      onFullDay={()=>settlePendingRecord('full-day')}
+      onAttendance={adjustAttendance}
+      onOvertime={settleFlexibleOvertime}
+      onCancel={cancelPendingSettlement}
+    />
   </section>
 }

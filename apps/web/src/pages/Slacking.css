@@ -1,6 +1,8 @@
 .clear-slacking-button:disabled{cursor:not-allowed;opacity:.42}
 .slacking-record>.slacking-delete-button{display:grid!important}
 .timer-card .stop-button,.timer-card .primary-button.big{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.timer-backfill-button{margin:10px auto 0;border:0;background:transparent;color:#6f776c;display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;font-weight:600;cursor:pointer;padding:7px 10px;border-radius:9px}.timer-backfill-button:hover{background:rgba(95,116,91,.1);color:#4d5e49}.running .timer-backfill-button{color:#aab4a5}.running .timer-backfill-button:hover{background:rgba(255,255,255,.07);color:#eef1e7}.slacking-visual{font-size:31px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}.slacking-record-visual{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;font-size:19px}
+.timer-stop-error{width:min(420px,100%);margin:11px auto 0!important;padding:9px 11px;border-radius:9px;background:#eee1da;color:#985e4b!important;font-size:10px!important;line-height:1.5}.running .timer-stop-error{background:rgba(194,106,75,.16);color:#f0b99f!important}.timer-stop-error button{margin-top:7px;border:1px solid currentColor;border-radius:7px;background:transparent;color:inherit;padding:5px 9px;font:inherit;font-weight:700;cursor:pointer}.timer-stop-error button:hover{background:rgba(152,94,75,.1)}.running .timer-stop-error button:hover{background:rgba(255,255,255,.08)}
 
 @media(max-width:560px){
   .slacking-summary{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;align-items:start}
