@@ -6,7 +6,7 @@
 
 实时薪资 · 心愿清单 · 摸鱼 · 加班 · 账本 · 薪苦日历 · 物品持有成本
 
-[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.25（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.25.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
+[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.26（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.26.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
 
 ![CI](https://github.com/cshouuu/money-dance/actions/workflows/ci.yml/badge.svg)
 ![Android APK](https://github.com/cshouuu/money-dance/actions/workflows/build-android-apk.yml/badge.svg)
@@ -24,7 +24,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.2.25**
+**当前稳定版：v0.2.26**
 
 ## 当前功能
 
@@ -95,7 +95,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 国内用户推荐通过 Cloudflare R2 下载当前正式版：
 
-**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.25.apk**
+**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.26.apk**
 
 也可以在 [GitHub Releases](https://github.com/cshouuu/money-dance/releases/latest) 查看版本说明和校验文件。
 
@@ -213,14 +213,14 @@ Android 使用 Git Tag 驱动正式发布，Tag 必须符合 `vMAJOR.MINOR.PATCH
 ~~~bash
 git checkout main
 git pull
-git tag -a v0.2.25 -m "MoneyDance v0.2.25"
-git push origin refs/tags/v0.2.25
+git tag -a v0.2.26 -m "MoneyDance v0.2.26"
+git push origin refs/tags/v0.2.26
 ~~~
 
 发布流水线会自动完成：
 
 ~~~text
-Tag v0.2.25
+Tag v0.2.26
    ↓
 解析 versionName / versionCode
    ↓
