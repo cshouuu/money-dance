@@ -129,7 +129,14 @@ jobs:
           ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
           ANDROID_RELEASE_SIGNING: 'true'
-        run: node apps/web/native/android/prepare-android.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/web/native/android/prepare-android.mjs
+          first_digest="$(find apps/web/android/app/src/main apps/web/android/app/build.gradle -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          node apps/web/native/android/prepare-android.mjs
+          second_digest="$(find apps/web/android/app/src/main apps/web/android/app/build.gradle -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          test "$first_digest" = "$second_digest"
       - name: Verify Android native injection
         shell: bash
         run: |
@@ -139,11 +146,19 @@ jobs:
           RES_ROOT="apps/web/android/app/src/main/res"
           MAIN_ACTIVITY="apps/web/android/app/src/main/java/com/cshouuu/moneydance/MainActivity.java"
           MANIFEST="apps/web/android/app/src/main/AndroidManifest.xml"
+          STYLES="apps/web/android/app/src/main/res/values/styles.xml"
+          API26_STYLES="apps/web/android/app/src/main/res/values-v26/styles.xml"
+          API27_STYLES="apps/web/android/app/src/main/res/values-v27/styles.xml"
           PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_info.xml"
           PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_info.xml"
+          WIDGET_LAYOUT="$RES_ROOT/layout/money_dance_widget.xml"
 
           test -f "$MAIN_ACTIVITY"
           test -f "$MANIFEST"
+          test -f "$STYLES"
+          test -f "$API26_STYLES"
+          test -f "$API27_STYLES"
+          test -f "$WIDGET_LAYOUT"
 
           for source in AppUpdaterPlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider; do
             test -f "$NATIVE_ROOT/${source}.java"
@@ -169,8 +184,31 @@ jobs:
           grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
           grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
           grep -Fq 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$MANIFEST"
+          grep -Fq '<!-- moneyDanceSystemBars -->' "$STYLES"
+          grep -Fq '<!-- moneyDanceLaunchSystemBars -->' "$STYLES"
+          grep -Fq '<item name="android:windowLightStatusBar">true</item>' "$STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#211A31</item>' "$STYLES"
+          ! grep -Fq 'android:windowLightNavigationBar' "$STYLES"
+          grep -Fq '<!-- moneyDanceApi26SystemBars -->' "$API26_STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#F5F2EA</item>' "$API26_STYLES"
+          ! grep -Fq 'android:windowLightNavigationBar' "$API26_STYLES"
+          test "$(grep -Fc '<style name="AppTheme.NoActionBar"' "$API26_STYLES")" -eq 1
+          ! grep -Fq '<style name="AppTheme.NoActionBarLaunch"' "$API26_STYLES"
+          grep -Fq '<!-- moneyDanceApi27SystemBars -->' "$API27_STYLES"
+          grep -Fq '<!-- moneyDanceApi27LaunchSystemBars -->' "$API27_STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#F5F2EA</item>' "$API27_STYLES"
+          test "$(grep -Fc '<item name="android:windowLightNavigationBar">true</item>' "$API27_STYLES")" -eq 2
+          test "$(grep -Fc '<style name="AppTheme.NoActionBar"' "$API27_STYLES")" -eq 1
+          test "$(grep -Fc '<style name="AppTheme.NoActionBarLaunch"' "$API27_STYLES")" -eq 1
+          grep -Fq '"insetsHandling": "css"' apps/web/capacitor.config.json
+          grep -Fq '"style": "LIGHT"' apps/web/capacitor.config.json
           grep -Fq 'android:initialLayout="@layout/money_dance_widget"' "$PROVIDER_XML"
+          grep -Fq 'android:minWidth="250dp"' "$PROVIDER_XML"
+          grep -Fq 'android:minHeight="50dp"' "$PROVIDER_XML"
+          grep -Fq 'android:targetCellWidth="4"' "$PROVIDER_XML"
+          grep -Fq 'android:targetCellHeight="1"' "$PROVIDER_XML"
           grep -Fq 'android:updatePeriodMillis="1800000"' "$PROVIDER_XML"
+          test "$(grep -Fc 'android:layout_height="44dp"' "$WIDGET_LAYOUT")" -ge 2
           grep -Fq 'ACTION_SLACKING_START' "$JAVA_ROOT/WidgetActionReceiver.java"
           grep -Fq 'ACTION_SLACKING_STOP' "$JAVA_ROOT/WidgetActionReceiver.java"
           grep -Fq 'EXTRA_EXPECTED_START_AT' "$JAVA_ROOT/WidgetActionReceiver.java"

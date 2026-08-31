@@ -13,6 +13,7 @@ import {
 import { applyWidgetActions } from '../lib/widgetActions'
 import { buildWidgetSnapshot } from '../lib/widgetState'
 import { loadWorkRecords } from '../lib/work'
+import { loadActiveSlacking } from '../lib/slacking'
 import type { ActiveOvertime } from '../types'
 
 const SYNC_DEBOUNCE_MS = 180
@@ -39,7 +40,7 @@ function createSnapshot() {
     profile: loadProfile(),
     workRecords: loadWorkRecords(),
     attendanceRecords: loadAttendanceRecords(),
-    activeSlacking: loadJSON<string | null>(keys.activeSlacking, null),
+    activeSlacking: loadActiveSlacking(),
     activeOvertime: loadJSON<ActiveOvertime | null>(keys.activeOvertime, null),
   })
 }
@@ -55,9 +56,19 @@ export async function performWidgetSync(): Promise<WidgetSyncOutcome> {
   // Passing the applied IDs lets native storage atomically commit this snapshot
   // and remove exactly that batch. The explicit ack remains an idempotent
   // protocol confirmation; actions queued during this sync stay pending.
-  await syncWidgetSnapshot(createSnapshot(), applied.actionIds)
+  const snapshotSynced = await syncWidgetSnapshot(createSnapshot(), applied.actionIds)
+  if (!snapshotSynced) return { acknowledgedActions, launchTarget }
   if (applied.actionIds.length > 0) {
-    acknowledgedActions = await ackWidgetActions(applied.actionIds)
+    // syncSnapshot removes this exact batch from native storage in the same
+    // commit as the mirrored snapshot. Reload even if the redundant protocol
+    // acknowledgement fails, otherwise React can keep showing the pre-action
+    // timer after its durable Web and native state have already advanced.
+    acknowledgedActions = true
+    try {
+      await ackWidgetActions(applied.actionIds)
+    } catch {
+      // Best-effort confirmation only; the atomic native commit already won.
+    }
   }
 
   const requestedTarget = await consumeWidgetLaunchTarget()

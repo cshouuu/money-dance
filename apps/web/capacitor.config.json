@@ -1,5 +1,15 @@
 {
   "appId": "com.cshouuu.moneydance",
   "appName": "Money Dance",
-  "webDir": "dist"
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#f5f2eaff"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "LIGHT",
+      "hidden": false
+    }
+  }
 }

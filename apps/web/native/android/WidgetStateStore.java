@@ -280,9 +280,11 @@ public final class WidgetStateStore {
                 action.put("sessionId", sessionId);
                 action.put("type", WidgetContract.EVENT_SLACKING_START);
                 action.put("startAt", occurredAt);
+                putStartBusinessDate(action, null, occurredAt);
                 JSONObject nextSlacking = new JSONObject();
                 nextSlacking.put("active", true);
                 nextSlacking.put("startAt", occurredAt);
+                putStartBusinessDate(nextSlacking, action, occurredAt);
                 snapshot.put("slacking", nextSlacking);
                 pending.put(action);
                 return prefs.edit()
@@ -316,6 +318,7 @@ public final class WidgetStateStore {
                 action.put("sessionId", sessionId);
                 action.put("startAt", startAt);
                 action.put("endAt", endAt);
+                putStartBusinessDate(action, slacking, startAt);
                 action.put("earnedAmount", ((endAt - startAt) / 1000D)
                         * finiteNonNegative(snapshot.optDouble("secondRate", 0D)));
                 JSONArray pending = parseArray(prefs.getString(WidgetContract.KEY_PENDING_ACTIONS_JSON, "[]"));
@@ -363,6 +366,7 @@ public final class WidgetStateStore {
                 action.put("sessionId", UUID.randomUUID().toString());
                 action.put("startAt", startAt);
                 action.put("endAt", endAt);
+                putStartBusinessDate(action, overtime, startAt);
                 action.put("earnedAmount", earnedAmount);
                 action.put("payMode", payMode);
                 if (overtime.has("multiplier")) action.put("multiplier", multiplier);
@@ -385,6 +389,40 @@ public final class WidgetStateStore {
         Calendar calendar = Calendar.getInstance();
         calendar.setTimeInMillis(timestamp);
         return calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR);
+    }
+
+    private static String localDate(long timestamp) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        return String.format(
+                java.util.Locale.US,
+                "%04d-%02d-%02d",
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH) + 1,
+                calendar.get(Calendar.DAY_OF_MONTH)
+        );
+    }
+
+    /** Mirrors JavaScript Date#getTimezoneOffset: UTC - local, in minutes. */
+    private static int timezoneOffsetMinutes(long timestamp) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(timestamp);
+        int localMinusUtc = calendar.get(Calendar.ZONE_OFFSET) + calendar.get(Calendar.DST_OFFSET);
+        return -(localMinusUtc / 60_000);
+    }
+
+    private static void putStartBusinessDate(
+            JSONObject target,
+            JSONObject source,
+            long startAt
+    ) throws JSONException {
+        String date = source == null ? "" : source.optString("startLocalDate", "");
+        if (!date.matches("\\d{4}-\\d{2}-\\d{2}")) date = localDate(startAt);
+        int offset = source != null && source.has("startTimezoneOffsetMinutes")
+                ? source.optInt("startTimezoneOffsetMinutes", timezoneOffsetMinutes(startAt))
+                : timezoneOffsetMinutes(startAt);
+        target.put("startLocalDate", date);
+        target.put("startTimezoneOffsetMinutes", offset);
     }
 
     private static boolean isSameLocalDay(long left, long right) {
@@ -486,6 +524,7 @@ public final class WidgetStateStore {
                 try {
                     slacking.put("active", true);
                     slacking.put("startAt", occurredAt);
+                    putStartBusinessDate(slacking, action, occurredAt);
                     snapshot.put("slacking", slacking);
                 } catch (JSONException ignored) {
                 }

@@ -1,7 +1,31 @@
 import { calculateRates, DEFAULT_PROFILE } from '@salary-flow/core'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
-import { closeActiveWorkSession, getAutomaticFlexibleSettlementMode, summarizeTodayWork } from './work'
+import {
+  closeActiveWorkSession,
+  commitFlexibleOvertimeSettlement,
+  commitFlexibleWorkCorrection,
+  commitFlexibleWorkStart,
+  freezeFlexibleWorkForSettlement,
+  getAutomaticFlexibleSettlementMode,
+  getCurrentWorkRecord,
+  getScheduledBusinessDate,
+  getFlexibleBaseSettlementAmount,
+  getFlexibleOvertimeWindow,
+  getFlexibleSettlementRequirement,
+  getFlexibleWorkedSeconds,
+  hasFlexiblePlannedEndReached,
+  isFlexibleStartTimeAllowed,
+  resumeFlexibleWork,
+  replaceFlexibleWorkTime,
+  resolveFlexiblePlannedEndTime,
+  settleFlexibleWorkRecord,
+  startFlexibleWork,
+  summarizeTodayWork,
+} from './work'
+import { salaryProfileForBusinessDate } from './profile'
+
+afterEach(() => vi.unstubAllGlobals())
 
 const profile = {
   ...DEFAULT_PROFILE,
@@ -119,6 +143,144 @@ describe('today workday rules', () => {
     expect(summary.dayType).toBe('holiday')
     expect(summary.earnedAmount).toBe(88)
   })
+
+  it('uses the official China holiday baseline until a saved work record overrides it', () => {
+    const nationalDay = new Date(2026, 9, 1, 10)
+    const monthly = { ...profile, salary: 2200, salaryType: 'monthly' as const }
+    const holiday = summarizeTodayWork(monthly, [], nationalDay)
+    expect(holiday.dayType).toBe('holiday')
+    expect(holiday.officialHolidayName).toBe('国庆')
+    expect(holiday.earnedAmount).toBeGreaterThan(0)
+
+    const manualWork = flexibleRecord(undefined, 'working')
+    manualWork.date = '2026-10-01'
+    manualWork.sessions = [{ id: 'manual', startTime: new Date(2026, 9, 1, 9).toISOString() }]
+    const worked = summarizeTodayWork(monthly, [manualWork], nationalDay)
+    expect(worked.dayType).toBe('work')
+    expect(worked.workedSeconds).toBe(3600)
+  })
+
+  it('keeps half-day leave active while showing only the remaining half-day work progress', () => {
+    const morningLeave = attendance({
+      status: 'leave',
+      leaveType: 'annual',
+      leavePeriod: 'morning',
+      payMode: 'unpaid',
+    }, '2026-08-28')
+    const morningSummary = summarizeTodayWork(profile, [], new Date(2026, 7, 28, 10), undefined, morningLeave)
+    expect(morningSummary.dayType).toBe('work')
+    expect(morningSummary.status).toBe('working')
+    expect(morningSummary.workedSeconds).toBe(0)
+    expect(morningSummary.earnedAmount).toBeCloseTo(50)
+
+    const afternoonLeave = attendance({
+      status: 'leave',
+      leaveType: 'annual',
+      leavePeriod: 'afternoon',
+      payMode: 'unpaid',
+    }, '2026-08-28')
+    const afternoonSummary = summarizeTodayWork(profile, [], new Date(2026, 7, 28, 15), undefined, afternoonLeave)
+    expect(afternoonSummary.dayType).toBe('work')
+    expect(afternoonSummary.workedSeconds).toBe(4 * 3600)
+    expect(afternoonSummary.earnedAmount).toBeCloseTo(50)
+  })
+
+  it('lets a manual half-day leave override a non-configured weekend', () => {
+    const saturdayHalfDay = attendance({
+      status: 'leave',
+      leaveType: 'annual',
+      leavePeriod: 'afternoon',
+      payMode: 'unpaid',
+    })
+    const summary = summarizeTodayWork(profile, [], saturday, undefined, saturdayHalfDay)
+    expect(summary.dayType).toBe('work')
+    expect(summary.earnedAmount).toBeCloseTo(50)
+  })
+
+  it('uses the fixed overnight shift start date as its business date', () => {
+    const overnight = { ...profile, workStartTime: '22:00', workEndTime: '06:00', paidBreak: true }
+    expect(getScheduledBusinessDate(overnight, new Date(2025, 11, 31, 23))).toBe('2025-12-31')
+    expect(getScheduledBusinessDate(overnight, new Date(2026, 0, 1, 2))).toBe('2025-12-31')
+    expect(getScheduledBusinessDate(overnight, new Date(2026, 0, 1, 12))).toBe('2025-12-31')
+    expect(getScheduledBusinessDate(overnight, new Date(2026, 0, 1, 22))).toBe('2026-01-01')
+    expect(getScheduledBusinessDate(profile, new Date(2026, 0, 1, 2))).toBe('2026-01-01')
+  })
+
+  it('does not let a next-day official holiday interrupt the previous overnight shift', () => {
+    const overnight = { ...profile, workStartTime: '22:00', workEndTime: '06:00', paidBreak: true }
+    const summary = summarizeTodayWork(overnight, [], new Date(2026, 0, 1, 2))
+    expect(summary.dayType).toBe('work')
+    expect(summary.workedSeconds).toBe(4 * 3600)
+    expect(summary.earnedAmount).toBeCloseTo(50)
+  })
+
+  it('uses previous-date manual attendance during an overnight shift', () => {
+    const overnight = { ...profile, workStartTime: '22:00', workEndTime: '06:00', paidBreak: true }
+    const attendanceRecords: AttendanceRecord[] = [{
+      date: '2025-12-31',
+      status: 'normal',
+      payMode: 'fixed',
+      fixedAmount: 88,
+      updatedAt: '',
+    }, {
+      date: '2026-01-01',
+      status: 'leave',
+      leaveType: 'personal',
+      payMode: 'unpaid',
+      updatedAt: '',
+    }]
+    const summary = summarizeTodayWork(overnight, [], new Date(2026, 0, 1, 2), undefined, attendanceRecords)
+    expect(summary.dayType).toBe('work')
+    expect(summary.attendance?.date).toBe('2025-12-31')
+    expect(summary.earnedAmount).toBe(88)
+  })
+
+  it('uses the overnight business date living-cost rate after midnight', () => {
+    const overnight = {
+      ...profile,
+      workStartTime: '22:00',
+      workEndTime: '06:00',
+      paidBreak: true,
+      includeLivingCost: true,
+      livingCostMode: 'daily-ledger' as const,
+      monthlyLivingCost: 1100,
+      livingCostHistory: [
+        { version: 1 as const, effectiveFrom: '2025-12-31', mode: 'deduct' as const, monthlyAmount: 1100 },
+        { version: 1 as const, effectiveFrom: '2026-01-01', mode: 'daily-ledger' as const, monthlyAmount: 1100 },
+      ],
+    }
+    const previousRates = calculateRates(salaryProfileForBusinessDate(overnight, '2025-12-31'))
+    const currentRates = calculateRates(overnight)
+    const carried = summarizeTodayWork(overnight, [], new Date(2026, 0, 1, 2), currentRates)
+    const nextShiftRecord: DailyWorkRecord = {
+      date: '2026-01-01',
+      mode: 'scheduled',
+      status: 'ended',
+      sessions: [],
+      updatedAt: new Date(2026, 0, 1, 22).toISOString(),
+    }
+    const nextShift = summarizeTodayWork(overnight, [nextShiftRecord], new Date(2026, 0, 1, 22, 30), previousRates)
+
+    expect(carried.businessDate).toBe('2025-12-31')
+    expect(carried.earnedAmount).toBeCloseTo(4 * 3600 * previousRates.second)
+    expect(nextShift.businessDate).toBe('2026-01-01')
+    expect(nextShift.earnedAmount).toBeCloseTo(30 * 60 * currentRates.second)
+  })
+
+  it('keeps an overnight holiday at rest, then recognizes the adjusted workday at its own start', () => {
+    const values = new Map([['money-dance.china-holiday-calendar.v1', JSON.stringify({ enabled: true, effectiveFrom: '2025-01-01', dataVersion: 'test' })]])
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+    })
+    const overnight = { ...profile, workStartTime: '22:00', workEndTime: '06:00', paidBreak: true }
+    const carriedHoliday = summarizeTodayWork(overnight, [], new Date(2026, 0, 4, 2))
+    const adjustedStart = summarizeTodayWork(overnight, [], new Date(2026, 0, 4, 22, 30))
+    expect(carriedHoliday.dayType).toBe('holiday')
+    expect(carriedHoliday.officialHolidayName).toBe('元旦')
+    expect(adjustedStart.dayType).toBe('work')
+    expect(adjustedStart.workedSeconds).toBe(30 * 60)
+  })
 })
 
 describe('flexible work settlement', () => {
@@ -139,6 +301,55 @@ describe('flexible work settlement', () => {
     expect(summary.status).toBe('working')
     expect(summary.workedSeconds).toBe(3600)
     expect(summary.earnedAmount).toBeCloseTo(200)
+  })
+
+  it('keeps a normal-attendance custom amount as the base after flexible work exceeds its target', () => {
+    const summary = summarizeTodayWork(
+      profile,
+      [flexibleRecord(new Date(2026, 7, 28, 18), 'ended')],
+      new Date(2026, 7, 28, 18),
+      undefined,
+      attendance({ status: 'normal', payMode: 'multiplier', multiplier: 2 }, '2026-08-28'),
+    )
+    expect(summary.workedSeconds).toBe(9 * 3600)
+    expect(summary.earnedAmount).toBeCloseTo(200)
+  })
+
+  it('keeps the combined half-day amount as the base after flexible work exceeds its reduced target', () => {
+    const summary = summarizeTodayWork(
+      profile,
+      [flexibleRecord(new Date(2026, 7, 28, 14), 'ended')],
+      new Date(2026, 7, 28, 14),
+      undefined,
+      attendance({
+        status: 'leave',
+        leaveType: 'annual',
+        leavePeriod: 'morning',
+        payMode: 'multiplier',
+        multiplier: 0.8,
+      }, '2026-08-28'),
+    )
+    expect(summary.workedSeconds).toBe(5 * 3600)
+    expect(summary.earnedAmount).toBeCloseTo(90)
+  })
+
+  it('uses zero as the base when worked time becomes overtime during full-day unpaid leave', () => {
+    const unpaidLeave: AttendanceRecord = {
+      date: '2026-08-28',
+      status: 'leave',
+      leaveType: 'personal',
+      payMode: 'unpaid',
+      updatedAt: new Date(2026, 7, 28, 8).toISOString(),
+    }
+    expect(getFlexibleBaseSettlementAmount(unpaidLeave, 100)).toBe(0)
+    expect(getFlexibleBaseSettlementAmount({ ...unpaidLeave, leavePeriod: 'morning' }, 100)).toBe(50)
+    expect(getFlexibleBaseSettlementAmount({
+      date: '2026-08-28',
+      status: 'normal',
+      payMode: 'multiplier',
+      multiplier: 2,
+      updatedAt: unpaidLeave.updatedAt,
+    }, 100)).toBe(200)
   })
 
   it('lets a normal-attendance fixed amount override an actual settlement', () => {
@@ -197,9 +408,9 @@ describe('flexible work settlement', () => {
     expect(active.earnedAmount).toBeCloseTo(12.5)
   })
 
-  it('caps actual settlement at the daily target', () => {
+  it('keeps actual work time visible while capping base salary at the daily target', () => {
     const summary = summarizeTodayWork(profile, [flexibleRecord(new Date(2026, 7, 28, 22), 'ended', 'actual')], new Date(2026, 7, 28, 22))
-    expect(summary.workedSeconds).toBe(8 * 3600)
+    expect(summary.workedSeconds).toBe(13 * 3600)
     expect(summary.earnedAmount).toBeCloseTo(100)
   })
 
@@ -217,8 +428,8 @@ describe('flexible work settlement', () => {
     expect(closeActiveWorkSession(active, 'paused', end).settlementMode).toBeUndefined()
   })
 
-  it('automatically settles hourly work as actual time', () => {
-    expect(getAutomaticFlexibleSettlementMode('hourly', 3600, 8 * 3600)).toBe('actual')
+  it('lets hourly users choose how to settle a short day', () => {
+    expect(getAutomaticFlexibleSettlementMode('hourly', 3600, 8 * 3600)).toBeNull()
   })
 
   it('skips early-finish choices when attendance already overrides the day amount', () => {
@@ -226,9 +437,207 @@ describe('flexible work settlement', () => {
     expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600, 8 * 3600, true)).toBe('full-day')
   })
 
-  it('settles completed non-hourly work as a full day and asks about an early finish', () => {
+  it('only settles the exact target automatically', () => {
     expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600 - 1, 8 * 3600)).toBeNull()
     expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600, 8 * 3600)).toBe('full-day')
-    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600 + 1, 8 * 3600)).toBe('full-day')
+    expect(getAutomaticFlexibleSettlementMode('daily', 8 * 3600 + 1, 8 * 3600)).toBeNull()
+  })
+
+  it('classifies under-target, exact-target, and excess work using completed seconds', () => {
+    expect(getFlexibleSettlementRequirement(8 * 3600 - 0.01, 8 * 3600)).toBe('under-target')
+    expect(getFlexibleSettlementRequirement(8 * 3600 + 0.99, 8 * 3600)).toBe('target-reached')
+    expect(getFlexibleSettlementRequirement(8 * 3600 + 1, 8 * 3600)).toBe('over-target')
+  })
+
+  it('freezes work before asking for a settlement and can finalize it later', () => {
+    const active = flexibleRecord(undefined, 'working')
+    const end = new Date(2026, 7, 28, 10)
+    const frozen = freezeFlexibleWorkForSettlement(active, end)
+    expect(frozen.status).toBe('ended')
+    expect(frozen.settlementPending).toBe(true)
+    expect(frozen.settlementMode).toBeUndefined()
+    expect(frozen.overtimeSessionId).toBeTruthy()
+    expect(frozen.sessions.every(session => session.endTime === end.toISOString())).toBe(true)
+
+    const settled = settleFlexibleWorkRecord(frozen, 'full-day')
+    expect(settled.settlementPending).toBe(false)
+    expect(settled.settlementMode).toBe('full-day')
+    expect(settled.overtimeSessionId).toBe(frozen.overtimeSessionId)
+  })
+
+  it('supports an explicit full-target settlement for new hourly records without changing legacy records', () => {
+    const hourly = { ...profile, salary: 50, salaryType: 'hourly' as const }
+    const legacy = flexibleRecord(new Date(2026, 7, 28, 10), 'ended', 'full-day')
+    const current = { ...legacy, settlementVersion: 2 as const }
+    expect(summarizeTodayWork(hourly, [legacy], new Date(2026, 7, 28, 20)).earnedAmount).toBeCloseTo(50)
+    expect(summarizeTodayWork(hourly, [current], new Date(2026, 7, 28, 20)).earnedAmount).toBeCloseTo(400)
+  })
+
+  it('extracts only excess working segments and excludes pauses', () => {
+    const record: DailyWorkRecord = {
+      date: '2026-08-28',
+      mode: 'flexible',
+      status: 'ended',
+      sessions: [
+        { id: 'morning', startTime: new Date(2026, 7, 28, 9).toISOString(), endTime: new Date(2026, 7, 28, 13).toISOString() },
+        { id: 'afternoon', startTime: new Date(2026, 7, 28, 14).toISOString(), endTime: new Date(2026, 7, 28, 19).toISOString() },
+        { id: 'night', startTime: new Date(2026, 7, 28, 20).toISOString(), endTime: new Date(2026, 7, 28, 21).toISOString() },
+      ],
+      updatedAt: new Date(2026, 7, 28, 21).toISOString(),
+    }
+    const overtime = getFlexibleOvertimeWindow(record, 8 * 3600)
+    expect(overtime?.durationSeconds).toBe(2 * 3600)
+    expect(overtime?.segments).toEqual([
+      { startTime: new Date(2026, 7, 28, 18).toISOString(), endTime: new Date(2026, 7, 28, 19).toISOString() },
+      { startTime: new Date(2026, 7, 28, 20).toISOString(), endTime: new Date(2026, 7, 28, 21).toISOString() },
+    ])
+  })
+
+  it('stops an active flexible record at its planned end before settlement is persisted', () => {
+    const record = {
+      ...flexibleRecord(undefined, 'working'),
+      plannedEndTime: new Date(2026, 7, 28, 10).toISOString(),
+    }
+    const summary = summarizeTodayWork(profile, [record], new Date(2026, 7, 28, 11))
+    expect(summary.status).toBe('ended')
+    expect(summary.workedSeconds).toBe(3600)
+    expect(summary.earnedAmount).toBeCloseTo(12.5)
+    expect(hasFlexiblePlannedEndReached(record, new Date(2026, 7, 28, 11))).toBe(true)
+  })
+
+  it('freezes a late-opened planned record at the planned time instead of the current time', () => {
+    const plannedEnd = new Date(2026, 7, 28, 10)
+    const record = {
+      ...flexibleRecord(undefined, 'working'),
+      plannedEndTime: plannedEnd.toISOString(),
+    }
+    const frozen = freezeFlexibleWorkForSettlement(record, new Date(2026, 7, 28, 12))
+    expect(frozen.sessions[0]?.endTime).toBe(plannedEnd.toISOString())
+    expect(getFlexibleOvertimeWindow(frozen, 30 * 60)?.durationSeconds).toBe(30 * 60)
+  })
+
+  it('stores an optional planned end and only clears it when work resumes after that deadline', () => {
+    const plannedEnd = new Date(2026, 7, 29, 1).toISOString()
+    const started = startFlexibleWork('2026-08-28', '23:00', undefined, plannedEnd)
+    expect(started.plannedEndTime).toBe(plannedEnd)
+    const pausedBeforeEnd = closeActiveWorkSession(started, 'paused', new Date(2026, 7, 29, 0, 30))
+    expect(resumeFlexibleWork(pausedBeforeEnd, new Date(2026, 7, 29, 0, 45)).plannedEndTime).toBe(plannedEnd)
+    const frozen = freezeFlexibleWorkForSettlement(started, new Date(2026, 7, 29, 2))
+    expect(frozen.sessions[0]?.endTime).toBe(plannedEnd)
+    expect(resumeFlexibleWork(frozen, new Date(2026, 7, 29, 2)).plannedEndTime).toBeUndefined()
+  })
+
+  it('correctly saves a manually adjusted end time after midnight', () => {
+    const record = replaceFlexibleWorkTime('2026-08-28', '23:00', '01:00', '2026-08-29')
+    expect(record.status).toBe('ended')
+    expect(getFlexibleSettlementRequirement(getFlexibleOvertimeWindow(record, 3600)?.durationSeconds ?? 0, 3600)).toBe('target-reached')
+    expect(getFlexibleWorkedSeconds(record)).toBe(2 * 3600)
+  })
+
+  it('rejects future flexible start times for both quick starts and manual entries', () => {
+    const now = new Date(2026, 7, 28, 9, 30)
+    expect(isFlexibleStartTimeAllowed('2026-08-28', '09:30', now)).toBe(true)
+    expect(isFlexibleStartTimeAllowed('2026-08-28', '09:31', now)).toBe(false)
+  })
+
+  it('resolves the same planned end for quick and submitted flexible starts', () => {
+    const now = new Date(2026, 7, 28, 9, 30)
+    const expected = new Date(2026, 7, 28, 18).toISOString()
+    expect(resolveFlexiblePlannedEndTime('2026-08-28', '09:30', '2026-08-28', '18:00', now)).toBe(expected)
+    expect(resolveFlexiblePlannedEndTime('2026-08-28', '09:30', '2026-08-28', '', now)).toBeUndefined()
+    expect(resolveFlexiblePlannedEndTime('2026-08-28', '19:00', '2026-08-28', '18:00', now)).toBeNull()
+  })
+
+  it('carries an unsettled flexible shift across midnight on the dashboard', () => {
+    const record: DailyWorkRecord = {
+      date: '2026-08-28',
+      mode: 'flexible',
+      status: 'working',
+      sessions: [{ id: 'overnight', startTime: new Date(2026, 7, 28, 23).toISOString() }],
+      plannedEndTime: new Date(2026, 7, 29, 1).toISOString(),
+      updatedAt: new Date(2026, 7, 28, 23).toISOString(),
+    }
+    const beforeEnd = summarizeTodayWork(profile, [record], new Date(2026, 7, 29, 0, 30))
+    expect(beforeEnd.record?.date).toBe('2026-08-28')
+    expect(beforeEnd.status).toBe('working')
+    expect(beforeEnd.workedSeconds).toBe(1.5 * 3600)
+
+    const afterEnd = summarizeTodayWork(profile, [record], new Date(2026, 7, 29, 2))
+    expect(afterEnd.status).toBe('ended')
+    expect(afterEnd.workedSeconds).toBe(2 * 3600)
+  })
+
+  it('selects the latest carried pending record when stale pending records coexist', () => {
+    const older: DailyWorkRecord = {
+      date: '2026-08-27',
+      mode: 'flexible',
+      status: 'ended',
+      settlementPending: true,
+      sessions: [{ id: 'older', startTime: new Date(2026, 7, 27, 9).toISOString(), endTime: new Date(2026, 7, 27, 10).toISOString() }],
+      updatedAt: new Date(2026, 7, 27, 10).toISOString(),
+    }
+    const latest: DailyWorkRecord = {
+      ...older,
+      date: '2026-08-28',
+      sessions: [{ id: 'latest', startTime: new Date(2026, 7, 28, 9).toISOString(), endTime: new Date(2026, 7, 28, 10).toISOString() }],
+      updatedAt: new Date(2026, 7, 28, 10).toISOString(),
+    }
+    expect(getCurrentWorkRecord([older, latest], new Date(2026, 7, 29, 9))?.date).toBe('2026-08-28')
+  })
+
+  it('never finalizes the work record when an earlier overtime write fails', () => {
+    const calls: string[] = []
+    const result = commitFlexibleOvertimeSettlement({
+      saveOvertimeSession: () => { calls.push('session'); return true },
+      saveLedger: () => { calls.push('ledger'); return false },
+      saveAchievement: () => { calls.push('achievement'); return true },
+      saveWorkRecord: () => { calls.push('work'); return true },
+    })
+    expect(result).toEqual({ success: false, stage: 'ledger' })
+    expect(calls).toEqual(['session', 'ledger'])
+  })
+
+  it('does not replace a work record when linked-overtime cleanup fails', () => {
+    let workSaved = false
+    const result = commitFlexibleWorkCorrection({
+      removeLinkedOvertime: () => false,
+      saveWorkRecord: () => { workSaved = true; return true },
+    })
+    expect(result).toEqual({ success: false, stage: 'overtime-cleanup' })
+    expect(workSaved).toBe(false)
+  })
+
+  it('reports a failed flexible start instead of treating it as persisted', () => {
+    let attempts = 0
+    expect(commitFlexibleWorkStart(() => { attempts += 1; return false })).toBe(false)
+    expect(attempts).toBe(1)
+    expect(commitFlexibleWorkStart(() => true)).toBe(true)
+    expect(commitFlexibleWorkStart(() => { throw new Error('storage full') })).toBe(false)
+  })
+
+  it('retries a partial stable-ID overtime settlement without duplicate records', () => {
+    const sessions = new Map<string, number>()
+    const ledger = new Map<string, number>()
+    let failLedger = true
+    let workSettled = false
+    const commit = () => commitFlexibleOvertimeSettlement({
+      saveOvertimeSession: () => { sessions.set('stable-flex-id', 3600); return true },
+      saveLedger: () => {
+        if (failLedger) return false
+        ledger.set('stable-flex-id', 100)
+        return true
+      },
+      saveAchievement: () => true,
+      saveWorkRecord: () => { workSettled = true; return true },
+    })
+
+    expect(commit()).toEqual({ success: false, stage: 'ledger' })
+    expect(sessions.size).toBe(1)
+    expect(workSettled).toBe(false)
+    failLedger = false
+    expect(commit()).toEqual({ success: true })
+    expect(sessions.size).toBe(1)
+    expect(ledger.size).toBe(1)
+    expect(workSettled).toBe(true)
   })
 })

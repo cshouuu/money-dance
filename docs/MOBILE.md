@@ -109,9 +109,9 @@ On Android 8+, the first in-app update may also require the user to enable **All
 
 The app automatically checks at most once every six hours and also exposes a manual **我的 → 应用更新 → 检查更新** action.
 
-### Android 4×2 home-screen widget
+### Android home-screen widget
 
-The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. The implementation is complete in the source tree and is pending the next Android release; it is not part of v0.2.23.
+The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. v0.2.24 remains the current stable Android release and first shipped the widget as a 4×2 surface. The current source compacts it to a 4×1 row while retaining the live amount and both timer actions; that layout remains unreleased until the next Android tag.
 
 Its refresh behavior follows the current earning state:
 
@@ -126,7 +126,7 @@ Its refresh behavior follows the current earning state:
 
 On Android 13 and later, Money Dance asks for notification permission once, only after at least one widget has been added and the app next resumes. If the user declines, the foreground ticker can still run and Android keeps it visible under **Active apps / Task Manager**, but the notification-drawer status and its stop action may be hidden. Real-time mode can still be turned off from the widget, and notification permission can be granted later in Android system settings.
 
-The 4×2 layout exposes these actions:
+The 4×1 layout exposes these actions:
 
 - slacking can be started and stopped directly from the widget;
 - starting overtime opens MoneyDance and reuses the existing overtime pay-mode selector (unpaid, salary multiplier, or fixed amount);
@@ -135,7 +135,15 @@ The 4×2 layout exposes these actions:
 
 The native widget does not reimplement salary, attendance, flexible-work, or calendar adjustment rules. The Web layer calculates and compresses the next 36 hours into earnings timeline slices, then sends the snapshot through the Capacitor bridge to Android `SharedPreferences`. The native layer evaluates the current slice to render the amount without loading the WebView on every tick.
 
+An optional flexible-work planned end is included as an exact timeline boundary. Once reached, the widget stops increasing the work amount at that second; the Web layer performs the interactive settlement when the app next becomes active.
+
 Widget actions are stored in an append-only native action queue with stable action IDs. On app startup or resume, the bridge exposes pending actions to the Web layer, which applies them idempotently to `localStorage` and acknowledges them only after the related session and ledger changes succeed. This keeps desktop actions recoverable across process restarts while preserving the existing local-first source of truth.
+
+### Lightweight timer backfill
+
+Slacking and overtime can start from the current time or backfill an actual start time that has already passed; a completed missed interval can also be entered in one step. This is intentionally a lightweight correction flow, not future scheduling: Money Dance does not register an Android alarm, background job, or exact-time trigger to start slacking or overtime automatically. Future timestamps are rejected, and backfilled intervals may not overlap retained or active records of the same kind.
+
+Backfilled earnings use the salary rate available when the record is created rather than reconstructing a historical salary snapshot. Cross-midnight income remains attributed to the interval's start date, while duration views may split the elapsed time by local calendar day.
 
 ### Slacking and overtime achievements
 
@@ -147,6 +155,12 @@ Both timers have five permanent achievement levels:
 | Overtime | 1 hour, 10 hours, 30 hours, 100 hours, 300 hours |
 
 Existing session records are used to initialize lifetime progress. New completed sessions continue adding to that lifetime total. Clearing or deleting session history does not subtract lifetime duration and does not relock an illuminated medal; history cleanup and achievement progress are deliberately separate operations.
+
+Each retained timer record also has an independent duration-based visual. Slacking progresses from fish to mermaid emoji, while overtime uses Lucide icons from briefcase through crown. These record visuals do not alter the permanent achievement thresholds above.
+
+### System bars and safe areas
+
+The Capacitor shell uses the Android System Bars plugin with edge-to-edge content, a transparent status bar, dark status-bar icons on the light MoneyDance background, and CSS safe-area variables for headers, dialogs, notices, and the bottom navigation. The native preparation script applies the same theme idempotently when CI regenerates the Android project, including on vivo and other OEM shells that previously showed a sunken dark status-bar band.
 
 ### First migration from old debug APKs
 

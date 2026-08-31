@@ -60,12 +60,30 @@ describe('achievement lifetime reconciliation', () => {
     expect(state.unlockedAt['slacking-2']).toBe('2026-08-30T12:00:00.000Z')
   })
 
-  it('counts each session id once across repeated reconciliation', () => {
+  it('credits only a positive duration correction for the same session id', () => {
     const first = reconcileAchievementSessions('slacking', createEmptyAchievementState(), [session('same', 1800)], '2026-08-30T12:00:00.000Z')
-    const second = reconcileAchievementSessions('slacking', first, [session('same', 999999)], '2026-08-31T12:00:00.000Z')
+    const repeated = reconcileAchievementSessions('slacking', first, [session('same', 1800)], '2026-08-31T12:00:00.000Z')
+    const increased = reconcileAchievementSessions('slacking', repeated, [session('same', 2400)], '2026-08-31T13:00:00.000Z')
+    const decreased = reconcileAchievementSessions('slacking', increased, [session('same', 1200)], '2026-08-31T14:00:00.000Z')
 
-    expect(second.lifetimeSeconds).toBe(1800)
-    expect(second.processedSessionIds).toEqual(['same'])
+    expect(repeated.lifetimeSeconds).toBe(1800)
+    expect(increased.lifetimeSeconds).toBe(2400)
+    expect(decreased.lifetimeSeconds).toBe(2400)
+    expect(decreased.processedSessionIds).toEqual(['same'])
+    expect(decreased.creditedSecondsBySessionId.same).toBe(2400)
+  })
+
+  it('registers legacy processed sessions without double-counting their duration', () => {
+    const legacy = {
+      ...createEmptyAchievementState(),
+      lifetimeSeconds: 1800,
+      processedSessionIds: ['legacy'],
+      creditedSecondsBySessionId: {},
+    }
+    const migrated = reconcileAchievementSessions('slacking', legacy, [session('legacy', 1800)], '2026-08-31T12:00:00.000Z')
+
+    expect(migrated.lifetimeSeconds).toBe(1800)
+    expect(migrated.creditedSecondsBySessionId.legacy).toBe(1800)
   })
 
   it('keeps lifetime progress and unlocked medals after history is deleted', () => {
