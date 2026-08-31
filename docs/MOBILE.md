@@ -111,7 +111,7 @@ The app automatically checks at most once every six hours and also exposes a man
 
 ### Android home-screen widget
 
-The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. v0.2.24 remains the current stable Android release and first shipped the widget as a 4×2 surface. The current source compacts it to a 4×1 row while retaining the live amount and both timer actions; that layout remains unreleased until the next Android tag.
+The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. v0.2.25 ships the compact 4×1 row while retaining the live amount and both timer actions.
 
 Its refresh behavior follows the current earning state:
 

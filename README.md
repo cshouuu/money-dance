@@ -6,7 +6,7 @@
 
 实时薪资 · 心愿清单 · 摸鱼 · 加班 · 账本 · 薪苦日历 · 物品持有成本
 
-[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.24（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.24.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
+[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.25（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.25.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
 
 ![CI](https://github.com/cshouuu/money-dance/actions/workflows/ci.yml/badge.svg)
 ![Android APK](https://github.com/cshouuu/money-dance/actions/workflows/build-android-apk.yml/badge.svg)
@@ -24,9 +24,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.2.24**
-
-当前仓库还包含将随下一 Android 版本发布的改动；下表描述当前源码能力，v0.2.24 APK 的桌面组件仍为 4×2。
+**当前稳定版：v0.2.25**
 
 ## 当前功能
 
@@ -43,7 +41,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | 📦 我的好物 | 记录已购买物品及持有时间，持续观察每小时使用成本 |
 | 📱 多端使用 | 支持 Web、iPhone / iPad PWA 和 Android APK |
 | 🔄 Android 更新 | 应用内检查新版本，通过 Cloudflare R2 下载 APK，并由 Android 系统确认覆盖安装 |
-| 🧩 Android 桌面组件 | 现有组件展示实时收益并提供摸鱼 / 加班操作；紧凑 4×1 布局已在源码完成，将随下一 Android 版本发布 |
+| 🧩 Android 桌面组件 | 紧凑 4×1 组件展示实时收益，并提供摸鱼 / 加班操作 |
 
 ## 关键业务规则
 
@@ -66,7 +64,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 - 生活成本可继续直接从工资速度中扣除，也可按当月天数拆成每日账本支出；每日模式从首次选择当天生效，采用分币分摊保证整月配置不变时合计准确。生活成本模式和金额按本地业务日期保存，后续修改或关闭只影响当天及以后，既不会改写过去工资口径，也会保留过去的每日支出；工资覆盖会记录金额是否已扣生活成本，避免切换模式时重复扣除。
 - 加班收入统一归属到加班开始当天，不因跨日而拆分到多个日期。
 - 摸鱼和加班采用轻量补时：开始计时时可把实际开始时间回填到现在之前，也可在结束后一次性补记完整起止时段；不支持预约未来时间或由后台自动开始。补记不能与已有或进行中的同类记录重叠，跨日收入仍归属开始日期。
-- Android 桌面组件仅面向系统主屏幕（`home_screen`），不扩展到锁屏、iOS 或 PWA；应用在计薪时段同步数据后会自动按秒刷新，用户也可从组件主动开启或停止当日实时模式。未启用实时模式时由系统约每 30 分钟低频刷新；紧凑 4×1 布局将随下一 Android 版本发布。
+- Android 桌面组件仅面向系统主屏幕（`home_screen`），不扩展到锁屏、iOS 或 PWA；应用在计薪时段同步数据后会自动按秒刷新，用户也可从组件主动开启或停止当日实时模式。未启用实时模式时由系统约每 30 分钟低频刷新。
 - 摸鱼可从桌面组件直接开始或结束；开始加班时进入应用并沿用现有计薪方式选择，进行中的加班可从桌面组件直接结束。
 - 组件秒级更新依赖 `specialUse` 前台服务和常驻通知；午休等零费率区间会等待到下一计薪时间片，息屏时暂停组件重绘，亮屏后恢复。不同厂商的系统调度和 Launcher 仍可能产生延迟，因此秒级刷新属于尽力保证而非硬实时承诺。
 - 摸鱼成就按累计 30 分钟、3 小时、10 小时、30 小时、100 小时分为五级；加班成就按累计 1 小时、10 小时、30 小时、100 小时、300 小时分为五级。
@@ -97,7 +95,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 国内用户推荐通过 Cloudflare R2 下载当前正式版：
 
-**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.24.apk**
+**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.25.apk**
 
 也可以在 [GitHub Releases](https://github.com/cshouuu/money-dance/releases/latest) 查看版本说明和校验文件。
 
@@ -306,7 +304,7 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 - [x] 固定工作周、大小周和历史收入重算
 - [x] Android 固定签名、应用内更新和 Cloudflare R2 分发
 - [x] 摸鱼 / 加班五级永久成就与勋章点亮
-- [x] Android 4×1 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作（待随下一 Android 版本发布）
+- [x] Android 4×1 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作
 - [x] 中国大陆节假日 / 调休补班识别与半天请假
 - [x] 摸鱼 / 加班遗漏时段补记与弹性工时分段结算
 - [ ] 数据导入 / 导出
