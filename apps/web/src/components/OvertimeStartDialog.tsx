@@ -1,8 +1,9 @@
 import { ArrowLeft, BadgeDollarSign, Ban, Clock3, History, X } from 'lucide-react'
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
 import { OVERTIME_MULTIPLIERS } from '../lib/overtime'
+import { resolveOvertimeStartSubmission, type OvertimePaidMode, type OvertimeStartStep } from '../lib/overtimeStart'
 import type { ActiveOvertime, OvertimeStartOption } from '../types'
 import { useDialogFocus } from './useDialogFocus'
 import { useModalViewport } from './useModalViewport'
@@ -14,8 +15,6 @@ interface OvertimeStartDialogProps {
   onCancel: () => void
 }
 
-type Step = 'pay-confirm' | 'pay-details'
-type PaidMode = 'multiplier' | 'fixed'
 type StartMode = 'now' | 'custom'
 
 function toLocalDateTimeInput(date: Date): string {
@@ -28,30 +27,38 @@ function toLocalDateTimeInput(date: Date): string {
 }
 
 export function OvertimeStartDialog({ open, onStart, onCancel }: OvertimeStartDialogProps) {
-  const [step, setStep] = useState<Step>('pay-confirm')
-  const [paidMode, setPaidMode] = useState<PaidMode>('multiplier')
-  const [multiplier, setMultiplier] = useState<number>(1.5)
+  const [step, setStep] = useState<OvertimeStartStep>('pay-confirm')
+  const [paidMode, setPaidMode] = useState<OvertimePaidMode | null>(null)
+  const [multiplier, setMultiplier] = useState<number | null>(null)
   const [fixedAmount, setFixedAmount] = useState('')
   const [startMode, setStartMode] = useState<StartMode>('now')
   const [customStartTime, setCustomStartTime] = useState('')
   const [error, setError] = useState('')
-  const dialogRef = useRef<HTMLFormElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const paidChoiceRef = useRef<HTMLButtonElement>(null)
   const paidModeButtonRef = useRef<HTMLButtonElement>(null)
   useModalViewport(open)
 
-  useEffect(() => {
-    if (!open) return
+  const resetDialog = useCallback(() => {
     setStep('pay-confirm')
-    setPaidMode('multiplier')
-    setMultiplier(1.5)
+    setPaidMode(null)
+    setMultiplier(null)
     setFixedAmount('')
     setStartMode('now')
     setCustomStartTime(toLocalDateTimeInput(new Date()))
     setError('')
-  }, [open])
-  useDialogFocus(open, onCancel, dialogRef, closeButtonRef)
+  }, [])
+
+  const cancelDialog = useCallback(() => {
+    resetDialog()
+    onCancel()
+  }, [onCancel, resetDialog])
+
+  useEffect(() => {
+    if (open) resetDialog()
+  }, [open, resetDialog])
+  useDialogFocus(open, cancelDialog, dialogRef, closeButtonRef)
 
   if (!open) return null
 
@@ -60,6 +67,10 @@ export function OvertimeStartDialog({ open, onStart, onCancel }: OvertimeStartDi
     window.setTimeout(() => paidChoiceRef.current?.focus(), 0)
   }
   const showPayDetails = () => {
+    setPaidMode(null)
+    setMultiplier(null)
+    setFixedAmount('')
+    setError('')
     setStep('pay-details')
     window.setTimeout(() => paidModeButtonRef.current?.focus(), 0)
   }
@@ -83,27 +94,38 @@ export function OvertimeStartDialog({ open, onStart, onCancel }: OvertimeStartDi
       showPayConfirm()
       return false
     }
+    resetDialog()
     return true
   }
 
   const startPaid = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (paidMode === 'multiplier') {
-      submitOption({ payMode: 'multiplier', multiplier })
+    const submission = resolveOvertimeStartSubmission({
+      step,
+      paidMode,
+      multiplier,
+      fixedAmount: parseNumberInput(fixedAmount),
+    })
+    if (submission.kind === 'show-pay-details') {
+      showPayDetails()
       return
     }
-    const amount = parseNumberInput(fixedAmount)
-    if (!event.currentTarget.reportValidity() || amount === null || amount <= 0 || amount > MAX_MONEY_AMOUNT) return
-    submitOption({ payMode: 'fixed', fixedAmount: amount })
+    if (submission.kind === 'invalid') {
+      setError(submission.message)
+      event.currentTarget.reportValidity()
+      return
+    }
+    if (!event.currentTarget.reportValidity()) return
+    submitOption(submission.option)
   }
 
   const title = step === 'pay-confirm' ? '居然要加班了，给加班费的吗' : '还好给钱，给多少？'
 
-  return createPortal(<div className="dialog-backdrop overtime-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
-    <form ref={dialogRef} className="overtime-start-dialog" role="dialog" aria-modal="true" aria-labelledby="overtime-dialog-title" onSubmit={startPaid}>
+  return createPortal(<div className="dialog-backdrop overtime-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) cancelDialog() }}>
+    <div ref={dialogRef} className="overtime-start-dialog" role="dialog" aria-modal="true" aria-labelledby="overtime-dialog-title">
       <div className="overtime-dialog-header">
-        <div><p className="eyebrow">OVERTIME CHECK</p><h2 id="overtime-dialog-title">{title}</h2></div>
-        <button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button>
+        <div><p className="eyebrow">OVERTIME CHECK</p><h2 id="overtime-dialog-title" aria-live="polite">{title}</h2></div>
+        <button ref={closeButtonRef} type="button" aria-label="关闭" onClick={cancelDialog}><X size={18}/></button>
       </div>
 
       {step === 'pay-confirm' ? <>
@@ -113,12 +135,12 @@ export function OvertimeStartDialog({ open, onStart, onCancel }: OvertimeStartDi
           <button type="button" className="overtime-unpaid-choice" onClick={() => submitOption({ payMode: 'unpaid' })}><Ban size={18}/><span><b>不给，很烦</b><small>只记录加班时间</small></span></button>
           <button ref={paidChoiceRef} type="button" className="overtime-paid-choice" onClick={showPayDetails}><BadgeDollarSign size={19}/><span><b>给钱</b><small>设置倍率或固定金额</small></span></button>
         </div>
-      </> : <>
-        <fieldset className="overtime-pay-field"><legend>加班费类型</legend><div className="overtime-pay-tabs"><button ref={paidModeButtonRef} type="button" className={paidMode === 'multiplier' ? 'active' : ''} aria-pressed={paidMode === 'multiplier'} onClick={() => setPaidMode('multiplier')}>按工资倍率</button><button type="button" className={paidMode === 'fixed' ? 'active' : ''} aria-pressed={paidMode === 'fixed'} onClick={() => setPaidMode('fixed')}>固定加班费</button></div></fieldset>
-        {paidMode === 'multiplier' ? <fieldset className="overtime-multiplier-field"><legend>选择工资倍率</legend><div className="overtime-multiplier-grid">{OVERTIME_MULTIPLIERS.map(value => <button key={value} type="button" className={multiplier === value ? 'active' : ''} aria-pressed={multiplier === value} onClick={() => setMultiplier(value)}>{value}倍</button>)}</div><p>按你的正常秒薪 × {multiplier} 倍实时计算。</p></fieldset> : <label className="overtime-fixed-field"><span>本次固定加班费</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => setFixedAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div><small>固定金额按本次加班总额计算。</small></label>}
-        <div className="overtime-dialog-actions"><button type="button" className="dialog-cancel" onClick={showPayConfirm}><ArrowLeft size={15}/>返回</button><button type="submit" className="dialog-confirm"><BadgeDollarSign size={16}/>开始加班</button></div>
-      </>}
+      </> : <form className="overtime-pay-details-form" onSubmit={startPaid}>
+        <fieldset className="overtime-pay-field"><legend>加班费类型</legend><div className="overtime-pay-tabs"><button ref={paidModeButtonRef} type="button" className={paidMode === 'multiplier' ? 'active' : ''} aria-pressed={paidMode === 'multiplier'} onClick={() => { setPaidMode('multiplier'); setMultiplier(null); setError('') }}>按工资倍率</button><button type="button" className={paidMode === 'fixed' ? 'active' : ''} aria-pressed={paidMode === 'fixed'} onClick={() => { setPaidMode('fixed'); setMultiplier(null); setError('') }}>固定加班费</button></div></fieldset>
+        {paidMode === 'multiplier' ? <fieldset className="overtime-multiplier-field"><legend>选择工资倍率</legend><div className="overtime-multiplier-grid">{OVERTIME_MULTIPLIERS.map(value => <button key={value} type="button" className={multiplier === value ? 'active' : ''} aria-pressed={multiplier === value} onClick={() => { setMultiplier(value); setError('') }}>{value}倍</button>)}</div><p>{multiplier === null ? '请选择本次加班的工资倍率。' : `按你的正常秒薪 × ${multiplier} 倍实时计算。`}</p></fieldset> : paidMode === 'fixed' ? <label className="overtime-fixed-field"><span>本次固定加班费</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => { setFixedAmount(normalizeDecimalInput(event.target.value)); setError('') }} placeholder="0.00"/></div><small>固定金额按本次加班总额计算。</small></label> : <p className="overtime-pay-empty">请选择按工资倍率还是固定金额，不会自动使用默认倍率。</p>}
+        <div className="overtime-dialog-actions"><button type="button" className="dialog-cancel" onClick={() => { setError(''); showPayConfirm() }}><ArrowLeft size={15}/>返回</button><button type="submit" className="dialog-confirm" disabled={paidMode === null || (paidMode === 'multiplier' && multiplier === null)}><BadgeDollarSign size={16}/>开始加班</button></div>
+      </form>}
       {error && <p className="overtime-dialog-error" role="alert">{error}</p>}
-    </form>
+    </div>
   </div>, document.body)
 }
