@@ -54,9 +54,9 @@ The workflow derives:
 
 This keeps Android's numeric upgrade ordering stable while the UI can compare normal semantic versions.
 
-### Tagged releases and R2 delivery
+### Tagged releases and Pgyer delivery
 
-Pushing a tag matching `v*` builds a fixed-key signed release APK and creates or updates the matching GitHub Release.
+Pushing a tag matching `v*` builds a fixed-key signed release APK, publishes it to Pgyer, and then creates or updates the matching GitHub Release archive.
 
 For example:
 
@@ -65,13 +65,21 @@ git tag v0.3.0
 git push origin v0.3.0
 ```
 
+Pgyer is the primary Android distribution source for current clients:
+
+- Public page: `https://www.pgyer.com/moneydance`
+- Actions secret: `PGYER_API_KEY`
+- Optional repository variable: `PGYER_APP_SHORTCUT` (defaults to `moneydance`)
+
+The API key is available only to the release job. The workflow uses Pgyer's three-step upload flow with domestic upload acceleration, verifies the package ID and version returned after publishing, and then checks that the public page exposes the tagged version. The API key and API-generated direct-install URL are never compiled into the APK or written to release artifacts.
+
 GitHub Releases remains the permanent release archive and receives:
 
 - `money-dance-v0.3.0.apk`
 - `money-dance-v0.3.0.apk.sha256`
 - `money-dance-update.json`
 
-The same signed APK is also uploaded to the private Cloudflare R2 bucket `money-dance-releases`. The existing Cloudflare Pages project exposes only the update endpoints through a Pages Function with an R2 binding:
+The same signed APK is also uploaded to the private Cloudflare R2 bucket `money-dance-releases` for clients released before the Pgyer migration. The existing Cloudflare Pages project exposes only the legacy update endpoints through a Pages Function with an R2 binding:
 
 - `/download/latest.json`
 - `/download/releases/money-dance-vX.Y.Z.apk`
@@ -79,7 +87,7 @@ The same signed APK is also uploaded to the private Cloudflare R2 bucket `money-
 
 The bucket itself remains private; users do not receive R2 credentials or direct bucket access.
 
-R2 is the preferred in-app APK delivery source. GitHub Releases remains a fallback so existing installs can continue updating even if the Cloudflare delivery path is temporarily unavailable.
+Current clients no longer query R2 or GitHub for updates. The R2 manifest and GitHub archive remain during the migration window so older installations can still discover the first Pgyer-enabled release.
 
 The release workflow maintains `retention.json` in R2 and keeps at most the newest **10 APK versions**. When a new release would exceed 10 retained APKs, the oldest APK object is deleted automatically. GitHub Releases is not pruned and continues to preserve the full release history.
 
@@ -95,19 +103,19 @@ The Android shell contains a native Capacitor plugin called `AppUpdater`.
 The app:
 
 1. reads its installed `versionName` / `versionCode` from Android;
-2. checks both the Cloudflare R2-backed Pages update manifest and the GitHub Release manifest;
-3. chooses the newer valid semantic version when both are reachable;
+2. loads the public `https://www.pgyer.com/moneydance` page over HTTPS;
+3. validates the fixed Pgyer host, Money Dance app name, and semantic version exposed by the page;
 4. prompts the user when a newer release exists;
-5. prefers APKs served from `https://money-dance-6gl.pages.dev/download/releases/`;
-6. continues to trust the project's own GitHub Release APK path as a fallback;
-7. downloads through Android `DownloadManager`;
-8. opens Android's package installer when the download finishes.
+5. opens the fixed Pgyer public page in the user's browser;
+6. lets Pgyer deliver the APK and Android perform the normal install/update confirmation.
 
-Android still requires the user to approve the final install/update confirmation. Money Dance does not attempt silent installation.
+Android still requires the user to approve the final install/update confirmation. Money Dance does not attempt silent installation and no longer requests `REQUEST_INSTALL_PACKAGES` itself.
 
-On Android 8+, the first in-app update may also require the user to enable **Allow from this source** for Money Dance. The app opens the relevant system settings page and asks the user to return and retry the update.
+On Android 8+, the user may need to enable **Allow from this source** for the browser that downloaded the APK. This permission belongs to that browser, not Money Dance.
 
 The app automatically checks at most once every six hours and also exposes a manual **我的 → 应用更新 → 检查更新** action.
+
+Existing builds that cannot reach either legacy host cannot discover this migration automatically. Those users need to install the first Pgyer-enabled release once from the public Pgyer page; the fixed release signature then allows later versions to update in place.
 
 ### Android home-screen widget
 

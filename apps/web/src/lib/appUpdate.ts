@@ -1,7 +1,3 @@
-const GITHUB_RELEASE_ASSET_PREFIX = 'https://github.com/cshouuu/money-dance/releases/download/'
-const R2_RELEASE_ASSET_PREFIX = 'https://money-dance-6gl.pages.dev/download/releases/'
-const TRUSTED_RELEASE_ASSET_PREFIXES = [GITHUB_RELEASE_ASSET_PREFIX, R2_RELEASE_ASSET_PREFIX] as const
-
 interface CapacitorBridge {
   getPlatform?: () => string
   nativePromise?: <T>(plugin: string, method: string, options?: Record<string, unknown>) => Promise<T>
@@ -23,9 +19,7 @@ export interface AndroidRelease {
   version: string
   title: string
   notes: string
-  apkName: string
-  apkUrl: string
-  htmlUrl: string
+  releasePageUrl: string
   publishedAt: string
 }
 
@@ -33,8 +27,8 @@ interface NativeReleaseResult extends Partial<AndroidRelease> {
   found: boolean
 }
 
-interface NativeUpdateResult {
-  status: 'downloading' | 'permission_required'
+interface NativeOpenResult {
+  status: 'opened'
 }
 
 function bridge() {
@@ -80,8 +74,20 @@ export function compareVersions(left: string, right: string) {
   return 0
 }
 
-export function isTrustedAndroidUpdateUrl(url: string) {
-  return TRUSTED_RELEASE_ASSET_PREFIXES.some(prefix => url.startsWith(prefix))
+export function isTrustedPgyerReleasePage(url: string) {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' &&
+      parsed.hostname === 'www.pgyer.com' &&
+      parsed.port === '' &&
+      /^\/[A-Za-z0-9_-]{4,64}$/.test(parsed.pathname) &&
+      parsed.search === '' &&
+      parsed.hash === '' &&
+      parsed.username === '' &&
+      parsed.password === ''
+  } catch {
+    return false
+  }
 }
 
 function isTrustedRelease(release: NativeReleaseResult): release is NativeReleaseResult & AndroidRelease {
@@ -91,12 +97,30 @@ function isTrustedRelease(release: NativeReleaseResult): release is NativeReleas
     release.version &&
     release.title !== undefined &&
     release.notes !== undefined &&
-    release.apkName?.endsWith('.apk') &&
-    release.apkUrl &&
-    isTrustedAndroidUpdateUrl(release.apkUrl) &&
-    release.htmlUrl !== undefined &&
+    release.releasePageUrl &&
+    isTrustedPgyerReleasePage(release.releasePageUrl) &&
     release.publishedAt !== undefined,
   )
+}
+
+function errorText(error: unknown) {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message ?? '')
+  }
+  return ''
+}
+
+export function formatAndroidUpdateError(error: unknown) {
+  const message = errorText(error)
+  if (/SocketTimeout|timed out|failed to connect|UnknownHost|NETWORK/i.test(message)) {
+    return '当前网络无法连接蒲公英更新服务，请切换网络后重试，或直接打开蒲公英下载页。'
+  }
+  if (/PGYER_PAGE_FORMAT_CHANGED|PGYER_APP_MISMATCH|PGYER_PAGE_TOO_LARGE/i.test(message)) {
+    return '暂时无法读取蒲公英版本信息，请直接打开蒲公英下载页查看。'
+  }
+  return '检查更新暂时失败，请稍后重试，或直接打开蒲公英下载页。'
 }
 
 export async function fetchLatestAndroidRelease(): Promise<AndroidRelease | null> {
@@ -108,9 +132,7 @@ export async function fetchLatestAndroidRelease(): Promise<AndroidRelease | null
     version: release.version,
     title: release.title,
     notes: release.notes,
-    apkName: release.apkName,
-    apkUrl: release.apkUrl,
-    htmlUrl: release.htmlUrl,
+    releasePageUrl: release.releasePageUrl,
     publishedAt: release.publishedAt,
   }
 }
@@ -128,10 +150,6 @@ export async function checkForAndroidUpdate() {
   }
 }
 
-export async function installAndroidRelease(release: AndroidRelease) {
-  if (!isTrustedAndroidUpdateUrl(release.apkUrl)) throw new Error('UNTRUSTED_UPDATE_URL')
-  return nativeCall<NativeUpdateResult>('downloadAndInstall', {
-    url: release.apkUrl,
-    fileName: release.apkName,
-  })
+export async function openPgyerReleasePage() {
+  return nativeCall<NativeOpenResult>('openReleasePage')
 }

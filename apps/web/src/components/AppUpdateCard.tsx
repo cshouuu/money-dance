@@ -1,26 +1,17 @@
-import { Download, RefreshCw, Smartphone } from 'lucide-react'
+import { ExternalLink, RefreshCw, Smartphone } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   checkForAndroidUpdate,
+  formatAndroidUpdateError,
   getInstalledAppVersion,
-  installAndroidRelease,
   isAndroidNative,
+  openPgyerReleasePage,
   type AndroidRelease,
   type InstalledAppVersion,
 } from '../lib/appUpdate'
 import './AppUpdate.css'
 
-type UpdateStatus = 'idle' | 'checking' | 'latest' | 'available' | 'downloading' | 'permission' | 'error'
-
-function describeError(error: unknown) {
-  if (error instanceof Error && error.message) return error.message
-  if (typeof error === 'string' && error) return error
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = String((error as { message?: unknown }).message ?? '')
-    if (message) return message
-  }
-  return 'UNKNOWN_ERROR'
-}
+type UpdateStatus = 'idle' | 'checking' | 'latest' | 'available' | 'opening' | 'error'
 
 export function AppUpdateCard() {
   const [visible] = useState(() => isAndroidNative())
@@ -31,9 +22,9 @@ export function AppUpdateCard() {
 
   useEffect(() => {
     if (!visible) return
-    getInstalledAppVersion().then(setCurrent).catch(error => {
+    getInstalledAppVersion().then(setCurrent).catch(() => {
       setStatus('error')
-      setMessage(`读取版本失败：${describeError(error)}`)
+      setMessage('读取当前版本失败，请重启应用后重试。')
     })
   }, [visible])
 
@@ -59,25 +50,19 @@ export function AppUpdateCard() {
       }
     } catch (error) {
       setStatus('error')
-      setMessage(`检查更新失败：${describeError(error)}`)
+      setMessage(formatAndroidUpdateError(error))
     }
   }
 
-  const update = async () => {
-    if (!latest) return
+  const openPgyer = async () => {
     setMessage('')
     try {
-      const result = await installAndroidRelease(latest)
-      if (result.status === 'permission_required') {
-        setStatus('permission')
-        setMessage('已打开系统设置。请开启“允许来自此来源”，返回 Money Dance 后再点一次立即更新。')
-      } else {
-        setStatus('downloading')
-        setMessage('新版 APK 正在后台下载。下载完成后 Android 会弹出系统安装确认。')
-      }
-    } catch (error) {
+      await openPgyerReleasePage()
+      setStatus('opening')
+      setMessage('已打开蒲公英下载页，请在页面中点击安装。')
+    } catch {
       setStatus('error')
-      setMessage(`启动更新失败：${describeError(error)}`)
+      setMessage('无法打开蒲公英下载页，请稍后重试。')
     }
   }
 
@@ -87,15 +72,15 @@ export function AppUpdateCard() {
       <div><small>ANDROID APP</small><h3>应用更新</h3></div>
       {current && <span className="version-chip">v{current.versionName}</span>}
     </div>
-    <p>从 GitHub Releases 检查新版，并在应用内下载 APK。安装时仍会由 Android 系统要求你最终确认。</p>
+    <p>通过蒲公英检查并下载新版 APK。安装时仍会由 Android 系统要求你最终确认。</p>
     {latest && status === 'available' && <div className="update-version-row"><span>当前 v{current?.versionName}</span><b>→</b><span>最新 {latest.tag}</span></div>}
     {message && <div className={`update-message ${status}`}>{message}</div>}
     <div className="app-update-actions">
       <button type="button" className="secondary-button" onClick={check} disabled={status === 'checking'}>
         <RefreshCw size={16} className={status === 'checking' ? 'spin' : ''}/>{status === 'checking' ? '检查中…' : '检查更新'}
       </button>
-      {latest && status === 'available' && <button type="button" className="primary-button update-now" onClick={update}><Download size={16}/>立即更新</button>}
-      {latest && (status === 'permission' || status === 'error') && <button type="button" className="primary-button update-now" onClick={update}><Download size={16}/>重新尝试</button>}
+      {latest && status === 'available' && <button type="button" className="primary-button update-now" onClick={openPgyer}><ExternalLink size={16}/>前往蒲公英更新</button>}
+      {status === 'error' && <button type="button" className="primary-button update-now" onClick={openPgyer}><ExternalLink size={16}/>打开蒲公英</button>}
     </div>
   </section>
 }
