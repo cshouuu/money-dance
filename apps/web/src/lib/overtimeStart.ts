@@ -23,7 +23,7 @@ export function resolveOvertimeStartSubmission(input: OvertimeStartSubmissionInp
 
   if (input.paidMode === 'multiplier') {
     if (input.multiplier === null || !Number.isFinite(input.multiplier) || input.multiplier <= 0) {
-      return { kind: 'invalid', message: '请选择一个工资倍率。' }
+      return { kind: 'invalid', message: '请输入有效的工资倍率。' }
     }
     return { kind: 'start', option: { payMode: 'multiplier', multiplier: input.multiplier } }
   }

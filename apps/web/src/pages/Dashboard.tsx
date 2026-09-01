@@ -1,5 +1,5 @@
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
-import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
@@ -9,6 +9,7 @@ import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLab
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { createId } from '../lib/id'
 import { loadLedger, saveLedger } from '../lib/ledger'
+import { getPaydayCountdown } from '../lib/payday'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
 import { calculateOvertimeEarnings, createCompletedOvertimeSession, createOvertimeLedgerEntries, loadOvertimeSessions, overtimeIntervalsOverlap, splitOvertimeSessionByLocalDay } from '../lib/overtime'
 import { keys, loadJSON, saveJSON } from '../lib/storage'
@@ -58,6 +59,7 @@ export function Dashboard() {
   const [settlementError, setSettlementError] = useState('')
   const settlingRef = useRef(false)
   const rates = useMemo(() => calculateRates(profile), [profile])
+  const paydayCountdown = getPaydayCountdown(profile.payday, now)
   const work = summarizeTodayWork(profile, workRecords, now, undefined, attendanceRecords)
   const workRates = useMemo(() => calculateRates(salaryProfileForBusinessDate(profile, work.businessDate)), [profile, work.businessDate])
   const targetSeconds = workRates.paidSecondsPerDay * attendanceWorkedFraction(work.attendance)
@@ -326,7 +328,7 @@ export function Dashboard() {
   }, [now, requestSettlement, work.record])
 
   return <section className="page dashboard-page">
-    <header className="page-header"><div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'long' })}</p><h1>今天的时间，正在变成钱。</h1></div><Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16}/></Link></header>
+    <header className="page-header"><div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'long' })}</p><h1>今天的时间，正在变成钱。</h1></div><div className="dashboard-header-actions"><Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}><CalendarDays size={17}/><span><small>{paydayCountdown ? `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天`) : '去设置'}</b></span></Link><Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16}/></Link></div></header>
 
     <div className={`hero-card${work.dayType === 'work' && work.mode === 'flexible' ? ' flexible-work' : ''}`}>
       <div className="hero-glow" />

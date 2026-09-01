@@ -3,8 +3,8 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDuration } from '@salary-flow/core'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
-import { OVERTIME_MULTIPLIERS } from '../lib/overtime'
 import type { OvertimeStartOption } from '../types'
+import { OvertimeMultiplierInput } from './OvertimeMultiplierInput'
 import './ConfirmDialog.css'
 import './EarlyFinishDialog.css'
 import { useModalViewport } from './useModalViewport'
@@ -35,7 +35,7 @@ export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetS
   const restoreFocusRef = useRef(true)
   const [showPaidOptions, setShowPaidOptions] = useState(false)
   const [paidMode, setPaidMode] = useState<'multiplier' | 'fixed'>('multiplier')
-  const [multiplier, setMultiplier] = useState<number>(1.5)
+  const [multiplier, setMultiplier] = useState('')
   const [fixedAmount, setFixedAmount] = useState('')
   useModalViewport(open)
 
@@ -44,7 +44,7 @@ export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetS
     restoreFocusRef.current = true
     setShowPaidOptions(false)
     setPaidMode('multiplier')
-    setMultiplier(1.5)
+    setMultiplier('')
     setFixedAmount('')
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const timer = window.setTimeout(() => closeButtonRef.current?.focus(), 0)
@@ -90,11 +90,13 @@ export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetS
   }
 
   const excessSeconds = Math.max(0, workedSeconds - targetSeconds)
+  const multiplierValue = parseNumberInput(multiplier)
   const submitPaidOvertime = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (paidMode === 'multiplier') {
+      if (!event.currentTarget.reportValidity() || multiplierValue === null || multiplierValue <= 0) return
       restoreFocusRef.current = false
-      onOvertime({ payMode: 'multiplier', multiplier })
+      onOvertime({ payMode: 'multiplier', multiplier: multiplierValue })
       return
     }
     const amount = parseNumberInput(fixedAmount)
@@ -117,10 +119,10 @@ export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetS
         <p id="early-finish-description">正常工时 {formatDuration(targetSeconds)} 已按 {money(fullDayAmount)} 结算，超出的 {formatDuration(excessSeconds)} 要怎么算？</p>
         {!showPaidOptions ? <div className="early-finish-options overtime-settlement-options">
           <button type="button" onClick={() => { restoreFocusRef.current = false; onOvertime({ payMode: 'unpaid' }) }}><Ban size={19}/><span><b>超出部分不计薪</b><small>仍记录 {formatDuration(excessSeconds)} 加班时长并累计成就</small></span></button>
-          <button ref={paidChoiceRef} type="button" className="paid-overtime-option" onClick={showPaidSettlement}><BadgeDollarSign size={19}/><span><b>超出部分按加班计薪</b><small>选择工资倍率或设置固定金额</small></span></button>
+          <button ref={paidChoiceRef} type="button" className="paid-overtime-option" onClick={showPaidSettlement}><BadgeDollarSign size={19}/><span><b>超出部分按加班计薪</b><small>输入工资倍率或设置固定金额</small></span></button>
         </div> : <form className="early-finish-pay-form" onSubmit={submitPaidOvertime}>
           <fieldset><legend>加班费类型</legend><div className="early-finish-pay-tabs"><button ref={paidModeButtonRef} type="button" className={paidMode === 'multiplier' ? 'active' : ''} aria-pressed={paidMode === 'multiplier'} onClick={() => setPaidMode('multiplier')}>按工资倍率</button><button type="button" className={paidMode === 'fixed' ? 'active' : ''} aria-pressed={paidMode === 'fixed'} onClick={() => setPaidMode('fixed')}>固定金额</button></div></fieldset>
-          {paidMode === 'multiplier' ? <fieldset><legend>工资倍率</legend><div className="early-finish-multiplier-grid">{OVERTIME_MULTIPLIERS.map(value => <button key={value} type="button" className={multiplier === value ? 'active' : ''} aria-pressed={multiplier === value} onClick={() => setMultiplier(value)}>{value}倍</button>)}</div><small>预计加班收入 {money(excessSeconds * secondRate * multiplier)}</small></fieldset> : <label className="early-finish-fixed-field"><span>本次固定加班费</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => setFixedAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div><small>固定金额按全部超出工时结算。</small></label>}
+          {paidMode === 'multiplier' ? <OvertimeMultiplierInput value={multiplier} onValueChange={setMultiplier} hint={multiplierValue !== null && multiplierValue > 0 ? `预计加班收入 ${money(excessSeconds * secondRate * multiplierValue)}` : '请输入超出工时的工资倍率。'}/> : <label className="early-finish-fixed-field"><span>本次固定加班费</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => setFixedAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div><small>固定金额按全部超出工时结算。</small></label>}
           <div className="early-finish-pay-actions"><button type="button" onClick={showSettlementChoices}><ArrowLeft size={15}/>返回</button><button type="submit"><BadgeDollarSign size={16}/>确认结算</button></div>
         </form>}
       </>}

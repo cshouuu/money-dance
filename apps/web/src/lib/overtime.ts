@@ -14,8 +14,6 @@ import {
   shiftSessionLocalDate,
 } from './sessionBusinessDate'
 
-export const OVERTIME_MULTIPLIERS = [1, 1.5, 2, 3, 4, 5] as const
-
 export function calculateOvertimeEarnings(option: Pick<ActiveOvertime, 'payMode' | 'multiplier' | 'fixedAmount'>, durationSeconds: number, secondRate: number): number {
   if (option.payMode === 'unpaid') return 0
   if (option.payMode === 'fixed') return Math.max(0, option.fixedAmount ?? 0)

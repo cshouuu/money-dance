@@ -1,6 +1,6 @@
 import { calculateRates, DEFAULT_PROFILE } from '@salary-flow/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ALTERNATING_MONTHLY_WORK_DAYS, livingCostConfigurationForDate, loadProfile, normalizeLivingCostMode, normalizeSalaryHistoryMode, recommendedMonthlyWorkDays, saveProfile } from './profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, livingCostConfigurationForDate, loadProfile, normalizeLivingCostMode, normalizePayday, normalizeSalaryHistoryMode, recommendedMonthlyWorkDays, saveProfile } from './profile'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -26,6 +26,26 @@ describe('normalizeSalaryHistoryMode', () => {
   it('keeps disabled or unknown history settings disabled', () => {
     expect(normalizeSalaryHistoryMode('none')).toBe('none')
     expect(normalizeSalaryHistoryMode(undefined)).toBe('none')
+  })
+})
+
+describe('normalizePayday', () => {
+  it.each([1, 10, 31])('keeps valid calendar day %i', day => {
+    expect(normalizePayday(day)).toBe(day)
+  })
+
+  it.each([undefined, null, 0, 32, 1.5, '10'])('clears invalid legacy payday %s', value => {
+    expect(normalizePayday(value)).toBeNull()
+  })
+
+  it('migrates a legacy profile without inventing a payday', () => {
+    const stored = { ...DEFAULT_PROFILE } as Partial<typeof DEFAULT_PROFILE>
+    delete stored.payday
+    const setItem = vi.fn()
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(stored), setItem })
+
+    expect(loadProfile().payday).toBeNull()
+    expect(setItem).toHaveBeenCalled()
   })
 })
 

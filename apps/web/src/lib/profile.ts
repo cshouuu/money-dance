@@ -7,6 +7,10 @@ export function normalizeLivingCostMode(value: unknown): SalaryProfile['livingCo
   return value === 'daily-ledger' ? 'daily-ledger' : 'deduct'
 }
 
+export function normalizePayday(value: unknown): SalaryProfile['payday'] {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31 ? value : null
+}
+
 function normalizeLivingCostHistoryMode(value: unknown): LivingCostHistoryMode | null {
   return value === 'off' || value === 'deduct' || value === 'daily-ledger' ? value : null
 }
@@ -157,11 +161,13 @@ export function loadProfile(now = new Date()): SalaryProfile {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
   const profile = { ...DEFAULT_PROFILE, ...stored }
   const storedHistoryMode = (stored as { salaryHistoryMode?: unknown }).salaryHistoryMode
+  const storedPayday = (stored as { payday?: unknown }).payday
   const storedLivingCostMode = (stored as { livingCostMode?: unknown }).livingCostMode
   const storedLivingCostHistory = (stored as { livingCostHistory?: unknown }).livingCostHistory
   const normalizedLivingCostHistory = normalizeLivingCostHistory(storedLivingCostHistory)
   const migratedBase: SalaryProfile = {
     ...profile,
+    payday: normalizePayday(storedPayday),
     livingCostMode: normalizeLivingCostMode(storedLivingCostMode),
     livingCostHistory: normalizedLivingCostHistory,
     salaryHistoryMode: normalizeSalaryHistoryMode(storedHistoryMode),
@@ -177,7 +183,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
     ? withLivingCostHistoryEvent(migratedBase, now)
     : migratedBase
   if (
-    storedHistoryMode !== migrated.salaryHistoryMode ||
+    storedHistoryMode !== migrated.salaryHistoryMode || storedPayday !== migrated.payday ||
     storedLivingCostMode !== migrated.livingCostMode ||
     JSON.stringify(storedLivingCostHistory) !== JSON.stringify(migrated.livingCostHistory) ||
     !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode ||
@@ -196,7 +202,7 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
       ? stored.monthlyLivingCost
       : DEFAULT_PROFILE.monthlyLivingCost,
   }
-  const next = withLivingCostHistoryEvent(profile, now, previousConfiguration)
+  const next = withLivingCostHistoryEvent({ ...profile, payday: normalizePayday(profile.payday) }, now, previousConfiguration)
   return saveJSON(keys.profile, next) ? next : null
 }
 
