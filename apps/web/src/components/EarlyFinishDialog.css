@@ -1,6 +1,36 @@
-.early-finish-dialog{width:min(470px,100%)}.early-finish-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.early-finish-header h2{margin-top:5px}.early-finish-header>button{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;border:0;border-radius:10px;background:#ece9e1;color:var(--muted);cursor:pointer}.early-finish-dialog>p:not(.eyebrow){margin-top:6px}.early-finish-options{display:grid;gap:9px;margin-top:18px}.early-finish-options>button{display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:11px;width:100%;min-height:66px;padding:12px 14px;border:1px solid #dedbd1;border-radius:14px;background:#f4f1e9;color:var(--ink);text-align:left;cursor:pointer;transition:transform .18s ease,border-color .2s ease,background-color .2s ease}.early-finish-options>button>svg{box-sizing:content-box;padding:9px;border-radius:10px;background:#e2e6d2;color:#56664f}.early-finish-options>button>span{display:flex;flex-direction:column;gap:4px}.early-finish-options b{font-size:12px}.early-finish-options small{color:var(--muted);font-size:10px;line-height:1.45}.early-finish-options>button:hover{border-color:#9da892;background:#eef1e3}.early-finish-options>button:active{transform:scale(.99)}.early-finish-options .attendance-option{background:#ece9e1}.early-finish-options .attendance-option>svg{background:#e8ded1;color:#806653}.early-finish-dialog .early-finish-note{margin-top:14px!important;padding-top:12px;border-top:1px solid var(--line);font-size:9px!important}
-.early-finish-options .paid-overtime-option{background:var(--dark);border-color:var(--dark);color:#f8f6eb}.early-finish-options .paid-overtime-option>svg{background:rgba(255,255,255,.1);color:var(--lime)}.early-finish-options .paid-overtime-option small{color:#c8cbc1}.early-finish-options .paid-overtime-option:hover{border-color:#596255;background:#30382f}.early-finish-pay-form{display:grid;gap:18px;margin-top:18px}.early-finish-pay-form fieldset{border:0;padding:0;margin:0}.early-finish-pay-form legend,.early-finish-fixed-field>span{display:block;margin-bottom:8px;color:var(--muted);font-size:10px;font-weight:600}.early-finish-pay-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;border-radius:12px;background:#ece9e1}.early-finish-pay-tabs button{height:39px;border:0;border-radius:9px;background:transparent;color:#777d74;font-size:10px;font-weight:700;cursor:pointer}.early-finish-pay-tabs button.active{background:var(--dark);color:#f8f6eb}.early-finish-multiplier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.early-finish-multiplier-grid button{height:43px;border:1px solid #ddd9cf;border-radius:11px;background:#f5f2eb;color:var(--ink);font:600 12px 'DM Mono';cursor:pointer}.early-finish-multiplier-grid button.active{border-color:#cbd6a5;background:var(--lime);color:#3f4e3d;box-shadow:0 0 0 2px rgba(95,116,91,.08)}.early-finish-pay-form fieldset>small,.early-finish-fixed-field small{display:block;margin-top:9px;color:var(--muted);font-size:9px;line-height:1.5}.early-finish-fixed-field{display:flex;flex-direction:column}.early-finish-fixed-field input{width:100%;height:45px;border:1px solid #dbd8cf;border-radius:11px;background:#f8f6f0;padding:0 12px 0 30px;outline:none;color:var(--ink)}.early-finish-fixed-field input:focus{border-color:#8e9b80;box-shadow:0 0 0 3px rgba(115,136,103,.1)}.early-finish-pay-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.early-finish-pay-actions button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:42px;border:1px solid #d7d4ca;border-radius:11px;background:#efede6;color:var(--ink);font-size:10px;font-weight:700;cursor:pointer}.early-finish-pay-actions button[type="submit"]{border-color:var(--dark);background:var(--dark);color:#f8f6eb}
+.early-finish-dialog{width:min(470px,100%)}
+.early-finish-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.early-finish-header h2{margin-top:5px}
+.early-finish-header>button{width:44px;height:44px;display:grid;place-items:center;flex:0 0 auto;border:0;border-radius:10px;background:#ece9e1;color:var(--muted);cursor:pointer}
+.early-finish-dialog>p:not(.eyebrow){margin-top:6px}
+.early-finish-options{display:grid;gap:9px;margin-top:18px}
+.early-finish-options>button{width:100%;min-height:66px;display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:11px;padding:12px 14px;border:1px solid #dedbd1;border-radius:14px;background:#f4f1e9;color:var(--ink);text-align:left;cursor:pointer;transition:transform .18s ease,border-color .2s ease,background-color .2s ease}
+.early-finish-options>button>svg{box-sizing:content-box;padding:9px;border-radius:10px;background:#e2e6d2;color:#56664f}
+.early-finish-options>button>span{display:flex;flex-direction:column;gap:4px}
+.early-finish-options b{font-size:12px}
+.early-finish-options small{color:var(--muted);font-size:10px;line-height:1.45}
+.early-finish-options>button:hover{border-color:#9da892;background:#eef1e3}
+.early-finish-options>button:active{transform:scale(.99)}
+.early-finish-options .attendance-option{background:#ece9e1}
+.early-finish-options .attendance-option>svg{background:#e8ded1;color:#806653}
+.early-finish-dialog .early-finish-note{margin-top:14px!important;padding-top:12px;border-top:1px solid var(--line);font-size:9px!important}
+.early-finish-options .paid-overtime-option{border-color:var(--dark);background:var(--dark);color:#f8f6eb}
+.early-finish-options .paid-overtime-option>svg{background:rgba(255,255,255,.1);color:var(--lime)}
+.early-finish-options .paid-overtime-option small{color:#c8cbc1}
+.early-finish-options .paid-overtime-option:hover{border-color:#596255;background:#30382f}
+.early-finish-pay-form{display:grid;gap:18px;margin-top:18px}
+.early-finish-pay-form fieldset{border:0;padding:0;margin:0}
+.early-finish-pay-form legend,.early-finish-fixed-field>span{display:block;margin-bottom:8px;color:var(--muted);font-size:10px;font-weight:600}
+.early-finish-pay-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;border-radius:12px;background:#ece9e1}
+.early-finish-pay-tabs button{min-height:44px;border:0;border-radius:9px;background:transparent;color:#777d74;font-size:10px;font-weight:700;cursor:pointer}
+.early-finish-pay-tabs button.active{background:var(--dark);color:#f8f6eb}
+.early-finish-pay-form fieldset>small,.early-finish-fixed-field small{display:block;margin-top:9px;color:var(--muted);font-size:9px;line-height:1.5}
+.early-finish-fixed-field{display:flex;flex-direction:column}
+.early-finish-fixed-field input{width:100%;height:45px;padding:0 12px 0 30px;border:1px solid #dbd8cf;border-radius:11px;background:#f8f6f0;color:var(--ink);outline:none}
+.early-finish-fixed-field input:focus{border-color:#8e9b80;box-shadow:0 0 0 3px rgba(115,136,103,.1)}
+.early-finish-pay-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.early-finish-pay-actions button{min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #d7d4ca;border-radius:11px;background:#efede6;color:var(--ink);font-size:10px;font-weight:700;cursor:pointer}
+.early-finish-pay-actions button[type="submit"]{border-color:var(--dark);background:var(--dark);color:#f8f6eb}
 .early-finish-error{margin:14px 0 0!important;padding:9px 11px;border-radius:9px;background:#eee1da;color:#985e4b!important;font-size:10px!important;line-height:1.5}
-.early-finish-header>button{width:44px;height:44px}.early-finish-pay-tabs button,.early-finish-multiplier-grid button,.early-finish-pay-actions button{min-height:44px}
 @media(max-width:480px){.early-finish-dialog{padding:20px}.early-finish-options>button{min-height:62px}.early-finish-header h2{font-size:21px}.early-finish-pay-actions{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.early-finish-options>button{transition:none}}

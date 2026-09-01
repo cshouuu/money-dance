@@ -16,6 +16,8 @@ export interface LivingCostHistoryEvent {
 export interface SalaryProfile {
   salary: number
   salaryType: SalaryType
+  /** Calendar day of month used for the payday countdown. */
+  payday: number | null
   workStartTime: string
   workEndTime: string
   breakStartTime: string
@@ -47,6 +49,7 @@ export interface SalaryRates {
 export const DEFAULT_PROFILE: SalaryProfile = {
   salary: 15000,
   salaryType: 'monthly',
+  payday: null,
   workStartTime: '09:00',
   workEndTime: '18:00',
   breakStartTime: '12:00',

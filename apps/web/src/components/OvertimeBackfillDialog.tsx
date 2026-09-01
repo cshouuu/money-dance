@@ -3,10 +3,11 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
 import { createId } from '../lib/id'
-import { OVERTIME_MULTIPLIERS, type CompletedOvertimeInput } from '../lib/overtime'
+import type { CompletedOvertimeInput } from '../lib/overtime'
 import type { OvertimePayMode } from '../types'
 import { useDialogFocus } from './useDialogFocus'
 import { useModalViewport } from './useModalViewport'
+import { OvertimeMultiplierInput } from './OvertimeMultiplierInput'
 import './OvertimeBackfillDialog.css'
 
 interface OvertimeBackfillDialogProps {
@@ -28,7 +29,7 @@ export function OvertimeBackfillDialog({ open, onSave, onCancel }: OvertimeBackf
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
   const [payMode, setPayMode] = useState<OvertimePayMode>('multiplier')
-  const [multiplier, setMultiplier] = useState(1.5)
+  const [multiplier, setMultiplier] = useState('')
   const [fixedAmount, setFixedAmount] = useState('')
   const [error, setError] = useState('')
   const requestIdRef = useRef('')
@@ -43,7 +44,7 @@ export function OvertimeBackfillDialog({ open, onSave, onCancel }: OvertimeBackf
     setStartTime(toLocalDateTimeInput(new Date(now.getTime() - 60 * 60 * 1000)))
     setEndTime(toLocalDateTimeInput(now))
     setPayMode('multiplier')
-    setMultiplier(1.5)
+    setMultiplier('')
     setFixedAmount('')
     setError('')
     savingRef.current = false
@@ -81,7 +82,12 @@ export function OvertimeBackfillDialog({ open, onSave, onCancel }: OvertimeBackf
       }
       payOption = { payMode, fixedAmount: amount }
     } else if (payMode === 'multiplier') {
-      payOption = { payMode, multiplier }
+      const multiplierValue = parseNumberInput(multiplier)
+      if (multiplierValue === null || multiplierValue <= 0) {
+        setError('请输入有效的工资倍率。')
+        return
+      }
+      payOption = { payMode, multiplier: multiplierValue }
     } else {
       payOption = { payMode }
     }
@@ -108,7 +114,7 @@ export function OvertimeBackfillDialog({ open, onSave, onCancel }: OvertimeBackf
       <div className="overtime-backfill-times"><label><span>开始日期与时间</span><input required type="datetime-local" max={nowInput} value={startTime} onChange={event => { setStartTime(event.target.value); setError('') }}/></label><label><span>结束日期与时间</span><input required type="datetime-local" max={nowInput} value={endTime} onChange={event => { setEndTime(event.target.value); setError('') }}/></label></div>
 
       <fieldset className="overtime-backfill-pay"><legend>这段加班怎么算</legend><div className="overtime-backfill-pay-tabs"><button type="button" className={payMode === 'unpaid' ? 'active' : ''} aria-pressed={payMode === 'unpaid'} onClick={() => { setPayMode('unpaid'); setError('') }}><Ban size={14}/>无加班费</button><button type="button" className={payMode === 'multiplier' ? 'active' : ''} aria-pressed={payMode === 'multiplier'} onClick={() => { setPayMode('multiplier'); setError('') }}>工资倍率</button><button type="button" className={payMode === 'fixed' ? 'active' : ''} aria-pressed={payMode === 'fixed'} onClick={() => { setPayMode('fixed'); setError('') }}><BadgeDollarSign size={14}/>固定金额</button></div></fieldset>
-      {payMode === 'multiplier' && <fieldset className="overtime-multiplier-field"><legend>选择工资倍率</legend><div className="overtime-multiplier-grid">{OVERTIME_MULTIPLIERS.map(value => <button key={value} type="button" className={multiplier === value ? 'active' : ''} aria-pressed={multiplier === value} onClick={() => setMultiplier(value)}>{value}倍</button>)}</div><p>补记金额按你当前设置的工资秒薪计算；历史工资不同可改用固定金额。</p></fieldset>}
+      {payMode === 'multiplier' && <OvertimeMultiplierInput value={multiplier} onValueChange={value => { setMultiplier(value); setError('') }} hint="补记金额按你当前设置的工资秒薪计算；历史工资不同可改用固定金额。"/>}
       {payMode === 'fixed' && <label className="overtime-fixed-field"><span>整段固定加班费</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} onKeyDown={preventInvalidNumberKey} onChange={event => { setFixedAmount(normalizeDecimalInput(event.target.value)); setError('') }} placeholder="0.00"/></div></label>}
       {error && <p className="overtime-dialog-error" role="alert">{error}</p>}
       <div className="overtime-dialog-actions"><button type="button" className="dialog-cancel" onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm"><History size={16}/>保存补记</button></div>
