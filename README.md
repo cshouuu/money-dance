@@ -6,7 +6,7 @@
 
 实时薪资 · 心愿清单 · 摸鱼 · 加班 · 账本 · 薪苦日历 · 物品持有成本
 
-[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android v0.2.26（Cloudflare R2）](https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.26.apk) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
+[🌐 在线体验](https://money-dance-6gl.pages.dev/) · [📱 Android（蒲公英）](https://www.pgyer.com/moneydance) · [📦 版本记录](https://github.com/cshouuu/money-dance/releases) · [🛠️ GitHub Actions](https://github.com/cshouuu/money-dance/actions)
 
 ![CI](https://github.com/cshouuu/money-dance/actions/workflows/ci.yml/badge.svg)
 ![Android APK](https://github.com/cshouuu/money-dance/actions/workflows/build-android-apk.yml/badge.svg)
@@ -24,7 +24,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.2.26**
+**当前稳定版：v0.2.27**
 
 ## 当前功能
 
@@ -40,7 +40,7 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | ⚡ 意外收支 | 记录不会改变工资速度、但需要进入账本统计的临时收入或花费 |
 | 📦 我的好物 | 记录已购买物品及持有时间，持续观察每小时使用成本 |
 | 📱 多端使用 | 支持 Web、iPhone / iPad PWA 和 Android APK |
-| 🔄 Android 更新 | 应用内检查新版本，通过 Cloudflare R2 下载 APK，并由 Android 系统确认覆盖安装 |
+| 🔄 Android 更新 | 应用内通过蒲公英检查新版并打开公开下载页，由 Android 系统确认覆盖安装 |
 | 🧩 Android 桌面组件 | 紧凑 4×1 组件展示实时收益，并提供摸鱼 / 加班操作 |
 
 ## 关键业务规则
@@ -94,11 +94,11 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 ### Android
 
-国内用户推荐通过 Cloudflare R2 下载当前正式版：
+国内用户推荐通过蒲公英公开页下载当前正式版：
 
-**https://money-dance-6gl.pages.dev/download/releases/money-dance-v0.2.26.apk**
+[**https://www.pgyer.com/moneydance**](https://www.pgyer.com/moneydance)
 
-也可以在 [GitHub Releases](https://github.com/cshouuu/money-dance/releases/latest) 查看版本说明和校验文件。
+也可以在 [GitHub Releases](https://github.com/cshouuu/money-dance/releases/latest) 查看归档版本、版本说明和校验文件。
 
 正式 APK 使用固定 Release keystore 签名。安装固定签名版本后，后续版本可以直接覆盖升级，无需卸载。应用会自动检查更新，也可以在「我的 → 应用更新」中手动检查。
 
@@ -231,16 +231,16 @@ Tag v0.2.26
    ↓
 生成并校验签名 APK + SHA-256
    ↓
-上传 APK 与 latest.json 到 Cloudflare R2
+上传签名 APK 到蒲公英并验证公开下载页
    ↓
-通过 Cloudflare Pages 验证清单版本与 APK 下载响应
+同步 APK 与 latest.json 到 Cloudflare R2，兼容旧版客户端
    ↓
 创建 GitHub Release 并上传 APK、SHA-256 与更新清单
    ↓
 已安装的 MoneyDance 检测到新版本
 ~~~
 
-R2 最多保留最近 10 个正式 APK，旧版本由发布流水线自动清理。
+蒲公英是新版客户端的主分发源。R2 最多保留最近 10 个正式 APK，作为旧版客户端迁移通道；GitHub Releases 保留完整归档。
 
 ### 发布所需 Secrets
 
@@ -251,12 +251,17 @@ Android 固定签名：
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-Cloudflare R2：
+蒲公英发布：
+
+- `PGYER_API_KEY`
+- 可选仓库变量 `PGYER_APP_SHORTCUT`；未配置时使用 `moneydance`
+
+Cloudflare R2（旧版兼容）：
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 
-缺少签名或 R2 发布凭据时，正式发布会失败，避免产生无法覆盖升级或无法下载的错误版本。
+缺少签名、蒲公英或 R2 发布凭据时，正式发布会失败，避免产生无法覆盖升级或部分客户端无法下载的错误版本。
 
 ## 部署
 
@@ -265,7 +270,7 @@ Cloudflare R2：
 - Build command：`npm run build -w @salary-flow/core && npm run build -w @salary-flow/web`
 - Output：`apps/web/dist`
 - Production：`https://money-dance-6gl.pages.dev/`
-- R2 bucket：`money-dance-releases`
+- Legacy R2 bucket：`money-dance-releases`
 
 ### API — Vercel
 
@@ -296,14 +301,14 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 - 任何薪资、出勤、跨日和账本逻辑变更，都需要同时覆盖本地日期与历史数据场景。
 - 移动端弹窗必须锁定页面滚动和底部导航，支持点击遮罩关闭，且新增 / 编辑表单不应默认唤起输入法。
 - 破坏性操作必须有语义明确的二次确认。
-- 发布 Android 前必须确认 Tag 指向最新 `main`，并等待 APK、R2、更新清单和 GitHub Release 全部验证成功。
+- 发布 Android 前必须确认 Tag 指向最新 `main`，并等待 APK、蒲公英公开页、R2 兼容镜像、更新清单和 GitHub Release 全部验证成功。
 
 ## Roadmap
 
 - [x] 实时薪资、固定 / 弹性作息和生活成本
 - [x] 心愿清单、摸鱼、加班、账本与薪苦日历
 - [x] 固定工作周、大小周和历史收入重算
-- [x] Android 固定签名、应用内更新和 Cloudflare R2 分发
+- [x] Android 固定签名、应用内更新和蒲公英分发
 - [x] 摸鱼 / 加班五级永久成就与勋章点亮
 - [x] Android 4×1 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作
 - [x] 中国大陆节假日 / 调休补班识别与半天请假

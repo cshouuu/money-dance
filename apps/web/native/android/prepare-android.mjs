@@ -16,6 +16,11 @@ const versionName = process.env.ANDROID_VERSION_NAME || '0.1.0-dev'
 const versionCodeRaw = Number.parseInt(process.env.ANDROID_VERSION_CODE || '1', 10)
 const versionCode = Number.isFinite(versionCodeRaw) && versionCodeRaw > 0 ? versionCodeRaw : 1
 const releaseSigning = process.env.ANDROID_RELEASE_SIGNING === 'true'
+const pgyerAppShortcut = process.env.PGYER_APP_SHORTCUT || 'moneydance'
+
+if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
+  throw new Error('PGYER_APP_SHORTCUT must use 4-64 letters, numbers, underscores, or hyphens')
+}
 
 const nativeJavaFiles = [
   'AppUpdaterPlugin.java',
@@ -40,7 +45,18 @@ const nativeResourceFiles = [
 
 await mkdir(javaRoot, { recursive: true })
 for (const file of nativeJavaFiles) {
-  await copyFile(join(here, file), join(javaRoot, file))
+  const sourcePath = join(here, file)
+  const destinationPath = join(javaRoot, file)
+  if (file === 'AppUpdaterPlugin.java') {
+    const source = await readFile(sourcePath, 'utf8')
+    const prepared = source.replace('__PGYER_APP_SHORTCUT__', pgyerAppShortcut)
+    if (prepared === source || prepared.includes('__PGYER_APP_SHORTCUT__')) {
+      throw new Error('Unable to inject PGYER_APP_SHORTCUT into AppUpdaterPlugin.java')
+    }
+    await writeFile(destinationPath, prepared)
+  } else {
+    await copyFile(sourcePath, destinationPath)
+  }
 }
 for (const file of nativeResourceFiles) {
   const destination = join(appRoot, 'src/main/res', file)
@@ -201,9 +217,12 @@ await mkdir(dirname(api27StylesPath), { recursive: true })
 await writeFile(api27StylesPath, api27Styles)
 
 let manifest = await readFile(manifestPath, 'utf8')
+manifest = manifest.replace(
+  /\s*<uses-permission\s+android:name="android\.permission\.REQUEST_INSTALL_PACKAGES"\s*\/>\s*/g,
+  '\n',
+)
 for (const permission of [
   'android.permission.INTERNET',
-  'android.permission.REQUEST_INSTALL_PACKAGES',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_SPECIAL_USE',
   'android.permission.POST_NOTIFICATIONS',
@@ -270,4 +289,4 @@ if (releaseSigning) {
 }
 
 await writeFile(gradlePath, gradle)
-console.log(`Prepared Android project: versionName=${versionName}, versionCode=${versionCode}, releaseSigning=${releaseSigning}`)
+console.log(`Prepared Android project: versionName=${versionName}, versionCode=${versionCode}, releaseSigning=${releaseSigning}, pgyerShortcut=${pgyerAppShortcut}`)

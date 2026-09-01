@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { checkForAndroidUpdate, installAndroidRelease, isAndroidNative, type AndroidRelease } from '../lib/appUpdate'
+import { checkForAndroidUpdate, isAndroidNative, openPgyerReleasePage, type AndroidRelease } from '../lib/appUpdate'
 import { ConfirmDialog } from './ConfirmDialog'
 import './AppUpdate.css'
 
@@ -35,12 +35,8 @@ export function AppUpdatePrompt() {
     if (!release) return
     setOpen(false)
     try {
-      const result = await installAndroidRelease(release)
-      if (result.status === 'permission_required') {
-        setNotice('请开启“允许来自此来源”，返回 Money Dance 后到“我的 → 应用更新”再点一次更新。')
-      } else {
-        setNotice('新版 APK 已开始下载，完成后 Android 会弹出系统安装确认。')
-      }
+      await openPgyerReleasePage()
+      setNotice('已打开蒲公英下载页，请在页面中点击安装。')
     } catch {
       setNotice('启动更新失败，请稍后到“我的 → 应用更新”重试。')
     }
@@ -50,8 +46,8 @@ export function AppUpdatePrompt() {
     <ConfirmDialog
       open={open}
       title="Money Dance 有新版"
-      message={release ? `${release.tag} 已经发布。可以现在下载，安装时 Android 会再让你确认一次。` : undefined}
-      confirmLabel="立即更新"
+      message={release ? `${release.tag} 已经发布。将前往蒲公英下载，安装时 Android 会再让你确认一次。` : undefined}
+      confirmLabel="前往蒲公英"
       cancelLabel="稍后"
       onConfirm={update}
       onCancel={() => setOpen(false)}

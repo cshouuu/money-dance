@@ -124,11 +124,23 @@ jobs:
           keyAlias=money-dance-ci
           keyPassword=ci-only-password
           EOF
+      - name: Validate Pgyer updater configuration
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$PGYER_APP_SHORTCUT" =~ ^[A-Za-z0-9_-]{4,64}$ ]]; then
+            echo "Repository variable PGYER_APP_SHORTCUT is missing or invalid" >&2
+            exit 1
+          fi
       - name: Apply Android native updater and version
         env:
           ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
           ANDROID_RELEASE_SIGNING: 'true'
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -138,6 +150,8 @@ jobs:
           second_digest="$(find apps/web/android/app/src/main apps/web/android/app/build.gradle -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
           test "$first_digest" = "$second_digest"
       - name: Verify Android native injection
+        env:
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -160,11 +174,18 @@ jobs:
           test -f "$API27_STYLES"
           test -f "$WIDGET_LAYOUT"
 
-          for source in AppUpdaterPlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider; do
+          test -f "$NATIVE_ROOT/AppUpdaterPlugin.java"
+          test -f "$JAVA_ROOT/AppUpdaterPlugin.java"
+          for source in WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider; do
             test -f "$NATIVE_ROOT/${source}.java"
             test -f "$JAVA_ROOT/${source}.java"
             cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
           done
+
+          EXPECTED_PGYER_SHORTCUT="${PGYER_APP_SHORTCUT:-moneydance}"
+          grep -Fq 'private static final String PGYER_APP_SHORTCUT = "__PGYER_APP_SHORTCUT__";' "$NATIVE_ROOT/AppUpdaterPlugin.java"
+          grep -Fq "private static final String PGYER_APP_SHORTCUT = \"${EXPECTED_PGYER_SHORTCUT}\";" "$JAVA_ROOT/AppUpdaterPlugin.java"
+          ! grep -Fq '__PGYER_APP_SHORTCUT__' "$JAVA_ROOT/AppUpdaterPlugin.java"
 
           test -f "$PROVIDER_TEMPLATE"
           test -f "$PROVIDER_XML"
@@ -182,6 +203,7 @@ jobs:
           grep -Fq 'android:name="android.appwidget.provider"' "$MANIFEST"
           grep -Fq 'android:resource="@xml/money_dance_widget_info"' "$MANIFEST"
           grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
+          ! grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' "$MANIFEST"
           grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
           grep -Fq 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$MANIFEST"
           grep -Fq '<!-- moneyDanceSystemBars -->' "$STYLES"
@@ -233,6 +255,7 @@ jobs:
           }
           console.log('Native plugin registration order verified')
           NODE
+          node --check apps/web/scripts/publish-pgyer.mjs
       - name: Run Android checks and build APKs
         working-directory: apps/web/android
         shell: bash
@@ -282,7 +305,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: android-apk
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: write
@@ -305,6 +328,50 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name money-dance-android-apk \
             --dir release
+      - name: Validate Pgyer publishing credentials
+        env:
+          PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$PGYER_API_KEY"
+          if [[ ! "$PGYER_APP_SHORTCUT" =~ ^[A-Za-z0-9_-]{4,64}$ ]]; then
+            echo "Repository variable PGYER_APP_SHORTCUT is missing or invalid" >&2
+            exit 1
+          fi
+      - name: Publish signed APK to Pgyer
+        id: pgyer
+        env:
+          PGYER_API_KEY: ${{ secrets.PGYER_API_KEY }}
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGYER_EXPECTED_VERSION="${GITHUB_REF_NAME#v}"
+          export PGYER_APK_PATH="release/money-dance-${GITHUB_REF_NAME}.apk"
+          export PGYER_UPDATE_DESCRIPTION="Money Dance Android release ${GITHUB_REF_NAME}"
+          node apps/web/scripts/publish-pgyer.mjs
+      - name: Verify Pgyer public release page
+        env:
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION_REGEX="${VERSION//./[.]}"
+          URL="https://www.pgyer.com/${PGYER_APP_SHORTCUT}"
+          for attempt in {1..12}; do
+            HTML="$(curl -fsS --max-time 20 -H 'Accept-Language: zh-CN' "$URL" || true)"
+            if printf '%s' "$HTML" | grep -Eiq "Money[[:space:]]*Dance" \
+              && printf '%s' "$HTML" | grep -Eiq "(版本|Version)[[:space:]]*[：:][[:space:]]*${VERSION_REGEX}"; then
+              echo "Pgyer public page verified for version ${VERSION}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Pgyer public page did not expose version ${VERSION} after publishing" >&2
+          exit 1
       - name: Create update manifests
         shell: bash
         run: |
@@ -344,7 +411,7 @@ jobs:
           EOF
 
           node -e "JSON.parse(require('fs').readFileSync('release/money-dance-update.json','utf8')); JSON.parse(require('fs').readFileSync('release/r2-latest.json','utf8')); console.log('update manifests valid')"
-      - name: Validate R2 publishing credentials
+      - name: Validate legacy R2 publishing credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -352,7 +419,7 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
-      - name: Publish APK and latest manifest to R2
+      - name: Publish legacy APK and manifest to R2
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -413,7 +480,7 @@ jobs:
             --content-type application/json \
             --cache-control 'no-store' \
             --remote --force
-      - name: Verify R2 delivery through Cloudflare Pages
+      - name: Verify legacy R2 delivery through Cloudflare Pages
         shell: bash
         run: |
           set -euo pipefail
@@ -428,7 +495,7 @@ jobs:
             exit 1
           fi
           echo "R2 APK delivery verified with HTTP $STATUS"
-      - name: Publish GitHub Release after R2 verification
+      - name: Publish archival GitHub Release after mirror verification
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

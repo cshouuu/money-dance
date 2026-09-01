@@ -1,18 +1,9 @@
 package com.cshouuu.moneydance;
 
-import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.pm.PackageInfo;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
-import android.provider.Settings;
-
-import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -20,49 +11,75 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import org.json.JSONObject;
-
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
-    private static final String APK_MIME = "application/vnd.android.package-archive";
-    private static final String GITHUB_RELEASE_HOST = "github.com";
-    private static final String GITHUB_RELEASE_PATH_PREFIX = "/cshouuu/money-dance/releases/download/";
-    private static final String R2_RELEASE_HOST = "money-dance-6gl.pages.dev";
-    private static final String R2_RELEASE_PATH_PREFIX = "/download/releases/";
-    private static final String R2_UPDATE_MANIFEST_URL = "https://money-dance-6gl.pages.dev/download/latest.json";
-    private static final String GITHUB_UPDATE_MANIFEST_URL = "https://github.com/cshouuu/money-dance/releases/latest/download/money-dance-update.json";
+    private static final String PGYER_HOST = "www.pgyer.com";
+    private static final String PGYER_APP_SHORTCUT = "__PGYER_APP_SHORTCUT__";
+    private static final String PGYER_RELEASE_PAGE_URL = "https://www.pgyer.com/" + PGYER_APP_SHORTCUT;
     private static final int HTTP_TIMEOUT_MS = 12000;
-    private static final int MAX_REDIRECTS = 6;
+    private static final int MAX_REDIRECTS = 4;
+    private static final int MAX_PAGE_CHARS = 1_000_000;
+    private static final Pattern APP_NAME_PATTERN = Pattern.compile("Money\\s*Dance", Pattern.CASE_INSENSITIVE);
+    private static final Pattern VERSION_PATTERN = Pattern.compile(
+            "(?:版本|Version)\\s*[：:]\\s*(\\d+\\.\\d+\\.\\d+)",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern META_VERSION_PATTERN = Pattern.compile(
+            "Money\\s*Dance\\s+(\\d+\\.\\d+\\.\\d+)\\s*Build",
+            Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern UPDATED_PATTERN = Pattern.compile(
+            "(?:更新时间|Updated)\\s*[：:]\\s*(\\d{4}-\\d{2}-\\d{2})",
+            Pattern.CASE_INSENSITIVE
+    );
 
-    private boolean isTrustedReleaseUri(Uri uri) {
-        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null || uri.getPath() == null) {
-            return false;
+    private static final class ReleaseInfo {
+        final String version;
+        final String publishedAt;
+
+        ReleaseInfo(String version, String publishedAt) {
+            this.version = version;
+            this.publishedAt = publishedAt;
         }
-        boolean githubRelease = GITHUB_RELEASE_HOST.equalsIgnoreCase(uri.getHost())
-                && uri.getPath().startsWith(GITHUB_RELEASE_PATH_PREFIX);
-        boolean r2Release = R2_RELEASE_HOST.equalsIgnoreCase(uri.getHost())
-                && uri.getPath().startsWith(R2_RELEASE_PATH_PREFIX);
-        return githubRelease || r2Release;
+    }
+
+    private boolean isTrustedPgyerUrl(URL url) {
+        int port = url.getPort();
+        return "https".equalsIgnoreCase(url.getProtocol())
+                && PGYER_HOST.equalsIgnoreCase(url.getHost())
+                && (port == -1 || port == 443);
     }
 
     private String readBody(InputStream input) throws Exception {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"));
-        StringBuilder body = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) body.append(line);
-        reader.close();
-        return body.toString();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(input, "UTF-8"))) {
+            StringBuilder body = new StringBuilder();
+            char[] buffer = new char[4096];
+            int read;
+            while ((read = reader.read(buffer)) != -1) {
+                if (body.length() + read > MAX_PAGE_CHARS) {
+                    throw new IllegalStateException("PGYER_PAGE_TOO_LARGE");
+                }
+                body.append(buffer, 0, read);
+            }
+            return body.toString();
+        }
     }
 
-    private JSONObject fetchManifestFrom(String manifestUrl) throws Exception {
-        URL current = new URL(manifestUrl);
+    private String fetchReleasePage() throws Exception {
+        URL current = new URL(PGYER_RELEASE_PAGE_URL);
         for (int redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+            if (!isTrustedPgyerUrl(current)) {
+                throw new SecurityException("PGYER_UNTRUSTED_REDIRECT");
+            }
+
             HttpURLConnection connection = null;
             try {
                 connection = (HttpURLConnection) current.openConnection();
@@ -70,7 +87,8 @@ public class AppUpdaterPlugin extends Plugin {
                 connection.setConnectTimeout(HTTP_TIMEOUT_MS);
                 connection.setReadTimeout(HTTP_TIMEOUT_MS);
                 connection.setInstanceFollowRedirects(false);
-                connection.setRequestProperty("Accept", "application/json");
+                connection.setRequestProperty("Accept", "text/html");
+                connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
                 connection.setRequestProperty("User-Agent", "Money-Dance-Android");
                 connection.setRequestProperty("Cache-Control", "no-cache");
 
@@ -78,42 +96,38 @@ public class AppUpdaterPlugin extends Plugin {
                 if (status >= 300 && status < 400) {
                     String location = connection.getHeaderField("Location");
                     if (location == null || location.isEmpty()) {
-                        throw new IllegalStateException("UPDATE_MANIFEST_REDIRECT_WITHOUT_LOCATION");
+                        throw new IllegalStateException("PGYER_REDIRECT_WITHOUT_LOCATION");
                     }
-                    URL next = new URL(current, location);
-                    if (!"https".equalsIgnoreCase(next.getProtocol())) {
-                        throw new SecurityException("UPDATE_MANIFEST_UNSAFE_REDIRECT");
-                    }
-                    current = next;
+                    current = new URL(current, location);
                     continue;
                 }
                 if (status < 200 || status >= 300) {
-                    throw new IllegalStateException("UPDATE_MANIFEST_HTTP_" + status + "_HOST_" + current.getHost());
+                    throw new IllegalStateException("PGYER_HTTP_" + status);
                 }
-                return new JSONObject(readBody(connection.getInputStream()));
+                return readBody(connection.getInputStream());
             } finally {
                 if (connection != null) connection.disconnect();
             }
         }
-        throw new IllegalStateException("UPDATE_MANIFEST_TOO_MANY_REDIRECTS");
+        throw new IllegalStateException("PGYER_TOO_MANY_REDIRECTS");
     }
 
-    private JSONObject fetchUpdateManifest() throws Exception {
-        Exception r2Error = null;
-        try {
-            return fetchManifestFrom(R2_UPDATE_MANIFEST_URL);
-        } catch (Exception error) {
-            r2Error = error;
+    private ReleaseInfo parseReleasePage(String page) {
+        if (!APP_NAME_PATTERN.matcher(page).find()) {
+            throw new IllegalStateException("PGYER_APP_MISMATCH");
         }
 
-        try {
-            return fetchManifestFrom(GITHUB_UPDATE_MANIFEST_URL);
-        } catch (Exception githubError) {
-            throw new IllegalStateException(
-                    "R2_" + errorMessage(r2Error) + "; GITHUB_" + errorMessage(githubError),
-                    githubError
-            );
+        Matcher versionMatcher = VERSION_PATTERN.matcher(page);
+        if (!versionMatcher.find()) {
+            versionMatcher = META_VERSION_PATTERN.matcher(page);
+            if (!versionMatcher.find()) {
+                throw new IllegalStateException("PGYER_PAGE_FORMAT_CHANGED");
+            }
         }
+
+        Matcher updatedMatcher = UPDATED_PATTERN.matcher(page);
+        String publishedAt = updatedMatcher.find() ? updatedMatcher.group(1) : "";
+        return new ReleaseInfo(versionMatcher.group(1), publishedAt);
     }
 
     private String errorMessage(Exception error) {
@@ -141,132 +155,34 @@ public class AppUpdaterPlugin extends Plugin {
     public void getLatestRelease(PluginCall call) {
         new Thread(() -> {
             try {
-                JSONObject manifest = fetchUpdateManifest();
-                String tag = manifest.optString("tag", "");
-                String version = manifest.optString("version", "");
-                String apkName = manifest.optString("apkName", "");
-                String apkUrl = manifest.optString("apkUrl", "");
-
-                if (tag.isEmpty() || version.isEmpty() || apkName.isEmpty() || apkUrl.isEmpty()) {
-                    call.reject("Invalid update manifest: REQUIRED_FIELDS_MISSING");
-                    return;
-                }
-                if (!apkName.matches("[A-Za-z0-9._-]+\\.apk") || !isTrustedReleaseUri(Uri.parse(apkUrl))) {
-                    call.reject("Invalid update manifest: UNTRUSTED_APK_METADATA");
-                    return;
-                }
-
+                ReleaseInfo release = parseReleasePage(fetchReleasePage());
+                String tag = "v" + release.version;
                 JSObject result = new JSObject();
                 result.put("found", true);
                 result.put("tag", tag);
-                result.put("version", version);
-                result.put("title", manifest.optString("title", "Money Dance " + tag));
-                result.put("notes", manifest.optString("notes", ""));
-                result.put("apkName", apkName);
-                result.put("apkUrl", apkUrl);
-                result.put("htmlUrl", manifest.optString("htmlUrl", "https://github.com/cshouuu/money-dance/releases/latest"));
-                result.put("publishedAt", manifest.optString("publishedAt", ""));
+                result.put("version", release.version);
+                result.put("title", "Money Dance " + tag);
+                result.put("notes", "请在蒲公英下载页查看本次更新说明。");
+                result.put("releasePageUrl", PGYER_RELEASE_PAGE_URL);
+                result.put("publishedAt", release.publishedAt);
                 call.resolve(result);
             } catch (Exception error) {
                 call.reject("UPDATE_CHECK_FAILED: " + errorMessage(error), error);
             }
-        }, "money-dance-update-check").start();
+        }, "money-dance-pgyer-update-check").start();
     }
 
     @PluginMethod
-    public void downloadAndInstall(PluginCall call) {
-        String url = call.getString("url", "");
-        String fileName = call.getString("fileName", "money-dance-update.apk");
-        Uri uri = Uri.parse(url);
-
-        if (!isTrustedReleaseUri(uri)) {
-            call.reject("Untrusted update URL");
-            return;
-        }
-        if (!fileName.matches("[A-Za-z0-9._-]+\\.apk")) {
-            call.reject("Invalid APK file name");
-            return;
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                && !getContext().getPackageManager().canRequestPackageInstalls()) {
-            Intent settingsIntent = new Intent(
-                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:" + getContext().getPackageName())
-            );
-            settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(settingsIntent);
+    public void openReleasePage(PluginCall call) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(PGYER_RELEASE_PAGE_URL));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
             JSObject result = new JSObject();
-            result.put("status", "permission_required");
+            result.put("status", "opened");
             call.resolve(result);
-            return;
+        } catch (Exception error) {
+            call.reject("OPEN_PGYER_FAILED: " + errorMessage(error), error);
         }
-
-        DownloadManager manager = (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
-        if (manager == null) {
-            call.reject("Download manager unavailable");
-            return;
-        }
-
-        DownloadManager.Request request = new DownloadManager.Request(uri)
-                .setTitle("Money Dance 更新")
-                .setDescription("正在下载 " + fileName)
-                .setMimeType(APK_MIME)
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(getContext(), Environment.DIRECTORY_DOWNLOADS, fileName);
-
-        long downloadId = manager.enqueue(request);
-        Context context = getContext().getApplicationContext();
-        BroadcastReceiver receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context receiverContext, Intent intent) {
-                if (!DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) return;
-                long completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L);
-                if (completedId != downloadId) return;
-
-                int status;
-                try (Cursor cursor = manager.query(new DownloadManager.Query().setFilterById(downloadId))) {
-                    if (cursor == null || !cursor.moveToFirst()) return;
-                    int statusColumn = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
-                    if (statusColumn < 0) return;
-                    status = cursor.getInt(statusColumn);
-                }
-
-                // Keep listening when a spoofed/early broadcast arrives while
-                // DownloadManager still owns an unfinished request.
-                if (status != DownloadManager.STATUS_SUCCESSFUL) {
-                    if (status != DownloadManager.STATUS_FAILED) return;
-                    try {
-                        context.unregisterReceiver(this);
-                    } catch (Exception ignored) {
-                    }
-                    return;
-                }
-
-                Uri apkUri = manager.getUriForDownloadedFile(downloadId);
-                try {
-                    context.unregisterReceiver(this);
-                } catch (Exception ignored) {
-                }
-                if (apkUri == null) return;
-
-                Intent installIntent = new Intent(Intent.ACTION_VIEW)
-                        .setDataAndType(apkUri, APK_MIME)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                context.startActivity(installIntent);
-            }
-        };
-
-        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-        // DownloadManager is a system component outside this app process, so
-        // the receiver must be exported. The callback validates action, ID,
-        // final status and the app-scoped download URI before installing.
-        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED);
-
-        JSObject result = new JSObject();
-        result.put("status", "downloading");
-        result.put("downloadId", downloadId);
-        call.resolve(result);
     }
 }
