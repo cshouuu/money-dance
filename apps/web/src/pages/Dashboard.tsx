@@ -1,5 +1,5 @@
 import { calculateRates, formatDuration } from '@salary-flow/core'
-import { ArrowUpRight, BarChart3, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
@@ -409,7 +409,7 @@ export function Dashboard() {
 
     <div className="section-title dashboard-performance-title"><div><p className="eyebrow">MONTHLY SCORE</p><h2>本月战绩</h2></div><span>{now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}</span></div>
     <article className="dashboard-performance-card">
-      <div className="dashboard-performance-primary"><span className="metric-icon"><BarChart3 size={19} /></span><div><small>本月累计收入</small><strong>{money(monthlyStats.income)}</strong><span>本月预计 {money(monthlyStats.expectedIncome)}</span></div></div>
+      <div className="dashboard-performance-primary"><div><small>本月累计收入</small><strong>{money(monthlyStats.income)}</strong><span>本月预计 {money(monthlyStats.expectedIncome)}</span></div></div>
       <div className="dashboard-performance-progress">
         <div><span>计划工时进度</span><strong>{(monthlyStats.progress * 100).toFixed(0)}%</strong></div>
         <div className="dashboard-performance-track" role="progressbar" aria-label="本月计划工时进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(monthlyStats.progress * 100)}><i style={{ width: `${monthlyStats.progress * 100}%` }} /></div>
