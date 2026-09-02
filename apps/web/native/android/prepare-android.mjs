@@ -46,6 +46,42 @@ const nativeResourceFiles = [
   'xml/money_dance_widget_square_info.xml',
 ]
 
+// RemoteViews is inflated by the launcher in another process and rejects view
+// classes outside Android's documented allowlist. Validate the source layouts
+// before copying them so an unsupported spacer or custom view cannot ship as a
+// launcher-level "Problem loading widget" failure.
+const remoteViewsLayoutFiles = new Set([
+  'layout/money_dance_widget.xml',
+  'layout/money_dance_widget_square.xml',
+])
+const supportedRemoteViewsTags = new Set([
+  'AdapterViewFlipper',
+  'AnalogClock',
+  'Button',
+  'Chronometer',
+  'FrameLayout',
+  'GridLayout',
+  'GridView',
+  'ImageButton',
+  'ImageView',
+  'LinearLayout',
+  'ListView',
+  'ProgressBar',
+  'RelativeLayout',
+  'StackView',
+  'TextClock',
+  'TextView',
+  'ViewFlipper',
+])
+
+function validateRemoteViewsLayout(file, source) {
+  const tags = [...source.matchAll(/<\s*([A-Za-z][\w.]*)\b/g)].map(match => match[1])
+  const unsupported = [...new Set(tags.filter(tag => !supportedRemoteViewsTags.has(tag)))]
+  if (unsupported.length > 0) {
+    throw new Error(`${file} contains unsupported RemoteViews tags: ${unsupported.join(', ')}`)
+  }
+}
+
 await mkdir(javaRoot, { recursive: true })
 for (const file of nativeJavaFiles) {
   const sourcePath = join(here, file)
@@ -62,9 +98,13 @@ for (const file of nativeJavaFiles) {
   }
 }
 for (const file of nativeResourceFiles) {
+  const source = join(here, 'res', file)
   const destination = join(appRoot, 'src/main/res', file)
+  if (remoteViewsLayoutFiles.has(file)) {
+    validateRemoteViewsLayout(file, await readFile(source, 'utf8'))
+  }
   await mkdir(dirname(destination), { recursive: true })
-  await copyFile(join(here, 'res', file), destination)
+  await copyFile(source, destination)
 }
 
 await writeFile(join(javaRoot, 'MainActivity.java'), `package com.cshouuu.moneydance;
