@@ -727,6 +727,7 @@ describe('official holiday and half-day attendance salary entries', () => {
     ...profile,
     salary: 2175,
     salaryType: 'monthly' as const,
+    monthlyRateBasis: 'average' as const,
     monthlyWorkDays: 21.75,
   }
 

@@ -1,6 +1,6 @@
-import { DEFAULT_PROFILE, type LivingCostHistoryEvent, type LivingCostHistoryMode, type SalaryProfile } from '@salary-flow/core'
-import { getWeekStartDateValue } from './attendance'
-import { toLocalDateValue } from './form'
+import { DEFAULT_PROFILE, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
+import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
+import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 
 export function normalizeLivingCostMode(value: unknown): SalaryProfile['livingCostMode'] {
@@ -9,6 +9,31 @@ export function normalizeLivingCostMode(value: unknown): SalaryProfile['livingCo
 
 export function normalizePayday(value: unknown): SalaryProfile['payday'] {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31 ? value : null
+}
+
+export function normalizePaydayAdjustment(value: unknown, fallback: PaydayAdjustment = 'none'): PaydayAdjustment {
+  return value === 'previous-workday' || value === 'next-workday' || value === 'none' ? value : fallback
+}
+
+export function normalizeMonthlyRateBasis(value: unknown, fallback: SalaryProfile['monthlyRateBasis'] = 'average'): SalaryProfile['monthlyRateBasis'] {
+  return value === 'actual-calendar' || value === 'average' ? value : fallback
+}
+
+export function normalizeSalaryDeductions(value: unknown): SalaryDeduction[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object') return []
+    const raw = candidate as Partial<SalaryDeduction>
+    const type = raw.type === 'percentage' || raw.type === 'fixed' ? raw.type : null
+    if (!type || typeof raw.value !== 'number' || !Number.isFinite(raw.value) || raw.value < 0) return []
+    return [{
+      id: typeof raw.id === 'string' && raw.id.trim() ? raw.id : `deduction-${index + 1}`,
+      name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 30) : `扣除项 ${index + 1}`,
+      type,
+      value: type === 'percentage' ? Math.min(100, raw.value) : raw.value,
+      enabled: raw.enabled !== false,
+    }]
+  })
 }
 
 function normalizeLivingCostHistoryMode(value: unknown): LivingCostHistoryMode | null {
@@ -81,14 +106,22 @@ export function livingCostConfigurationBeforeDate(profile: SalaryProfile, date: 
 }
 
 /** Returns the rate profile that was in force for a local business date. */
-export function salaryProfileForBusinessDate(profile: SalaryProfile, date: string): SalaryProfile {
+export function salaryProfileForBusinessDate(
+  profile: SalaryProfile,
+  date: string,
+  attendanceRecords = loadAttendanceRecords(),
+  holidaySettings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(date)),
+): SalaryProfile {
   const configuration = livingCostConfigurationForDate(profile, date)
-  return {
+  const datedProfile: SalaryProfile = {
     ...profile,
     includeLivingCost: configuration.mode !== 'off',
     livingCostMode: configuration.mode === 'daily-ledger' ? 'daily-ledger' : 'deduct',
     monthlyLivingCost: configuration.monthlyAmount,
   }
+  if (datedProfile.monthlyRateBasis !== 'actual-calendar') return datedProfile
+  const paidDays = getMonthlyPaidDayCount(datedProfile, toLocalDateTime(date), attendanceRecords, holidaySettings)
+  return paidDays > 0 ? { ...datedProfile, monthlyWorkDays: paidDays } : datedProfile
 }
 
 function currentLivingCostEvent(profile: SalaryProfile, effectiveFrom: string): LivingCostHistoryEvent {
@@ -159,17 +192,25 @@ export function normalizeSalaryHistoryMode(value: unknown): SalaryProfile['salar
 
 export function loadProfile(now = new Date()): SalaryProfile {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
+  const hasStoredProfile = Object.keys(stored).length > 0
   const profile = { ...DEFAULT_PROFILE, ...stored }
   const storedHistoryMode = (stored as { salaryHistoryMode?: unknown }).salaryHistoryMode
   const storedPayday = (stored as { payday?: unknown }).payday
   const storedLivingCostMode = (stored as { livingCostMode?: unknown }).livingCostMode
   const storedLivingCostHistory = (stored as { livingCostHistory?: unknown }).livingCostHistory
+  const storedPaydayAdjustment = (stored as { paydayAdjustment?: unknown }).paydayAdjustment
+  const storedMonthlyRateBasis = (stored as { monthlyRateBasis?: unknown }).monthlyRateBasis
+  const storedSalaryDeductions = (stored as { salaryDeductions?: unknown }).salaryDeductions
   const normalizedLivingCostHistory = normalizeLivingCostHistory(storedLivingCostHistory)
+  const normalizedSalaryDeductions = normalizeSalaryDeductions(storedSalaryDeductions)
   const migratedBase: SalaryProfile = {
     ...profile,
     payday: normalizePayday(storedPayday),
+    paydayAdjustment: normalizePaydayAdjustment(storedPaydayAdjustment, hasStoredProfile ? 'none' : DEFAULT_PROFILE.paydayAdjustment),
     livingCostMode: normalizeLivingCostMode(storedLivingCostMode),
     livingCostHistory: normalizedLivingCostHistory,
+    salaryDeductions: normalizedSalaryDeductions,
+    monthlyRateBasis: normalizeMonthlyRateBasis(storedMonthlyRateBasis, hasStoredProfile ? 'average' : DEFAULT_PROFILE.monthlyRateBasis),
     salaryHistoryMode: normalizeSalaryHistoryMode(storedHistoryMode),
     salaryEffectiveDate: profile.salaryEffectiveDate || toLocalDateValue(now),
     defaultWorkMode: profile.defaultWorkMode ?? 'scheduled',
@@ -184,6 +225,8 @@ export function loadProfile(now = new Date()): SalaryProfile {
     : migratedBase
   if (
     storedHistoryMode !== migrated.salaryHistoryMode || storedPayday !== migrated.payday ||
+    storedPaydayAdjustment !== migrated.paydayAdjustment || storedMonthlyRateBasis !== migrated.monthlyRateBasis ||
+    JSON.stringify(storedSalaryDeductions) !== JSON.stringify(migrated.salaryDeductions) ||
     storedLivingCostMode !== migrated.livingCostMode ||
     JSON.stringify(storedLivingCostHistory) !== JSON.stringify(migrated.livingCostHistory) ||
     !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode ||
@@ -202,7 +245,13 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
       ? stored.monthlyLivingCost
       : DEFAULT_PROFILE.monthlyLivingCost,
   }
-  const next = withLivingCostHistoryEvent({ ...profile, payday: normalizePayday(profile.payday) }, now, previousConfiguration)
+  const next = withLivingCostHistoryEvent({
+    ...profile,
+    payday: normalizePayday(profile.payday),
+    paydayAdjustment: normalizePaydayAdjustment(profile.paydayAdjustment, DEFAULT_PROFILE.paydayAdjustment),
+    monthlyRateBasis: normalizeMonthlyRateBasis(profile.monthlyRateBasis, DEFAULT_PROFILE.monthlyRateBasis),
+    salaryDeductions: normalizeSalaryDeductions(profile.salaryDeductions),
+  }, now, previousConfiguration)
   return saveJSON(keys.profile, next) ? next : null
 }
 

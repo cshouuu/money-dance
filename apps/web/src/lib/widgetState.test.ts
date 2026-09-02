@@ -398,7 +398,13 @@ describe('widget snapshot', () => {
     expect(snapshot.syncedAt).toBe(now.getTime())
     expect(snapshot.validUntil).toBe(now.getTime() + 60_000)
     expect(snapshot.secondRate).toBeCloseTo(0.01)
-    expect(snapshot.slacking).toEqual({ active: true, startAt: slackingStart.getTime(), ...captureSessionStartBusinessDate(slackingStart.toISOString()) })
+    expect(snapshot.slacking).toEqual({
+      active: true,
+      startAt: slackingStart.getTime(),
+      ...captureSessionStartBusinessDate(slackingStart.toISOString()),
+      earnedAmountAtSync: 18,
+      paidSecondsAtSync: 1800,
+    })
     expect(snapshot.overtime).toEqual({
       active: true,
       startAt: overtimeStart.getTime(),

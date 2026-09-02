@@ -119,7 +119,10 @@ Existing builds that cannot reach either legacy host cannot discover this migrat
 
 ### Android home-screen widget
 
-The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. v0.2.25 ships the compact 4×1 row while retaining the live amount and both timer actions.
+The widget is an Android-only `home_screen` surface. It is not a lock-screen widget and does not add an equivalent widget to iOS or the PWA. Android's widget picker exposes two independent sizes that share the same data and actions:
+
+- a compact 4×1 row;
+- a 2×2 square for narrower home-screen layouts.
 
 Its refresh behavior follows the current earning state:
 
@@ -134,7 +137,7 @@ Its refresh behavior follows the current earning state:
 
 On Android 13 and later, Money Dance asks for notification permission once, only after at least one widget has been added and the app next resumes. If the user declines, the foreground ticker can still run and Android keeps it visible under **Active apps / Task Manager**, but the notification-drawer status and its stop action may be hidden. Real-time mode can still be turned off from the widget, and notification permission can be granted later in Android system settings.
 
-The 4×1 layout exposes these actions:
+Both the 4×1 and 2×2 layouts expose these actions:
 
 - slacking can be started and stopped directly from the widget;
 - starting overtime opens MoneyDance and reuses the existing overtime pay-mode selector (unpaid, salary multiplier, or fixed amount);
@@ -142,6 +145,8 @@ The 4×1 layout exposes these actions:
 - real-time display for normal work earnings can be enabled or stopped explicitly from the widget.
 
 The native widget does not reimplement salary, attendance, flexible-work, or calendar adjustment rules. The Web layer calculates and compresses the next 36 hours into earnings timeline slices, then sends the snapshot through the Capacitor bridge to Android `SharedPreferences`. The native layer evaluates the current slice to render the amount without loading the WebView on every tick.
+
+Slacking uses those same paid-work slices. An unpaid lunch, time before or after work, weekends, holidays, and other zero-rate gaps do not increase either the slacking amount or its paid duration; the wall-clock start and end are still retained for audit.
 
 An optional flexible-work planned end is included as an exact timeline boundary. Once reached, the widget stops increasing the work amount at that second; the Web layer performs the interactive settlement when the app next becomes active.
 

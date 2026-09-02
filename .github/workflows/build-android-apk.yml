@@ -165,7 +165,10 @@ jobs:
           API27_STYLES="apps/web/android/app/src/main/res/values-v27/styles.xml"
           PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_info.xml"
           PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_info.xml"
+          SQUARE_PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_square_info.xml"
+          SQUARE_PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_square_info.xml"
           WIDGET_LAYOUT="$RES_ROOT/layout/money_dance_widget.xml"
+          SQUARE_WIDGET_LAYOUT="$RES_ROOT/layout/money_dance_widget_square.xml"
 
           test -f "$MAIN_ACTIVITY"
           test -f "$MANIFEST"
@@ -173,10 +176,11 @@ jobs:
           test -f "$API26_STYLES"
           test -f "$API27_STYLES"
           test -f "$WIDGET_LAYOUT"
+          test -f "$SQUARE_WIDGET_LAYOUT"
 
           test -f "$NATIVE_ROOT/AppUpdaterPlugin.java"
           test -f "$JAVA_ROOT/AppUpdaterPlugin.java"
-          for source in WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider; do
+          for source in WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider; do
             test -f "$NATIVE_ROOT/${source}.java"
             test -f "$JAVA_ROOT/${source}.java"
             cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
@@ -190,18 +194,24 @@ jobs:
           test -f "$PROVIDER_TEMPLATE"
           test -f "$PROVIDER_XML"
           cmp "$PROVIDER_TEMPLATE" "$PROVIDER_XML"
+          test -f "$SQUARE_PROVIDER_TEMPLATE"
+          test -f "$SQUARE_PROVIDER_XML"
+          cmp "$SQUARE_PROVIDER_TEMPLATE" "$SQUARE_PROVIDER_XML"
 
           grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$JAVA_ROOT/AppUpdaterPlugin.java"
           grep -Fq '@CapacitorPlugin(name = "WidgetBridge")' "$JAVA_ROOT/WidgetBridgePlugin.java"
           grep -Fq 'class MoneyDanceWidgetProvider' "$JAVA_ROOT/MoneyDanceWidgetProvider.java"
+          grep -Fq 'class MoneyDanceSquareWidgetProvider' "$JAVA_ROOT/MoneyDanceSquareWidgetProvider.java"
           grep -Fq 'class WidgetActionReceiver' "$JAVA_ROOT/WidgetActionReceiver.java"
           grep -Fq 'class WidgetTickerService' "$JAVA_ROOT/WidgetTickerService.java"
           grep -Fq 'android:name=".MoneyDanceWidgetProvider"' "$MANIFEST"
+          grep -Fq 'android:name=".MoneyDanceSquareWidgetProvider"' "$MANIFEST"
           grep -Fq 'android:name=".WidgetTickerService"' "$MANIFEST"
           grep -Fq 'android:name=".WidgetActionReceiver"' "$MANIFEST"
           grep -Fq 'android.appwidget.action.APPWIDGET_UPDATE' "$MANIFEST"
           grep -Fq 'android:name="android.appwidget.provider"' "$MANIFEST"
           grep -Fq 'android:resource="@xml/money_dance_widget_info"' "$MANIFEST"
+          grep -Fq 'android:resource="@xml/money_dance_widget_square_info"' "$MANIFEST"
           grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
           ! grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' "$MANIFEST"
           grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
@@ -230,6 +240,14 @@ jobs:
           grep -Fq 'android:targetCellWidth="4"' "$PROVIDER_XML"
           grep -Fq 'android:targetCellHeight="1"' "$PROVIDER_XML"
           grep -Fq 'android:updatePeriodMillis="1800000"' "$PROVIDER_XML"
+          grep -Fq 'android:initialLayout="@layout/money_dance_widget_square"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:minWidth="110dp"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:minHeight="110dp"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:targetCellWidth="2"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:targetCellHeight="2"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:updatePeriodMillis="1800000"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'R.layout.money_dance_widget_square' "$JAVA_ROOT/WidgetRenderer.java"
+          grep -Fq 'paidDurationSeconds' "$JAVA_ROOT/WidgetStateStore.java"
           test "$(grep -Fc 'android:layout_height="44dp"' "$WIDGET_LAYOUT")" -ge 2
           grep -Fq 'ACTION_SLACKING_START' "$JAVA_ROOT/WidgetActionReceiver.java"
           grep -Fq 'ACTION_SLACKING_STOP' "$JAVA_ROOT/WidgetActionReceiver.java"
@@ -249,8 +267,12 @@ jobs:
               process.exit(1)
             }
           }
-          if (!/<receiver\s+android:name="\.MoneyDanceWidgetProvider"\s+android:exported="false">/.test(manifest)) {
+          if (!/<receiver\s+[^>]*android:name="\.MoneyDanceWidgetProvider"[^>]*android:exported="false">/.test(manifest)) {
             console.error('MoneyDanceWidgetProvider must not be exported')
+            process.exit(1)
+          }
+          if (!/<receiver\s+[^>]*android:name="\.MoneyDanceSquareWidgetProvider"[^>]*android:exported="false">/.test(manifest)) {
+            console.error('MoneyDanceSquareWidgetProvider must not be exported')
             process.exit(1)
           }
           console.log('Native plugin registration order verified')

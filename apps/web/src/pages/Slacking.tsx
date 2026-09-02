@@ -1,5 +1,5 @@
-import { calculateRates, formatDuration, slackingEarned } from '@salary-flow/core'
-import { History, Play, Square, Trash2 } from 'lucide-react'
+import { calculateRates, formatDuration } from '@salary-flow/core'
+import { History, Play, Square, Trash2, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AchievementPanel } from '../components/AchievementPanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -14,14 +14,18 @@ import {
   reconcileAchievementSessions,
   saveAchievementState,
 } from '../lib/achievements'
-import { loadProfile } from '../lib/profile'
-import { createCompletedSlackingSession, hasOverlappingSlacking, loadActiveSlacking, loadSlackingSessions, type CompletedSlackingInput } from '../lib/slacking'
+import { loadAttendanceRecords } from '../lib/attendance'
+import { toLocalDateValue } from '../lib/form'
+import { calculatePaidTimeEarnings } from '../lib/paidTime'
+import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
+import { createCompletedSlackingSession, hasOverlappingSlacking, loadActiveSlacking, loadSlackingSessions, slackingPaidDurationSeconds, type CompletedSlackingInput } from '../lib/slacking'
 import { resolveSessionStartBusinessDate } from '../lib/sessionBusinessDate'
 import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { runReversibleStorageTransaction } from '../lib/storageTransaction'
 import { createWebTimerSessionId, sameTimerStart, upsertTimerSession } from '../lib/timerStop'
 import { useNow } from '../lib/useNow'
 import { prepareSlackingWebStop } from '../lib/widgetActions'
+import { loadWorkRecords } from '../lib/work'
 import type { ActiveSlacking, SlackingSession } from '../types'
 import './Slacking.css'
 
@@ -55,8 +59,16 @@ function formatSessionTime(value: string): string {
 
 export function Slacking() {
   const [profile] = useState(() => loadProfile())
-  const rate = useMemo(() => calculateRates(profile).second, [profile])
   const now = useNow(1000)
+  const [workRecords] = useState(() => loadWorkRecords())
+  const [attendanceRecords] = useState(() => loadAttendanceRecords())
+  const currentDate = toLocalDateValue(now)
+  const rateProfile = useMemo(
+    () => salaryProfileForBusinessDate(profile, currentDate, attendanceRecords),
+    [attendanceRecords, currentDate, profile],
+  )
+  const rates = useMemo(() => calculateRates(rateProfile), [rateProfile])
+  const rate = rates.second
   const [active, setActive] = useState<ActiveSlacking | null>(loadActiveSlacking)
   const [sessions, setSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [achievementState, setAchievementState] = useState(() => reconcileAchievementSessions(
@@ -77,11 +89,27 @@ export function Slacking() {
   const currentPage = Math.min(page, getPageCount(sessions.length))
   const visibleSessions = getPageItems(sessions, currentPage)
   const liveSeconds = active ? elapsedSecondsSince(active.startTime, now) : 0
-  const liveMoney = liveSeconds * rate
+  const liveCalculation = useMemo(() => active
+    ? calculatePaidTimeEarnings(profile, active.startTime, now, workRecords, attendanceRecords)
+    : { elapsedSeconds: 0, paidSeconds: 0, earnedAmount: 0 }, [active, attendanceRecords, now, profile, workRecords])
+  const livePaidSeconds = liveCalculation.paidSeconds
+  const liveExcludedSeconds = Math.max(0, liveSeconds - livePaidSeconds)
+  const liveMoney = liveCalculation.earnedAmount
   const totalMoney = useMemo(() => sessions.reduce((total, session) => total + session.earnedAmount, 0), [sessions])
-  const totalSeconds = useMemo(() => sessions.reduce((total, session) => total + session.durationSeconds, 0), [sessions])
-  const achievementSnapshot = getAchievementSnapshot('slacking', achievementState, liveSeconds)
+  const totalSeconds = useMemo(() => sessions.reduce((total, session) => total + slackingPaidDurationSeconds(session), 0), [sessions])
+  const achievementSnapshot = getAchievementSnapshot('slacking', achievementState, livePaidSeconds)
   const timerVisual = slackingVisualByLevel(achievementSnapshot.highestLevel)
+  const weeklyDays = profile.workWeekMode === 'alternating' ? 5.5 : profile.workDaysPerWeek
+  const wageMilestones = [
+    { id: 'day', label: '摸回 1 天工资', amount: rates.daily },
+    { id: 'week', label: '摸回 1 周工资', amount: rates.daily * weeklyDays },
+    { id: 'month', label: '摸回 1 个月工资', amount: rates.daily * rateProfile.monthlyWorkDays },
+  ].map(item => ({
+    ...item,
+    achieved: item.amount > 0 && totalMoney >= item.amount,
+    progress: item.amount > 0 ? Math.min(100, totalMoney / item.amount * 100) : 0,
+    remaining: Math.max(0, item.amount - totalMoney),
+  }))
   useEffect(() => {
     setAchievementState(current => reconcileAchievementSessions('slacking', current, sessions, new Date().toISOString()))
   }, [sessions])
@@ -123,7 +151,11 @@ export function Slacking() {
       ? [...otherSessions, { startTime: storedActive.startTime, endTime: nowTime }]
       : otherSessions
     if (hasOverlappingSlacking(occupied, input.startTime, input.endTime)) return '这段时间与已有或正在进行的摸鱼记录重叠，请调整后再保存。'
-    const session = createCompletedSlackingSession(input, rate)
+    const calculation = calculatePaidTimeEarnings(profile, input.startTime, input.endTime, workRecords, attendanceRecords)
+    const session = createCompletedSlackingSession(input, {
+      paidDurationSeconds: calculation.paidSeconds,
+      earnedAmount: calculation.earnedAmount,
+    })
     if (!session) return '摸鱼时间无效，请检查后重试。'
     const next = [session, ...otherSessions]
     const storedAchievementState = loadAchievementState('slacking')
@@ -154,9 +186,9 @@ export function Slacking() {
     setAchievementSaveFailed(false)
     setPage(1)
     setTimeDialogPurpose(null)
-    setFinishNotice({ id: session.id, message: `补记成功：摸鱼 ${formatDuration(session.durationSeconds)}，赚了 ¥${session.earnedAmount.toFixed(2)}` })
+    setFinishNotice({ id: session.id, message: `补记成功：计薪摸鱼 ${formatDuration(slackingPaidDurationSeconds(session))}，赚了 ¥${session.earnedAmount.toFixed(2)}` })
     return null
-  }, [rate, sessions])
+  }, [attendanceRecords, profile, sessions, workRecords])
 
   const persistCompletedStop = useCallback((expectedStartTime: string): boolean => {
     const latest = prepareSlackingWebStop(expectedStartTime)
@@ -253,7 +285,8 @@ export function Slacking() {
       const endTime = new Date().toISOString()
       const stopActive = latest.active ?? active
       const startTime = stopActive.startTime
-      const durationSeconds = elapsedSecondsSince(startTime, new Date(endTime))
+      const calculation = calculatePaidTimeEarnings(profile, startTime, endTime, workRecords, attendanceRecords)
+      const durationSeconds = calculation.elapsedSeconds
       const sessionId = createWebTimerSessionId('slacking', startTime)
       if (!sessionId) {
         setStopError('开始时间无效，无法结束这次摸鱼。')
@@ -274,7 +307,8 @@ export function Slacking() {
         ...businessDate,
         endTime,
         durationSeconds,
-        earnedAmount: slackingEarned(startTime, endTime, rate),
+        paidDurationSeconds: calculation.paidSeconds,
+        earnedAmount: calculation.earnedAmount,
       }
       const next = upsertTimerSession(latest.sessions, session)
       const storedAchievementState = loadAchievementState('slacking')
@@ -314,7 +348,7 @@ export function Slacking() {
     } finally {
       stoppingRef.current = false
     }
-  }, [active, persistCompletedStop, rate])
+  }, [active, attendanceRecords, persistCompletedStop, profile, workRecords])
 
   const closeFinishNotice = useCallback(() => setFinishNotice(null), [])
   const closeTimeDialog = useCallback(() => setTimeDialogPurpose(null), [])
@@ -351,17 +385,18 @@ export function Slacking() {
     <div className={`timer-card ${active ? 'running' : ''}`}>
       <div className="fish-orbit slacking-visual" role="img" aria-label={`摸鱼状态：${timerVisual.label}`} title={`摸鱼状态：${timerVisual.label}`}>{timerVisual.emoji}</div>
       <p>{active ? '正在摸鱼……' : '今天准备摸一会儿？'}</p>
-      <div className="timer-number">{active ? formatTimerDuration(liveSeconds) : '00:00:00'}</div>
-      <small>老板已为这段时间支付</small>
+      <div className="timer-number">{active ? formatTimerDuration(livePaidSeconds) : '00:00:00'}</div>
+      <small>{active && liveExcludedSeconds >= 1 ? `实际经过 ${formatDuration(liveSeconds)} · 已排除 ${formatDuration(liveExcludedSeconds)}` : '老板已为这段时间支付'}</small>
       <div className="timer-money">¥{liveMoney.toFixed(2)}</div>
       {active ? <button type="button" className="stop-button" onClick={stop}><Square size={18}/>结束摸鱼</button> : <button type="button" className="primary-button big" onClick={() => setTimeDialogPurpose('start')}><Play size={18}/>开始摸鱼</button>}
       {stopError && <div className="timer-stop-error" role="alert"><span>{stopError}</span>{pendingRepairStart ? <button type="button" onClick={retryPendingRepair}>重试保存</button> : null}</div>}
       <button type="button" className="timer-backfill-button" onClick={() => setTimeDialogPurpose('backfill')}><History size={15}/>补记已结束摸鱼</button>
-      <span className="timer-rate">+ ¥{rate.toFixed(5)} / 秒</span>
+      <span className="timer-rate">+ ¥{rate.toFixed(5)} / 秒 · 午休和非工作时段不计收益</span>
     </div>
-    <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>当前保留的摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
-    <AchievementPanel kind="slacking" state={achievementState} activeSeconds={liveSeconds} saveFailed={achievementSaveFailed}/>
-    <div className="list-section"><div className="section-title"><h2>摸鱼记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有摸鱼记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const visual = slackingSessionVisual(session.durationSeconds); return <article className="list-card slacking-record" key={session.id}><div className="item-avatar fish slacking-record-visual" role="img" aria-label={visual.label} title={visual.label}>{visual.emoji}</div><div className="item-main"><b>{formatSessionTime(session.startTime)}</b><span>至 {formatSessionTime(session.endTime)} · {formatDuration(session.durationSeconds)}</span></div><div className="item-result"><small>本次摸鱼</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button slacking-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次摸鱼记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
+    <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>累计计薪摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+    <section className="slacking-wage-milestones" aria-labelledby="slacking-wage-title"><div className="section-title"><div><p className="eyebrow">WAGE MILESTONES</p><h2 id="slacking-wage-title">这份工资，摸回多少了？</h2></div><span>按当前到手薪资折算</span></div><div className="slacking-wage-grid">{wageMilestones.map(item => <article key={item.id} className={item.achieved ? 'achieved' : ''}><span className="slacking-wage-icon"><Trophy size={17}/></span><div><small>{item.label}</small><strong>¥{item.amount.toFixed(2)}</strong></div><div className="slacking-wage-progress"><i style={{ width: `${item.progress}%` }}/></div><em>{item.achieved ? '已达成' : item.amount > 0 ? `还差 ¥${item.remaining.toFixed(2)}` : '请先设置有效薪资'}</em></article>)}</div></section>
+    <AchievementPanel kind="slacking" state={achievementState} activeSeconds={livePaidSeconds} saveFailed={achievementSaveFailed}/>
+    <div className="list-section"><div className="section-title"><h2>摸鱼记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有摸鱼记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const paidSeconds = slackingPaidDurationSeconds(session); const visual = slackingSessionVisual(paidSeconds); const excludedSeconds = Math.max(0, session.durationSeconds - paidSeconds); return <article className="list-card slacking-record" key={session.id}><div className="item-avatar fish slacking-record-visual" role="img" aria-label={visual.label} title={visual.label}>{visual.emoji}</div><div className="item-main"><b>{formatSessionTime(session.startTime)}</b><span>至 {formatSessionTime(session.endTime)} · 计薪 {formatDuration(paidSeconds)}{excludedSeconds > 0 ? ` · 已排除 ${formatDuration(excludedSeconds)}` : ''}</span></div><div className="item-result"><small>本次摸鱼</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button slacking-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次摸鱼记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
     <SlackingTimeDialog open={timeDialogPurpose !== null} purpose={timeDialogPurpose ?? 'start'} onStart={start} onBackfill={saveBackfill} onCancel={closeTimeDialog}/>
     <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.type === 'all' ? '你要悄悄地删掉全部摸鱼记录吗？' : '你要悄悄地删掉这次摸鱼记录吗？'} message={pendingDelete ? `${pendingDelete.type === 'session' ? `${new Date(pendingDelete.session.startTime).toLocaleString('zh-CN')} · ¥${pendingDelete.session.earnedAmount.toFixed(2)}。` : ''}计时记录会被删除，但已点亮勋章和成就累计时长会永久保留。` : undefined} confirmLabel="对，打枪的不要" cancelLabel="不，我光明正大" onConfirm={confirmDelete} onCancel={cancelDelete}/>
     {finishNotice ? <FinishToast key={finishNotice.id} message={finishNotice.message} onClose={closeFinishNotice}/> : null}

@@ -277,7 +277,8 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const mode = record?.mode ?? profile.defaultWorkMode
   const businessDate = record?.date ?? (mode === 'scheduled' ? getScheduledBusinessDate(profile, now) : today)
   const attendance = attendanceRecords.find(item => item.date === businessDate)
-  const datedProfile = salaryProfileForBusinessDate(profile, businessDate)
+  const holidaySettings = loadChinaHolidaySettings(now)
+  const datedProfile = salaryProfileForBusinessDate(profile, businessDate, attendanceRecords, holidaySettings)
   const rates = calculateRates(datedProfile)
   const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
 
@@ -294,7 +295,6 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     }
   }
 
-  const holidaySettings = loadChinaHolidaySettings(now)
   const officialHoliday = attendance || record ? undefined : chinaHolidayForDate(businessDate, holidaySettings)
   const officialHolidayAmount = attendance || record ? null : getOfficialHolidayPayAmount(businessDate, datedProfile, rates.daily, holidaySettings)
   if (officialHolidayAmount !== null) {

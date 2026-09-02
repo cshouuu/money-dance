@@ -73,6 +73,15 @@ describe('achievement lifetime reconciliation', () => {
     expect(decreased.creditedSecondsBySessionId.same).toBe(2400)
   })
 
+  it('credits only paid slacking time when lunch or off-hours were excluded', () => {
+    const paidSession = { ...session('paid-only', 7200), paidDurationSeconds: 1800 }
+    const slacking = reconcileAchievementSessions('slacking', createEmptyAchievementState(), [paidSession], '2026-08-30T12:00:00.000Z')
+    const overtime = reconcileAchievementSessions('overtime', createEmptyAchievementState(), [paidSession], '2026-08-30T12:00:00.000Z')
+
+    expect(slacking.lifetimeSeconds).toBe(1800)
+    expect(overtime.lifetimeSeconds).toBe(7200)
+  })
+
   it('registers legacy processed sessions without double-counting their duration', () => {
     const legacy = {
       ...createEmptyAchievementState(),

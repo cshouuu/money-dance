@@ -8,6 +8,7 @@ import { FinishToast } from '../components/FinishToast'
 import { OvertimeBackfillDialog } from '../components/OvertimeBackfillDialog'
 import { OvertimeStartDialog } from '../components/OvertimeStartDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
+import { loadAttendanceRecords, loadChinaHolidaySettings } from '../lib/attendance'
 import {
   elapsedSecondsSince,
   formatTimerDuration,
@@ -27,7 +28,8 @@ import {
   overtimePayLabel,
   type CompletedOvertimeInput,
 } from '../lib/overtime'
-import { loadProfile } from '../lib/profile'
+import { toLocalDateValue } from '../lib/form'
+import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
 import { resolveSessionStartBusinessDate } from '../lib/sessionBusinessDate'
 import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { runReversibleStorageTransaction } from '../lib/storageTransaction'
@@ -69,8 +71,16 @@ function overtimeSessionVisualLevel(durationSeconds: number): number {
 export function Overtime() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [profile] = useState(() => loadProfile())
-  const rates = useMemo(() => calculateRates(profile), [profile])
   const now = useNow(1000)
+  const currentDate = toLocalDateValue(now)
+  const [attendanceRecords] = useState(() => loadAttendanceRecords())
+  const [holidaySettings] = useState(() => loadChinaHolidaySettings())
+  const rates = useMemo(() => calculateRates(salaryProfileForBusinessDate(
+    profile,
+    currentDate,
+    attendanceRecords,
+    holidaySettings,
+  )), [attendanceRecords, currentDate, holidaySettings, profile])
   const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
   const [sessions, setSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [achievementState, setAchievementState] = useState(() => reconcileAchievementSessions(
@@ -155,7 +165,13 @@ export function Overtime() {
     const otherSessions = storedSessions.filter(session => session.id !== input.id)
     if (hasOverlappingOvertime(otherSessions, input.startTime, input.endTime)) return '这段时间与已有加班记录重叠，请调整后再保存。'
     if (storedActive && overtimeIntervalsOverlap(input.startTime, input.endTime, storedActive.startTime, nowTime)) return '这段时间与正在进行的加班重叠，请调整后再保存。'
-    const session = createCompletedOvertimeSession(input, rates.second)
+    const sessionRate = calculateRates(salaryProfileForBusinessDate(
+      profile,
+      toLocalDateValue(new Date(input.startTime)),
+      attendanceRecords,
+      holidaySettings,
+    )).second
+    const session = createCompletedOvertimeSession(input, sessionRate)
     if (!session) return '加班时间或计薪方式无效，请检查后重试。'
 
     const next = [session, ...otherSessions]
@@ -200,7 +216,7 @@ export function Overtime() {
     setBackfillDialogOpen(false)
     setFinishNotice({ id: session.id, message: `补记成功：${formatDuration(session.durationSeconds)} · ¥${session.earnedAmount.toFixed(2)}` })
     return null
-  }, [rates.second, sessions])
+  }, [attendanceRecords, holidaySettings, profile, sessions])
 
   const persistCompletedStop = useCallback((expectedStartTime: string): boolean => {
     const latest = prepareOvertimeWebStop(expectedStartTime)

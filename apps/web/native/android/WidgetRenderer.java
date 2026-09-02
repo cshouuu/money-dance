@@ -20,8 +20,9 @@ public final class WidgetRenderer {
 
     public static int widgetCount(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
-        int[] ids = manager.getAppWidgetIds(new ComponentName(context, MoneyDanceWidgetProvider.class));
-        return ids == null ? 0 : ids.length;
+        int[] rowIds = manager.getAppWidgetIds(new ComponentName(context, MoneyDanceWidgetProvider.class));
+        int[] squareIds = manager.getAppWidgetIds(new ComponentName(context, MoneyDanceSquareWidgetProvider.class));
+        return count(rowIds) + count(squareIds);
     }
 
     public static boolean hasWidgets(Context context) {
@@ -30,8 +31,16 @@ public final class WidgetRenderer {
 
     public static void updateAll(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
-        int[] ids = manager.getAppWidgetIds(new ComponentName(context, MoneyDanceWidgetProvider.class));
-        update(context, manager, ids);
+        update(
+                context,
+                manager,
+                manager.getAppWidgetIds(new ComponentName(context, MoneyDanceWidgetProvider.class))
+        );
+        updateSquare(
+                context,
+                manager,
+                manager.getAppWidgetIds(new ComponentName(context, MoneyDanceSquareWidgetProvider.class))
+        );
     }
 
     public static void update(Context context, AppWidgetManager manager, int[] widgetIds) {
@@ -39,12 +48,30 @@ public final class WidgetRenderer {
         long now = System.currentTimeMillis();
         JSONObject snapshot = WidgetStateStore.getSnapshot(context);
         for (int widgetId : widgetIds) {
-            manager.updateAppWidget(widgetId, views(context, snapshot, now));
+            manager.updateAppWidget(widgetId, views(context, snapshot, now, R.layout.money_dance_widget));
         }
     }
 
-    private static RemoteViews views(Context context, JSONObject snapshot, long now) {
-        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.money_dance_widget);
+    public static void updateSquare(Context context, AppWidgetManager manager, int[] widgetIds) {
+        if (widgetIds == null || widgetIds.length == 0) return;
+        long now = System.currentTimeMillis();
+        JSONObject snapshot = WidgetStateStore.getSnapshot(context);
+        for (int widgetId : widgetIds) {
+            manager.updateAppWidget(widgetId, views(
+                    context,
+                    snapshot,
+                    now,
+                    R.layout.money_dance_widget_square
+            ));
+        }
+    }
+
+    private static int count(int[] ids) {
+        return ids == null ? 0 : ids.length;
+    }
+
+    private static RemoteViews views(Context context, JSONObject snapshot, long now, int layoutId) {
+        RemoteViews views = new RemoteViews(context.getPackageName(), layoutId);
         boolean snapshotValid = snapshot.optInt("version", -1) == WidgetContract.SNAPSHOT_VERSION;
         boolean stale = snapshotValid
                 && snapshot.optLong("validUntil", Long.MAX_VALUE) > 0L
@@ -56,7 +83,6 @@ public final class WidgetRenderer {
         boolean showSlacking = slackingActive && (!overtimeActive
                 || slacking.optLong("startAt", 0L) >= overtime.optLong("startAt", 0L));
         boolean showOvertime = overtimeActive && !showSlacking;
-        double secondRate = nonNegative(snapshot.optDouble("secondRate", 0D));
         boolean realtimeEnabled = WidgetStateStore.isRealtimeEnabled(context);
         boolean tickerRunning = WidgetStateStore.isTickerRunning(context);
         boolean tickerStartFailed = WidgetStateStore.didTickerStartFail(context);
@@ -66,11 +92,17 @@ public final class WidgetRenderer {
         String detail;
         double amount;
         if (showSlacking) {
-            long startAt = Math.max(0L, slacking.optLong("startAt", now));
-            long elapsed = Math.max(0L, now - startAt);
+            WidgetStateStore.SlackingEarnings earnings = WidgetStateStore.slackingEarnings(
+                    snapshot,
+                    slacking,
+                    now
+            );
             title = "正在摸鱼";
-            amount = (elapsed / 1000D) * secondRate;
-            detail = duration(elapsed) + " · +¥" + rate(secondRate) + "/秒";
+            amount = earnings.amount;
+            detail = duration(Math.round(earnings.paidSeconds * 1000D))
+                    + (earnings.currentRate > 0D
+                    ? " · +¥" + rate(earnings.currentRate) + "/秒"
+                    : " · 当前暂停计薪");
         } else if (showOvertime) {
             long startAt = Math.max(0L, overtime.optLong("startAt", now));
             long elapsed = Math.max(0L, now - startAt);
@@ -82,6 +114,7 @@ public final class WidgetRenderer {
                 amount = fixedAmount;
                 detail = duration(elapsed) + " · 固定加班费";
             } else if ("multiplier".equals(payMode)) {
+                double secondRate = nonNegative(snapshot.optDouble("secondRate", 0D));
                 amount = (elapsed / 1000D) * secondRate * multiplier;
                 detail = duration(elapsed) + " · " + compact(multiplier) + "倍工资";
             } else {

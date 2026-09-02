@@ -1,6 +1,6 @@
 import { calculateRates, DEFAULT_PROFILE } from '@salary-flow/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ALTERNATING_MONTHLY_WORK_DAYS, livingCostConfigurationForDate, loadProfile, normalizeLivingCostMode, normalizePayday, normalizeSalaryHistoryMode, recommendedMonthlyWorkDays, saveProfile } from './profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, livingCostConfigurationForDate, loadProfile, normalizeLivingCostMode, normalizePayday, normalizeSalaryHistoryMode, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile } from './profile'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -46,6 +46,39 @@ describe('normalizePayday', () => {
 
     expect(loadProfile().payday).toBeNull()
     expect(setItem).toHaveBeenCalled()
+  })
+
+  it('preserves released users on the average rate and exact payday rules', () => {
+    const stored = { ...DEFAULT_PROFILE } as Partial<typeof DEFAULT_PROFILE>
+    delete stored.monthlyRateBasis
+    delete stored.paydayAdjustment
+    const setItem = vi.fn()
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify(stored), setItem })
+
+    const migrated = loadProfile()
+    expect(migrated.monthlyRateBasis).toBe('average')
+    expect(migrated.paydayAdjustment).toBe('none')
+  })
+
+  it('uses actual calendar rates and previous-workday paydays for a new profile', () => {
+    const setItem = vi.fn()
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem })
+
+    const profile = loadProfile()
+    expect(profile.monthlyRateBasis).toBe('actual-calendar')
+    expect(profile.paydayAdjustment).toBe('previous-workday')
+  })
+})
+
+describe('salaryProfileForBusinessDate', () => {
+  it('uses each calendar month actual workday denominator', () => {
+    const settings = { enabled: false, effectiveFrom: '2026-01-01', dataVersion: 'test' }
+    const august = salaryProfileForBusinessDate(DEFAULT_PROFILE, '2026-08-10', [], settings)
+    const september = salaryProfileForBusinessDate(DEFAULT_PROFILE, '2026-09-10', [], settings)
+
+    expect(august.monthlyWorkDays).toBe(21)
+    expect(september.monthlyWorkDays).toBe(22)
+    expect(calculateRates(august).hourly).toBeGreaterThan(calculateRates(september).hourly)
   })
 })
 

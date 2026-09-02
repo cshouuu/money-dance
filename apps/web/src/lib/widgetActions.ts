@@ -21,6 +21,7 @@ export interface WidgetSlackingStopAction extends WidgetActionBase {
   startAt: number
   endAt: number
   earnedAmount: number
+  paidDurationSeconds?: number
 }
 
 export interface WidgetOvertimeStopAction extends WidgetActionBase {
@@ -115,6 +116,7 @@ function parseAction(value: unknown): WidgetAction | null {
       startAt: value.startAt,
       endAt: value.endAt,
       earnedAmount: value.earnedAmount,
+      ...(isFiniteNumber(value.paidDurationSeconds) ? { paidDurationSeconds: value.paidDurationSeconds } : {}),
     }
   }
 
@@ -247,6 +249,10 @@ export function reduceWidgetActions(initial: WidgetActionState, actions: WidgetA
           startTime: isoTime(action.startAt),
           endTime: isoTime(action.endAt),
           durationSeconds: durationSeconds(action.startAt, action.endAt),
+          paidDurationSeconds: Math.min(
+            durationSeconds(action.startAt, action.endAt),
+            nonNegative(action.paidDurationSeconds ?? durationSeconds(action.startAt, action.endAt)),
+          ),
           earnedAmount: nonNegative(action.earnedAmount),
         }),
         ...actionBusinessDate(action, matchingActive ?? existing),

@@ -14,7 +14,10 @@ export interface SlackingSession {
   /** Date#getTimezoneOffset captured at the session start instant. */
   startTimezoneOffsetMinutes?: number
   endTime: string
+  /** Elapsed wall-clock duration, retained for audit and display. */
   durationSeconds: number
+  /** Portion overlapping paid work. Missing on legacy records means full duration. */
+  paidDurationSeconds?: number
   earnedAmount: number
 }
 

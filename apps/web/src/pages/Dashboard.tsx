@@ -1,21 +1,23 @@
-import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
-import { ArrowUpRight, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
+import { calculateRates, formatDuration } from '@salary-flow/core'
+import { ArrowUpRight, BarChart3, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
 import { loadAchievementState, reconcileAchievementSessions, saveAchievementState } from '../lib/achievements'
-import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isHalfDayLeave, loadAttendanceRecords } from '../lib/attendance'
+import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isConfiguredWorkday, isHalfDayLeave, loadAttendanceRecords, loadChinaHolidaySettings } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { createId } from '../lib/id'
 import { loadLedger, saveLedger } from '../lib/ledger'
+import { getMonthlyWorkStats } from '../lib/monthlyStats'
 import { getPaydayCountdown } from '../lib/payday'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
 import { calculateOvertimeEarnings, createCompletedOvertimeSession, createOvertimeLedgerEntries, loadOvertimeSessions, overtimeIntervalsOverlap, splitOvertimeSessionByLocalDay } from '../lib/overtime'
 import { keys, loadJSON, saveJSON } from '../lib/storage'
 import { sessionStartLocalDate } from '../lib/sessionBusinessDate'
-import { loadSlackingSessions } from '../lib/slacking'
+import { loadSlackingSessions, slackingPaidDurationSeconds } from '../lib/slacking'
 import { useNow } from '../lib/useNow'
+import { getWishProgress } from '../lib/wishProgress'
 import { closeActiveWorkSession, commitFlexibleOvertimeSettlement, commitFlexibleWorkCorrection, commitFlexibleWorkStart, freezeFlexibleWorkForSettlement, getAutomaticFlexibleSettlementMode, getCurrentWorkRecord, getFlexibleBaseSettlementAmount, getFlexibleEarnedAmount, getFlexibleOvertimeWindow, getFlexibleSettlementRequirement, getFlexibleWorkedSeconds, hasFlexiblePlannedEndReached, isFlexibleFullDaySettlement, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, settleFlexibleWorkRecord, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
 import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession, WishItem } from '../types'
 import './Dashboard.css'
@@ -47,6 +49,8 @@ export function Dashboard() {
   const workRecordsRef = useRef(workRecords)
   const settledActionRef = useRef<HTMLButtonElement>(null)
   const [attendanceRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
+  const [holidaySettings] = useState(() => loadChinaHolidaySettings())
+  const [ledger, setLedger] = useState(() => loadLedger())
   const [slackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [activeOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
@@ -58,19 +62,27 @@ export function Dashboard() {
   })
   const [settlementError, setSettlementError] = useState('')
   const settlingRef = useRef(false)
-  const rates = useMemo(() => calculateRates(profile), [profile])
-  const paydayCountdown = getPaydayCountdown(profile.payday, now)
+  const today = toLocalDateValue(now)
+  const currentMinute = Math.floor(now.getTime() / 60_000)
+  const currentRates = useMemo(() => calculateRates(
+    salaryProfileForBusinessDate(profile, today, attendanceRecords, holidaySettings),
+  ), [attendanceRecords, holidaySettings, profile, today])
+  const paydayCountdown = getPaydayCountdown(profile.payday, now, {
+    adjustment: profile.paydayAdjustment,
+    isWorkday: date => isConfiguredWorkday(date, profile, holidaySettings),
+  })
   const work = summarizeTodayWork(profile, workRecords, now, undefined, attendanceRecords)
-  const workRates = useMemo(() => calculateRates(salaryProfileForBusinessDate(profile, work.businessDate)), [profile, work.businessDate])
+  const workRates = useMemo(() => calculateRates(
+    salaryProfileForBusinessDate(profile, work.businessDate, attendanceRecords, holidaySettings),
+  ), [attendanceRecords, holidaySettings, profile, work.businessDate])
   const targetSeconds = workRates.paidSecondsPerDay * attendanceWorkedFraction(work.attendance)
   const earned = work.earnedAmount
   const worked = work.workedSeconds
   const progress = targetSeconds > 0 ? Math.max(0, Math.min(100, (worked / targetSeconds) * 100)) : 0
   const hasReachedFlexibleTarget = work.mode === 'flexible' && worked >= targetSeconds
-  const today = toLocalDateValue(now)
   const workDate = work.record?.date ?? today
   const todaySlacking = useMemo(() => slackingSessions.filter(session => sessionStartLocalDate(session) === today), [slackingSessions, today])
-  const slackingSeconds = useMemo(() => todaySlacking.reduce((total, session) => total + session.durationSeconds, 0), [todaySlacking])
+  const slackingSeconds = useMemo(() => todaySlacking.reduce((total, session) => total + slackingPaidDurationSeconds(session), 0), [todaySlacking])
   const slackingMoney = useMemo(() => todaySlacking.reduce((total, session) => total + session.earnedAmount, 0), [todaySlacking])
   const completedOvertimeToday = useMemo(() => overtimeSessions.flatMap(splitOvertimeSessionByLocalDay).filter(slice => slice.date === today), [overtimeSessions, today])
   const completedOvertimeMoney = useMemo(() => overtimeSessions.filter(session => sessionStartLocalDate(session) === today).reduce((total, session) => total + session.earnedAmount, 0), [overtimeSessions, today])
@@ -80,12 +92,23 @@ export function Dashboard() {
     return splitOvertimeSessionByLocalDay({ ...activeOvertime, endTime }).find(slice => slice.date === today) ?? null
   }, [activeOvertime, now, today])
   const activeOvertimeMoney = activeOvertime && sessionStartLocalDate(activeOvertime) === today
-    ? calculateOvertimeEarnings(activeOvertime, Math.max(0, (now.getTime() - new Date(activeOvertime.startTime).getTime()) / 1000), rates.second)
+    ? calculateOvertimeEarnings(activeOvertime, Math.max(0, (now.getTime() - new Date(activeOvertime.startTime).getTime()) / 1000), currentRates.second)
     : 0
   const overtimeSeconds = completedOvertimeToday.reduce((total, slice) => total + slice.durationSeconds, 0) + (activeOvertimeSlice?.durationSeconds ?? 0)
   const overtimeMoney = completedOvertimeMoney + activeOvertimeMoney
   const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
-  const featuredWishes = wishlistItems.slice(0, 3)
+  const featuredWishes = useMemo(() => wishlistItems.slice(0, 3), [wishlistItems])
+  const featuredWishProgress = useMemo(() => new Map(featuredWishes.map(item => [
+    item.id,
+    getWishProgress(item, profile, new Date(currentMinute * 60_000), workRecords, attendanceRecords),
+  ])), [attendanceRecords, currentMinute, featuredWishes, profile, workRecords])
+  const monthlyStats = useMemo(() => getMonthlyWorkStats(
+    profile,
+    ledger,
+    workRecords,
+    attendanceRecords,
+    new Date(currentMinute * 60_000),
+  ), [attendanceRecords, currentMinute, ledger, profile, workRecords])
   const firstStart = work.record?.sessions[0]?.startTime
   const plannedEndLabel = work.record?.plannedEndTime
     ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`
@@ -131,7 +154,10 @@ export function Dashboard() {
     }
     const latestLedger = loadLedger()
     const nextLedger = latestLedger.filter(entry => entry.kind !== 'overtime' || entry.linkedId !== record.overtimeSessionId)
-    if (nextLedger.length !== latestLedger.length && !saveLedger(nextLedger)) return false
+    if (nextLedger.length !== latestLedger.length) {
+      if (!saveLedger(nextLedger)) return false
+      setLedger(nextLedger)
+    }
     return true
   }, [])
 
@@ -264,6 +290,7 @@ export function Dashboard() {
     const nextSessions = [session, ...otherSessions]
     const latestLedger = loadLedger().filter(entry => entry.kind !== 'overtime' || entry.linkedId !== session.id)
     const generatedLedger = createOvertimeLedgerEntries(session, () => `flex-overtime-ledger-${session.id}`)
+    const settledLedger = [...generatedLedger, ...latestLedger]
     const achievementState = reconcileAchievementSessions(
       'overtime',
       loadAchievementState('overtime'),
@@ -276,7 +303,7 @@ export function Dashboard() {
     try {
       const committed = commitFlexibleOvertimeSettlement({
         saveOvertimeSession: () => saveJSON(keys.overtimeSessions, nextSessions),
-        saveLedger: () => saveLedger([...generatedLedger, ...latestLedger]),
+        saveLedger: () => saveLedger(settledLedger),
         saveAchievement: () => saveAchievementState('overtime', achievementState),
         saveWorkRecord: () => persistRecord(settledRecord),
       })
@@ -292,6 +319,7 @@ export function Dashboard() {
         return
       }
       setOvertimeSessions(nextSessions)
+      setLedger(settledLedger)
       setPendingEndRecord(null)
       setSettlementError('')
       focusSettledAction()
@@ -328,7 +356,16 @@ export function Dashboard() {
   }, [now, requestSettlement, work.record])
 
   return <section className="page dashboard-page">
-    <header className="page-header"><div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'long' })}</p><h1>今天的时间，正在变成钱。</h1></div><div className="dashboard-header-actions"><Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}><CalendarDays size={17}/><span><small>{paydayCountdown ? `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天`) : '去设置'}</b></span></Link><Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16}/></Link></div></header>
+    <header className="page-header">
+      <div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</p><h1>今天的时间，正在变成钱。</h1></div>
+      <div className="dashboard-header-actions">
+        <Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
+          <CalendarDays size={17} />
+          <span><small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置'}</b></span>
+        </Link>
+        <Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16} /></Link>
+      </div>
+    </header>
 
     <div className={`hero-card${work.dayType === 'work' && work.mode === 'flexible' ? ' flexible-work' : ''}`}>
       <div className="hero-glow" />
@@ -370,11 +407,32 @@ export function Dashboard() {
       <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
     </div>
 
+    <div className="section-title dashboard-performance-title"><div><p className="eyebrow">MONTHLY SCORE</p><h2>本月战绩</h2></div><span>{now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}</span></div>
+    <article className="dashboard-performance-card">
+      <div className="dashboard-performance-primary"><span className="metric-icon"><BarChart3 size={19} /></span><div><small>本月累计收入</small><strong>{money(monthlyStats.income)}</strong><span>本月预计 {money(monthlyStats.expectedIncome)}</span></div></div>
+      <div className="dashboard-performance-progress">
+        <div><span>计划工时进度</span><strong>{(monthlyStats.progress * 100).toFixed(0)}%</strong></div>
+        <div className="dashboard-performance-track" role="progressbar" aria-label="本月计划工时进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(monthlyStats.progress * 100)}><i style={{ width: `${monthlyStats.progress * 100}%` }} /></div>
+        <small>{formatDuration(monthlyStats.workedSeconds)} / {formatDuration(monthlyStats.plannedSeconds)}</small>
+      </div>
+      <div className="dashboard-performance-details">
+        <div><Target size={16} /><span>本月工作日</span><b>{monthlyStats.workdayCount} 天</b></div>
+        <div><Clock3 size={16} /><span>累计有效工时</span><b>{formatDuration(monthlyStats.workedSeconds)}</b></div>
+        <div><TrendingUp size={16} /><span>平均每小时收入</span><b>{money(monthlyStats.averageHourlyIncome)}</b></div>
+      </div>
+    </article>
+
     <div className="section-title dashboard-wishlist-title"><div><p className="eyebrow">WISH LIST</p><h2>我的心愿清单</h2></div><Link className="dashboard-wishlist-link" to="/convert">查看全部 {wishlistItems.length} 项 <ArrowUpRight size={14}/></Link></div>
     {featuredWishes.length === 0 ? <div className="dashboard-wishlist-empty"><span>✨</span><div><b>还没有心愿</b><small>把想买的东西换算成需要工作的时间。</small></div><Link to="/convert">去心愿清单</Link></div> : <div className="dashboard-wishlist-grid">
       {featuredWishes.map(item => {
-        const seconds = priceToWorkSeconds(item.price, rates.second)
-        return <article className="dashboard-wish-card" key={item.id}><span className="dashboard-wish-avatar">{item.name.trim().slice(0,1).toUpperCase() || '愿'}</span><div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)}</small></div><div className="dashboard-wish-time"><small>需要工作</small><strong>{formatDuration(seconds)}</strong></div></article>
+        const wishProgress = featuredWishProgress.get(item.id)
+        const percent = (wishProgress?.progress ?? 0) * 100
+        return <article className="dashboard-wish-card" key={item.id}>
+          <span className="dashboard-wish-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</span>
+          <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · 已完成 {percent.toFixed(0)}%</small></div>
+          <div className="dashboard-wish-time"><small>还差纯工时</small><strong>{formatDuration(wishProgress?.remainingSeconds ?? 0)}</strong></div>
+          <div className="dashboard-wish-progress" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
+        </article>
       })}
     </div>}
 

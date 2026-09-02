@@ -1,6 +1,8 @@
 import { calculateRates, type SalaryProfile, type SalaryRates } from '@salary-flow/core'
 import type { ActiveOvertime, ActiveSlacking, AttendanceRecord, DailyWorkRecord, OvertimePayMode } from '../types'
 import { toLocalDateTime, toLocalDateValue } from './form'
+import { calculatePaidTimeEarnings } from './paidTime'
+import { salaryProfileForBusinessDate } from './profile'
 import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
 import { normalizeActiveSlacking } from './slacking'
 import { getScheduledBusinessDate, summarizeTodayWork } from './work'
@@ -20,6 +22,8 @@ export interface WidgetActiveSlacking {
   startAt: number
   startLocalDate: string
   startTimezoneOffsetMinutes?: number
+  earnedAmountAtSync: number
+  paidSecondsAtSync: number
 }
 
 export interface WidgetActiveOvertime {
@@ -277,7 +281,11 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
   const requestedHorizon = options.horizonMs ?? WIDGET_SNAPSHOT_HORIZON_MS
   const horizonMs = Number.isFinite(requestedHorizon) ? Math.max(1000, requestedHorizon) : WIDGET_SNAPSHOT_HORIZON_MS
   const validUntil = safeSyncedAt + horizonMs
-  const rates = options.rates ?? calculateRates(options.profile)
+  const rates = options.rates ?? calculateRates(salaryProfileForBusinessDate(
+    options.profile,
+    toLocalDateValue(new Date(safeSyncedAt)),
+    options.attendanceRecords,
+  ))
   const activeSlacking = normalizeActiveSlacking(options.activeSlacking)
   const slackingStartAt = timestamp(activeSlacking?.startTime)
   const slackingBusinessDate = slackingStartAt === null || !activeSlacking
@@ -288,6 +296,15 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
       activeSlacking.startTimezoneOffsetMinutes,
     )
   const overtime = widgetOvertime(options.activeOvertime)
+  const slackingAtSync = slackingStartAt === null || !activeSlacking
+    ? null
+    : calculatePaidTimeEarnings(
+        options.profile,
+        activeSlacking.startTime,
+        new Date(safeSyncedAt),
+        options.workRecords,
+        options.attendanceRecords,
+      )
 
   return {
     version: WIDGET_SNAPSHOT_VERSION,
@@ -304,7 +321,15 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
     }),
     ...(slackingStartAt === null || !slackingBusinessDate
       ? {}
-      : { slacking: { active: true as const, startAt: slackingStartAt, ...slackingBusinessDate } }),
+      : {
+          slacking: {
+            active: true as const,
+            startAt: slackingStartAt,
+            ...slackingBusinessDate,
+            earnedAmountAtSync: finiteNonNegative(slackingAtSync?.earnedAmount ?? 0),
+            paidSecondsAtSync: finiteNonNegative(slackingAtSync?.paidSeconds ?? 0),
+          },
+        }),
     ...(overtime ? { overtime } : {}),
   }
 }

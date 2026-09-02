@@ -218,6 +218,46 @@ public final class WidgetStateStore {
         return 0D;
     }
 
+    /** Integrates only positive-rate timeline slices for an active slacking timer. */
+    static SlackingEarnings slackingEarnings(JSONObject snapshot, JSONObject slacking, long endAt) {
+        long startAt = Math.max(0L, slacking.optLong("startAt", endAt));
+        long safeEndAt = Math.max(startAt, endAt);
+        long syncedAt = Math.max(startAt, snapshot.optLong("syncedAt", startAt));
+        boolean hasSyncedBase = slacking.has("earnedAmountAtSync")
+                && slacking.has("paidSecondsAtSync");
+        double amount = hasSyncedBase
+                ? finiteNonNegative(slacking.optDouble("earnedAmountAtSync", 0D))
+                : ((Math.min(safeEndAt, syncedAt) - startAt) / 1000D)
+                        * finiteNonNegative(snapshot.optDouble("secondRate", 0D));
+        double paidSeconds = hasSyncedBase
+                ? finiteNonNegative(slacking.optDouble("paidSecondsAtSync", 0D))
+                : Math.max(0L, Math.min(safeEndAt, syncedAt) - startAt) / 1000D;
+        double currentRate = 0D;
+        long integrationStart = Math.max(startAt, syncedAt);
+        JSONArray timeline = snapshot.optJSONArray("workTimeline");
+        if (timeline == null || safeEndAt <= integrationStart) {
+            return new SlackingEarnings(amount, paidSeconds, currentRate);
+        }
+
+        for (int index = 0; index < timeline.length(); index += 1) {
+            JSONObject segment = timeline.optJSONObject(index);
+            if (segment == null) continue;
+            long segmentStart = segment.optLong("startAt", -1L);
+            long segmentEnd = segment.optLong("endAt", -1L);
+            double rate = finiteNonNegative(segment.optDouble("ratePerSecond", 0D));
+            if (segmentStart < 0L || segmentEnd <= segmentStart || rate <= 0D) continue;
+            long overlapStart = Math.max(integrationStart, segmentStart);
+            long overlapEnd = Math.min(safeEndAt, segmentEnd);
+            if (overlapEnd > overlapStart) {
+                double seconds = (overlapEnd - overlapStart) / 1000D;
+                paidSeconds += seconds;
+                amount += seconds * rate;
+            }
+            if (safeEndAt >= segmentStart && safeEndAt < segmentEnd) currentRate = rate;
+        }
+        return new SlackingEarnings(amount, paidSeconds, currentRate);
+    }
+
     public static long nextPaidWorkStartAt(Context context, long now) {
         JSONObject snapshot = getSnapshot(context);
         if (!hasUsableSnapshot(snapshot, now)) return -1L;
@@ -284,6 +324,8 @@ public final class WidgetStateStore {
                 JSONObject nextSlacking = new JSONObject();
                 nextSlacking.put("active", true);
                 nextSlacking.put("startAt", occurredAt);
+                nextSlacking.put("earnedAmountAtSync", 0D);
+                nextSlacking.put("paidSecondsAtSync", 0D);
                 putStartBusinessDate(nextSlacking, action, occurredAt);
                 snapshot.put("slacking", nextSlacking);
                 pending.put(action);
@@ -307,6 +349,7 @@ public final class WidgetStateStore {
             long startAt = Math.max(0L, slacking.optLong("startAt", occurredAt));
             if (expectedStartAt < 0L || startAt != expectedStartAt) return false;
             long endAt = Math.max(startAt, occurredAt);
+            SlackingEarnings earnings = slackingEarnings(snapshot, slacking, endAt);
             String sessionId = prefs.getString(WidgetContract.KEY_ACTIVE_SLACKING_SESSION_ID, "");
             if (sessionId == null || sessionId.isEmpty()) sessionId = UUID.randomUUID().toString();
 
@@ -319,8 +362,8 @@ public final class WidgetStateStore {
                 action.put("startAt", startAt);
                 action.put("endAt", endAt);
                 putStartBusinessDate(action, slacking, startAt);
-                action.put("earnedAmount", ((endAt - startAt) / 1000D)
-                        * finiteNonNegative(snapshot.optDouble("secondRate", 0D)));
+                action.put("earnedAmount", earnings.amount);
+                action.put("paidDurationSeconds", earnings.paidSeconds);
                 JSONArray pending = parseArray(prefs.getString(WidgetContract.KEY_PENDING_ACTIONS_JSON, "[]"));
                 pending.put(action);
                 snapshot.remove("slacking");
@@ -470,7 +513,17 @@ public final class WidgetStateStore {
     private static boolean validActiveTimer(JSONObject timer, boolean overtime) {
         if (timer == null) return true;
         if (!timer.optBoolean("active", false) || timer.optLong("startAt", -1L) < 0L) return false;
-        if (!overtime) return true;
+        if (!overtime) {
+            if (timer.has("earnedAmountAtSync")) {
+                double earnedAmount = timer.optDouble("earnedAmountAtSync", Double.NaN);
+                if (!isFinite(earnedAmount) || earnedAmount < 0D) return false;
+            }
+            if (timer.has("paidSecondsAtSync")) {
+                double paidSeconds = timer.optDouble("paidSecondsAtSync", Double.NaN);
+                if (!isFinite(paidSeconds) || paidSeconds < 0D) return false;
+            }
+            return true;
+        }
         String payMode = timer.optString("payMode", "");
         if (!"unpaid".equals(payMode) && !"multiplier".equals(payMode) && !"fixed".equals(payMode)) {
             return false;
@@ -524,6 +577,8 @@ public final class WidgetStateStore {
                 try {
                     slacking.put("active", true);
                     slacking.put("startAt", occurredAt);
+                    slacking.put("earnedAmountAtSync", 0D);
+                    slacking.put("paidSecondsAtSync", 0D);
                     putStartBusinessDate(slacking, action, occurredAt);
                     snapshot.put("slacking", slacking);
                 } catch (JSONException ignored) {
@@ -537,6 +592,18 @@ public final class WidgetStateStore {
                     snapshot.remove("overtime");
                 }
             }
+        }
+    }
+
+    static final class SlackingEarnings {
+        final double amount;
+        final double paidSeconds;
+        final double currentRate;
+
+        SlackingEarnings(double amount, double paidSeconds, double currentRate) {
+            this.amount = amount;
+            this.paidSeconds = paidSeconds;
+            this.currentRate = currentRate;
         }
     }
 }

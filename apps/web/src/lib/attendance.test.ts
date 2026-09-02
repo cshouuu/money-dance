@@ -1,6 +1,6 @@
 import { DEFAULT_PROFILE, type SalaryProfile } from '@salary-flow/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, getWeekStartDateValue, isConfiguredWorkday, resolveAttendanceDay, saveAttendanceRecords, saveChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
+import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, chinaHolidayForDate, getCustomAttendanceAmount, getMonthlyPaidDayCount, getMonthlyScheduledWorkDayCount, getOfficialHolidayPayAmount, getWeekStartDateValue, isConfiguredWorkday, resolveAttendanceDay, saveAttendanceRecords, saveChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -127,6 +127,28 @@ describe('China holiday workday priority', () => {
     expect(getOfficialHolidayPayAmount('2026-09-25', { ...alternatingProfile, salaryType: 'hourly' }, 100, holidaySettings)).toBe(0)
     expect(getOfficialHolidayPayAmount('2026-02-15', { ...alternatingProfile, salaryType: 'monthly' }, 100, holidaySettings)).toBe(0)
     expect(getOfficialHolidayPayAmount('2026-09-20', alternatingProfile, 100, holidaySettings)).toBeNull()
+  })
+})
+
+describe('calendar month paid-day count', () => {
+  const disabledSettings = { ...holidaySettings, enabled: false }
+
+  it('counts the actual weekdays in a calendar month', () => {
+    expect(getMonthlyPaidDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [], disabledSettings)).toBe(21)
+  })
+
+  it('keeps personal leave in the denominator but removes an explicit company holiday', () => {
+    const leave = { date: '2026-08-03', status: 'leave' as const, leaveType: 'personal' as const, payMode: 'unpaid' as const, updatedAt: '' }
+    const companyHoliday = { date: '2026-08-04', status: 'holiday' as const, payMode: 'unpaid' as const, updatedAt: '' }
+    expect(getMonthlyPaidDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [leave], disabledSettings)).toBe(21)
+    expect(getMonthlyPaidDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [companyHoliday], disabledSettings)).toBe(20)
+    expect(getMonthlyScheduledWorkDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [leave], disabledSettings)).toBe(20)
+    expect(getMonthlyScheduledWorkDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [companyHoliday], disabledSettings)).toBe(20)
+  })
+
+  it('counts half-day leave as half a planned workday', () => {
+    const halfDayLeave = { date: '2026-08-03', status: 'leave' as const, leaveType: 'annual' as const, leavePeriod: 'morning' as const, updatedAt: '' }
+    expect(getMonthlyScheduledWorkDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [halfDayLeave], disabledSettings)).toBe(20.5)
   })
 })
 

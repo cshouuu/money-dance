@@ -5,6 +5,18 @@ export type WorkWeekMode = 'fixed' | 'alternating'
 export type AlternatingWeekType = 'big' | 'small'
 export type LivingCostMode = 'deduct' | 'daily-ledger'
 export type LivingCostHistoryMode = 'off' | LivingCostMode
+export type MonthlyRateBasis = 'average' | 'actual-calendar'
+export type PaydayAdjustment = 'none' | 'previous-workday' | 'next-workday'
+export type SalaryDeductionType = 'fixed' | 'percentage'
+
+export interface SalaryDeduction {
+  id: string
+  name: string
+  type: SalaryDeductionType
+  /** Fixed monthly amount, or a percentage of gross salary. */
+  value: number
+  enabled: boolean
+}
 
 export interface LivingCostHistoryEvent {
   version: 1
@@ -18,6 +30,8 @@ export interface SalaryProfile {
   salaryType: SalaryType
   /** Calendar day of month used for the payday countdown. */
   payday: number | null
+  /** How a non-working nominal payday is moved. */
+  paydayAdjustment: PaydayAdjustment
   workStartTime: string
   workEndTime: string
   breakStartTime: string
@@ -27,6 +41,10 @@ export interface SalaryProfile {
   monthlyLivingCost: number
   livingCostMode: LivingCostMode
   livingCostHistory: LivingCostHistoryEvent[]
+  /** Payroll deductions applied before deriving take-home time rates. */
+  salaryDeductions: SalaryDeduction[]
+  /** Average conversion or the current calendar month's paid-day count. */
+  monthlyRateBasis: MonthlyRateBasis
   monthlyWorkDays: number
   workDaysPerWeek: number
   workWeekMode: WorkWeekMode
@@ -50,6 +68,7 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   salary: 15000,
   salaryType: 'monthly',
   payday: null,
+  paydayAdjustment: 'previous-workday',
   workStartTime: '09:00',
   workEndTime: '18:00',
   breakStartTime: '12:00',
@@ -59,6 +78,8 @@ export const DEFAULT_PROFILE: SalaryProfile = {
   monthlyLivingCost: 0,
   livingCostMode: 'deduct',
   livingCostHistory: [],
+  salaryDeductions: [],
+  monthlyRateBasis: 'actual-calendar',
   monthlyWorkDays: 21.75,
   workDaysPerWeek: 5,
   workWeekMode: 'fixed',
@@ -104,6 +125,29 @@ export function getPaidSecondsPerDay(profile: SalaryProfile): number {
   return Math.max(0, shift - overlap)
 }
 
+/** Gross monthly equivalent for every supported salary input mode. */
+export function calculateGrossMonthlySalary(profile: SalaryProfile): number {
+  if (!Number.isFinite(profile.salary) || profile.salary < 0) throw new Error('Salary must be non-negative')
+  if (!Number.isFinite(profile.monthlyWorkDays) || profile.monthlyWorkDays <= 0) throw new Error('Monthly work days must be positive')
+  const paidSecondsPerDay = getPaidSecondsPerDay(profile)
+  if (paidSecondsPerDay <= 0) throw new Error('Paid work duration must be positive')
+  if (profile.salaryType === 'annual') return profile.salary / 12
+  if (profile.salaryType === 'monthly') return profile.salary
+  if (profile.salaryType === 'daily') return profile.salary * profile.monthlyWorkDays
+  return profile.salary * (paidSecondsPerDay / 3600) * profile.monthlyWorkDays
+}
+
+/** Monthly payroll deductions after fixed and percentage items are combined. */
+export function calculateMonthlySalaryDeductions(profile: SalaryProfile): number {
+  const grossMonthly = calculateGrossMonthlySalary(profile)
+  return (profile.salaryDeductions ?? []).reduce((total, deduction) => {
+    if (!deduction?.enabled || !Number.isFinite(deduction.value) || deduction.value <= 0) return total
+    if (deduction.type === 'percentage') return total + grossMonthly * Math.min(100, deduction.value) / 100
+    if (deduction.type === 'fixed') return total + deduction.value
+    return total
+  }, 0)
+}
+
 export function calculateRates(profile: SalaryProfile): SalaryRates {
   if (!Number.isFinite(profile.salary) || profile.salary < 0) throw new Error('Salary must be non-negative')
   if (!Number.isFinite(profile.monthlyWorkDays) || profile.monthlyWorkDays <= 0) throw new Error('Monthly work days must be positive')
@@ -118,13 +162,14 @@ export function calculateRates(profile: SalaryProfile): SalaryRates {
   if (paidSecondsPerDay <= 0) throw new Error('Paid work duration must be positive')
 
   const livingCostPerWorkDay = monthlyLivingCost / profile.monthlyWorkDays
+  const salaryDeductionPerWorkDay = calculateMonthlySalaryDeductions(profile) / profile.monthlyWorkDays
   let grossDaily: number
   if (profile.salaryType === 'annual') grossDaily = (profile.salary / 12) / profile.monthlyWorkDays
   else if (profile.salaryType === 'monthly') grossDaily = profile.salary / profile.monthlyWorkDays
   else if (profile.salaryType === 'daily') grossDaily = profile.salary
   else grossDaily = profile.salary * (paidSecondsPerDay / 3600)
 
-  const daily = Math.max(0, grossDaily - livingCostPerWorkDay)
+  const daily = Math.max(0, grossDaily - salaryDeductionPerWorkDay - livingCostPerWorkDay)
   const second = daily / paidSecondsPerDay
   return { daily, hourly: second * 3600, minute: second * 60, second, paidSecondsPerDay }
 }

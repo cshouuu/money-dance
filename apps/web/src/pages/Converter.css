@@ -2,14 +2,22 @@
 
 .converter-card{
   grid-template-columns:42px minmax(0,1fr) 220px 92px;
+  grid-template-areas:
+    "avatar main result actions"
+    "progress progress progress progress";
   column-gap:16px;
+  row-gap:14px;
   align-items:center;
 }
+
+.converter-card>.item-avatar{grid-area:avatar}
+.converter-card>.item-main{grid-area:main}
 
 .converter-card.purchased{background:rgba(239,240,224,.86)}
 .converter-card.purchased .item-avatar{background:#dce3c2;color:#52634f}
 
 .converter-result{
+  grid-area:result;
   display:grid;
   grid-template-columns:1fr;
   gap:8px;
@@ -41,6 +49,7 @@
 }
 
 .converter-actions{
+  grid-area:actions;
   display:flex;
   align-items:center;
   justify-content:flex-end;
@@ -49,6 +58,13 @@
   min-width:92px;
   justify-self:end;
 }
+
+.wish-progress{grid-area:progress;display:grid;gap:7px;padding-top:12px;border-top:1px solid var(--line)}
+.wish-progress-heading,.wish-progress-meta{display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--muted);font-size:10px;line-height:1.4}
+.wish-progress-heading b{color:#50604d;font-weight:750}.wish-progress-heading strong{color:#4f624c;font:650 12px 'DM Mono'}
+.wish-progress-track{height:7px;overflow:hidden;border-radius:999px;background:#e9e7df}
+.wish-progress-track>i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#b9ca7e,#64785c);transition:width .35s ease}
+.wish-progress-meta span:last-child{text-align:right}
 
 .buy-button{
   height:34px;
@@ -85,7 +101,8 @@
     grid-template-columns:40px minmax(0,1fr) auto;
     grid-template-areas:
       "avatar main actions"
-      "result result result";
+      "result result result"
+      "progress progress progress";
     align-items:start;
     column-gap:11px;
     row-gap:12px;
@@ -115,6 +132,8 @@
     padding-top:11px;
   }
 
+  .converter-card>.wish-progress{grid-area:progress}
+
   .converter-card>.converter-result small,
   .converter-card>.converter-result strong{white-space:normal}
 
@@ -129,7 +148,8 @@
     grid-template-columns:40px minmax(0,1fr) auto;
     grid-template-areas:
       "avatar main main"
-      "result result actions";
+      "result result actions"
+      "progress progress progress";
     column-gap:10px;
     row-gap:13px;
   }
@@ -155,6 +175,10 @@
   }
 
   form.input-card .live-result.converter-live-result{padding-left:18px}
+  .wish-progress-heading,.wish-progress-meta{align-items:flex-start;flex-direction:column;gap:4px}
+  .wish-progress-heading{position:relative;padding-right:44px}
+  .wish-progress-heading strong{position:absolute;right:0}
+  .wish-progress-meta span:last-child{text-align:left}
   .purchase-toast{grid-template-columns:1fr auto}
   .purchase-toast>button{grid-column:2;grid-row:1;align-self:start}
   .purchase-toast>a{grid-column:1/3;text-align:center}

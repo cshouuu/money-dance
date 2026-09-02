@@ -31,6 +31,7 @@ const nativeJavaFiles = [
   'WidgetStateStore.java',
   'WidgetTickerService.java',
   'MoneyDanceWidgetProvider.java',
+  'MoneyDanceSquareWidgetProvider.java',
 ]
 
 const nativeResourceFiles = [
@@ -40,7 +41,9 @@ const nativeResourceFiles = [
   'drawable/money_dance_widget_button_secondary.xml',
   'drawable/money_dance_widget_notification.xml',
   'layout/money_dance_widget.xml',
+  'layout/money_dance_widget_square.xml',
   'xml/money_dance_widget_info.xml',
+  'xml/money_dance_widget_square_info.xml',
 ]
 
 await mkdir(javaRoot, { recursive: true })
@@ -237,6 +240,7 @@ if (!manifest.includes('moneyDanceWidgetComponents')) {
         <!-- moneyDanceWidgetComponents -->
         <receiver
             android:name=".MoneyDanceWidgetProvider"
+            android:label="Money Dance · 4×1"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -244,6 +248,17 @@ if (!manifest.includes('moneyDanceWidgetComponents')) {
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/money_dance_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".MoneyDanceSquareWidgetProvider"
+            android:label="Money Dance · 2×2"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/money_dance_widget_square_info" />
         </receiver>
         <receiver
             android:name=".WidgetActionReceiver"
@@ -258,6 +273,26 @@ if (!manifest.includes('moneyDanceWidgetComponents')) {
         </service>`
   const nextManifest = manifest.replace(/(<application\b[^>]*>)/, `$1${widgetComponents}`)
   if (nextManifest === manifest) throw new Error('Unable to inject Android widget components into <application>')
+  manifest = nextManifest
+}
+if (!manifest.includes('android:name=".MoneyDanceSquareWidgetProvider"')) {
+  const squareWidgetReceiver = `
+        <receiver
+            android:name=".MoneyDanceSquareWidgetProvider"
+            android:label="Money Dance · 2×2"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/money_dance_widget_square_info" />
+        </receiver>`
+  const nextManifest = manifest.replace(
+    /(\s*<receiver\s+android:name="\.WidgetActionReceiver")/,
+    `${squareWidgetReceiver}$1`,
+  )
+  if (nextManifest === manifest) throw new Error('Unable to inject Android 2x2 widget receiver')
   manifest = nextManifest
 }
 await writeFile(manifestPath, manifest)

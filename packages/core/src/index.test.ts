@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PROFILE, assetCostPerHour, calculateRates, getWorkedPaidSeconds, priceToWorkSeconds, slackingEarned } from './index.js'
+import { DEFAULT_PROFILE, assetCostPerHour, calculateMonthlySalaryDeductions, calculateRates, getWorkedPaidSeconds, priceToWorkSeconds, slackingEarned } from './index.js'
 
 describe('salary calculations', () => {
   it('calculates an 8-hour paid work day after unpaid lunch', () => {
@@ -29,6 +29,28 @@ describe('salary calculations', () => {
     })
     expect(rates.daily).toBeCloseTo(15000 / 21.75, 8)
     expect(rates.hourly).toBeCloseTo((15000 / 21.75) / 8, 8)
+  })
+
+  it('subtracts fixed and percentage payroll deductions before deriving rates', () => {
+    const profile = {
+      ...DEFAULT_PROFILE,
+      salaryDeductions: [
+        { id: 'social', name: '社保', type: 'fixed' as const, value: 1000, enabled: true },
+        { id: 'fund', name: '公积金', type: 'percentage' as const, value: 10, enabled: true },
+        { id: 'off', name: '停用项', type: 'fixed' as const, value: 9999, enabled: false },
+      ],
+    }
+    expect(calculateMonthlySalaryDeductions(profile)).toBe(2500)
+    expect(calculateRates(profile).daily).toBeCloseTo((15000 - 2500) / 21.75, 8)
+  })
+
+  it('never lets payroll deductions create a negative time rate', () => {
+    const rates = calculateRates({
+      ...DEFAULT_PROFILE,
+      salaryDeductions: [{ id: 'all', name: '扣除', type: 'percentage', value: 100, enabled: true }],
+    })
+    expect(rates.daily).toBe(0)
+    expect(rates.second).toBe(0)
   })
 
   it('does not count unpaid lunch as worked time', () => {

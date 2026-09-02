@@ -209,7 +209,7 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     day.setHours(0, 0, 0, 0)
     if (day > today) break
     const date = toLocalDateValue(day)
-    const datedProfile = salaryProfileForBusinessDate(profile, date)
+    const datedProfile = salaryProfileForBusinessDate(profile, date, attendanceRecords, holidaySettings)
     const rates = calculateRates(datedProfile)
     const workRecord = workRecordByDate.get(date)
     const attendance = attendanceByDate.get(date)

@@ -10,6 +10,11 @@ export interface CompletedSlackingInput {
   endTime: string
 }
 
+export interface CompletedSlackingCalculation {
+  paidDurationSeconds: number
+  earnedAmount: number
+}
+
 export function normalizeActiveSlacking(value: unknown): ActiveSlacking | null {
   const startTime = typeof value === 'string'
     ? value
@@ -44,12 +49,21 @@ function timestamp(value: string): number | null {
 
 export function createCompletedSlackingSession(
   input: CompletedSlackingInput,
-  secondRate: number,
+  rateOrCalculation: number | CompletedSlackingCalculation,
 ): SlackingSession | null {
   const start = timestamp(input.startTime)
   const end = timestamp(input.endTime)
   if (!input.id.trim() || start === null || end === null || end <= start) return null
   const durationSeconds = (end - start) / 1000
+  const calculation = typeof rateOrCalculation === 'number'
+    ? {
+        paidDurationSeconds: durationSeconds,
+        earnedAmount: durationSeconds * Math.max(0, Number.isFinite(rateOrCalculation) ? rateOrCalculation : 0),
+      }
+    : {
+        paidDurationSeconds: Math.min(durationSeconds, Math.max(0, Number.isFinite(rateOrCalculation.paidDurationSeconds) ? rateOrCalculation.paidDurationSeconds : 0)),
+        earnedAmount: Math.max(0, Number.isFinite(rateOrCalculation.earnedAmount) ? rateOrCalculation.earnedAmount : 0),
+      }
   const canonicalStart = new Date(start).toISOString()
   const businessDate = resolveSessionStartBusinessDate(
     canonicalStart,
@@ -63,8 +77,16 @@ export function createCompletedSlackingSession(
     ...businessDate,
     endTime: new Date(end).toISOString(),
     durationSeconds,
-    earnedAmount: durationSeconds * Math.max(0, Number.isFinite(secondRate) ? secondRate : 0),
+    paidDurationSeconds: calculation.paidDurationSeconds,
+    earnedAmount: calculation.earnedAmount,
   }
+}
+
+export function slackingPaidDurationSeconds(session: Pick<SlackingSession, 'durationSeconds' | 'paidDurationSeconds'>): number {
+  const paid = session.paidDurationSeconds
+  return typeof paid === 'number' && Number.isFinite(paid)
+    ? Math.min(Math.max(0, session.durationSeconds), Math.max(0, paid))
+    : Math.max(0, Number.isFinite(session.durationSeconds) ? session.durationSeconds : 0)
 }
 
 export function migrateLegacySlackingSessionLocalDates(sessions: SlackingSession[]): SlackingSession[] {

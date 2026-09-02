@@ -89,6 +89,7 @@ describe('widget action persistence', () => {
       ...captureSessionStartBusinessDate(new Date(startAt).toISOString()),
       endTime: new Date(endAt).toISOString(),
       durationSeconds: 3600,
+      paidDurationSeconds: 3600,
       earnedAmount: 12.5,
     }])
 

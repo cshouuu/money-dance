@@ -221,3 +221,67 @@ export function isConfiguredWorkday(
 ): boolean {
   return resolveAttendanceDay(date, profile, undefined, settings).isWorkday
 }
+
+/**
+ * Counts the days that receive one base salary share in a calendar month.
+ * Monthly/annual statutory holidays stay in the denominator because the
+ * generated ledger also keeps one normal day of pay for them. Personal leave
+ * remains a planned salary day; explicit company holidays can remove a day.
+ */
+export function getMonthlyPaidDayCount(
+  profile: SalaryProfile,
+  date: Date,
+  records: readonly AttendanceRecord[] = [],
+  settings = loadChinaHolidaySettings(date),
+): number {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const recordsByDate = new Map(records.map(record => [record.date, record]))
+  let paidDays = 0
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const current = new Date(year, month, day, 12)
+    const dateValue = toLocalDateValue(current)
+    const record = recordsByDate.get(dateValue)
+    if (record) {
+      if (record.status === 'normal' || record.status === 'leave') paidDays += 1
+      else if (record.status === 'holiday' && record.payMode !== 'unpaid') paidDays += 1
+      continue
+    }
+
+    const holiday = chinaHolidayForDate(dateValue, settings)
+    if (holiday) {
+      if (holiday.kind === 'adjusted-workday') paidDays += 1
+      else if (holiday.statutory && (profile.salaryType === 'monthly' || profile.salaryType === 'annual')) paidDays += 1
+      continue
+    }
+    if (isProfileWorkday(current, profile)) paidDays += 1
+  }
+
+  return paidDays
+}
+
+/** Planned working days for progress and workload statistics (paid rest days excluded). */
+export function getMonthlyScheduledWorkDayCount(
+  profile: SalaryProfile,
+  date: Date,
+  records: readonly AttendanceRecord[] = [],
+  settings = loadChinaHolidaySettings(date),
+): number {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const recordsByDate = new Map(records.map(record => [record.date, record]))
+  let workDays = 0
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const current = new Date(year, month, day, 12)
+    const record = recordsByDate.get(toLocalDateValue(current))
+    if (record) {
+      workDays += attendanceWorkedFraction(record)
+      continue
+    }
+    if (isConfiguredWorkday(current, profile, settings)) workDays += 1
+  }
+  return workDays
+}

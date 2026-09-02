@@ -5,11 +5,11 @@ import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.os.Bundle;
 
-/** Home-screen entry point registered with the Android launcher. */
-public class MoneyDanceWidgetProvider extends AppWidgetProvider {
+/** Independent 2x2 home-screen entry that shares the row widget's state and actions. */
+public class MoneyDanceSquareWidgetProvider extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] widgetIds) {
-        WidgetRenderer.update(context, manager, widgetIds);
+        WidgetRenderer.updateSquare(context, manager, widgetIds);
         WidgetTickerService.reconcile(context);
     }
 
@@ -20,7 +20,7 @@ public class MoneyDanceWidgetProvider extends AppWidgetProvider {
             int appWidgetId,
             Bundle newOptions
     ) {
-        WidgetRenderer.update(context, manager, new int[] { appWidgetId });
+        WidgetRenderer.updateSquare(context, manager, new int[] { appWidgetId });
     }
 
     @Override

@@ -38,7 +38,9 @@ interface AchievementStore {
   overtime: AchievementState
 }
 
-type AchievementSession = Pick<SlackingSession | OvertimeSession, 'id' | 'durationSeconds' | 'endTime'>
+type AchievementSession = Pick<SlackingSession | OvertimeSession, 'id' | 'durationSeconds' | 'endTime'> & {
+  paidDurationSeconds?: number
+}
 
 const HOUR = 3600
 
@@ -196,7 +198,9 @@ export function reconcileAchievementSessions(
     const wasProcessed = processed.has(session.id)
     const hadCredit = Object.prototype.hasOwnProperty.call(next.creditedSecondsBySessionId, session.id)
     const creditedSeconds = hadCredit ? next.creditedSecondsBySessionId[session.id] ?? 0 : 0
-    const currentSeconds = safeSeconds(session.durationSeconds)
+    const currentSeconds = kind === 'slacking' && typeof session.paidDurationSeconds === 'number'
+      ? Math.min(safeSeconds(session.durationSeconds), safeSeconds(session.paidDurationSeconds))
+      : safeSeconds(session.durationSeconds)
     if (!wasProcessed) {
       processed.add(session.id)
       next.processedSessionIds.push(session.id)

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCompletedSlackingSession, hasOverlappingSlacking, migrateLegacySlackingSessionLocalDates, normalizeActiveSlacking } from './slacking'
+import { createCompletedSlackingSession, hasOverlappingSlacking, migrateLegacySlackingSessionLocalDates, normalizeActiveSlacking, slackingPaidDurationSeconds } from './slacking'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -14,7 +14,20 @@ describe('slacking backfill helpers', () => {
     }, 0.01)
 
     expect(session?.durationSeconds).toBe(1800)
+    expect(session?.paidDurationSeconds).toBe(1800)
     expect(session?.earnedAmount).toBe(18)
+  })
+
+  it('stores elapsed and paid duration separately', () => {
+    const session = createCompletedSlackingSession({
+      id: 'lunch',
+      startTime: '2026-08-30T10:00:00.000Z',
+      endTime: '2026-08-30T12:00:00.000Z',
+    }, { paidDurationSeconds: 3600, earnedAmount: 12 })
+
+    expect(session).toMatchObject({ durationSeconds: 7200, paidDurationSeconds: 3600, earnedAmount: 12 })
+    expect(slackingPaidDurationSeconds(session!)).toBe(3600)
+    expect(slackingPaidDurationSeconds({ durationSeconds: 600 })).toBe(600)
   })
 
   it('rejects reversed and invalid timestamps', () => {
