@@ -44,7 +44,10 @@ async function getUploadTarget(apiKey, updateDescription) {
   const body = new URLSearchParams({
     _api_key: apiKey,
     buildType: 'android',
-    oversea: '2',
+    // GitHub-hosted runners execute outside mainland China. Pgyer's API uses
+    // 1 for overseas acceleration and 2 for domestic acceleration; forcing
+    // the domestic endpoint causes the COS upload to stall from these runners.
+    oversea: '1',
     buildInstallType: '1',
     buildInstallDate: '2',
     buildUpdateDescription: updateDescription,
@@ -78,7 +81,7 @@ async function uploadApk(target, apkPath) {
   const response = await fetch(endpoint, {
     method: 'POST',
     body,
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(300_000),
   })
   if (!response.ok) throw new Error(`Pgyer APK upload failed with HTTP ${response.status}`)
   return String(target.key)

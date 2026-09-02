@@ -71,7 +71,7 @@ Pgyer is the primary Android distribution source for current clients:
 - Actions secret: `PGYER_API_KEY`
 - Optional repository variable: `PGYER_APP_SHORTCUT` (defaults to `moneydance`)
 
-The API key is available only to the release job. The workflow uses Pgyer's three-step upload flow with domestic upload acceleration, verifies the package ID and version returned after publishing, and then checks that the public page exposes the tagged version. The API key and API-generated direct-install URL are never compiled into the APK or written to release artifacts.
+The API key is available only to the release job. The workflow uses Pgyer's three-step upload flow with overseas acceleration for GitHub-hosted runners, verifies the package ID and version returned after publishing, and then checks that the public page exposes the tagged version. The API key and API-generated direct-install URL are never compiled into the APK or written to release artifacts.
 
 GitHub Releases remains the permanent release archive and receives:
 
