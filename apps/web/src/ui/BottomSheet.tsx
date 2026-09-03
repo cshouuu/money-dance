@@ -1,6 +1,6 @@
 import {
   AnimatePresence,
-  motion,
+  m,
   type PanInfo,
   useDragControls,
   useReducedMotion,
@@ -101,7 +101,7 @@ export function BottomSheet({
 
   return createPortal(
     <AnimatePresence initial={false}>
-      {open && <motion.button
+      {open && <m.button
         key="bottom-sheet-backdrop"
         type="button"
         className="beui-bottom-sheet-backdrop"
@@ -112,7 +112,7 @@ export function BottomSheet({
         transition={reduceMotion ? { duration: 0.14 } : DRAWER_TRANSITION}
         onClick={() => onOpenChange(false)}
       />}
-      {open && <motion.div
+      {open && <m.div
         key="bottom-sheet-panel"
         ref={sheetRef}
         tabIndex={-1}
@@ -153,7 +153,7 @@ export function BottomSheet({
           </div>
         </div>
         <div className="beui-bottom-sheet-content">{children}</div>
-      </motion.div>}
+      </m.div>}
     </AnimatePresence>,
     document.body,
   )

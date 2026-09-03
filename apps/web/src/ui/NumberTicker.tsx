@@ -1,4 +1,4 @@
-import { animate, motion, useInView, useReducedMotion } from 'motion/react'
+import { m, useInView, useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './ui-components.css'
 
@@ -90,31 +90,20 @@ function Digit({
   blur: boolean
 }) {
   const reduceMotion = useReducedMotion()
-  const columnRef = useRef<HTMLSpanElement>(null)
-
-  useEffect(() => {
-    if (reduceMotion || !blur || !columnRef.current || !Number.isFinite(digit)) return
-    const node = columnRef.current
-    const controls = animate(node, { filter: ['blur(7px)', 'blur(0px)'] }, {
-      duration: Math.min(duration * 0.7, 0.28),
-      delay,
-      ease: EASE_OUT,
-    })
-    return () => {
-      controls.stop()
-      node.style.filter = 'blur(0px)'
-    }
-  }, [blur, delay, digit, duration, reduceMotion])
-
   return <span className="beui-number-ticker-digit" style={{ height: `${DIGIT_HEIGHT_EM}em`, width: '1ch' }}>
-    <motion.span
-      ref={columnRef}
+    <m.span
       initial={{ y: 0 }}
-      animate={{ y: `-${digit * DIGIT_HEIGHT_EM}em` }}
-      transition={reduceMotion ? { duration: 0 } : { duration, delay, ease: EASE_OUT }}
+      animate={{
+        y: `-${digit * DIGIT_HEIGHT_EM}em`,
+        filter: reduceMotion || !blur ? 'blur(0px)' : ['blur(7px)', 'blur(0px)'],
+      }}
+      transition={reduceMotion ? { duration: 0 } : {
+        y: { duration, delay, ease: EASE_OUT },
+        filter: { duration: Math.min(duration * 0.7, 0.28), delay, ease: EASE_OUT },
+      }}
       className="beui-number-ticker-column"
     >
       {DIGITS.map(item => <span key={item} style={{ height: `${DIGIT_HEIGHT_EM}em` }}>{item}</span>)}
-    </motion.span>
+    </m.span>
   </span>
 }

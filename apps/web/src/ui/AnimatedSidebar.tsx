@@ -1,4 +1,4 @@
-import { motion, useReducedMotion, type HTMLMotionProps } from 'motion/react'
+import { m, useReducedMotion, type HTMLMotionProps } from 'motion/react'
 import { forwardRef } from 'react'
 
 /**
@@ -24,7 +24,7 @@ export const AnimatedSidebar = forwardRef<HTMLElement, AnimatedSidebarProps>(fun
 ) {
   const reduceMotion = useReducedMotion()
 
-  return <motion.aside
+  return <m.aside
     {...props}
     ref={ref}
     initial={false}
@@ -35,5 +35,5 @@ export const AnimatedSidebar = forwardRef<HTMLElement, AnimatedSidebarProps>(fun
       : { type: 'spring', stiffness: 380, damping: 35, mass: 0.75 }}
   >
     {children}
-  </motion.aside>
+  </m.aside>
 })

@@ -12,11 +12,14 @@ import {
   PanelLeftOpen,
   Settings2,
 } from 'lucide-react'
+import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { AnimatedSidebar } from '../ui/AnimatedSidebar'
 import { BottomSheet } from '../ui/BottomSheet'
 import './Shell.css'
+
+const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
 const items = [
   ['/', Coins, '今日', true],
@@ -65,7 +68,8 @@ export function Shell() {
     <span>{label}</span>
   </NavLink>
 
-  return <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+  return <LazyMotion features={loadMotionFeatures} strict>
+    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
     <AnimatedSidebar
       collapsed={sidebarCollapsed}
       expandedWidth={232}
@@ -136,5 +140,6 @@ export function Shell() {
         {drawerItems.map(item => renderMobileItem(item, true))}
       </nav>
     </BottomSheet>
-  </div>
+    </div>
+  </LazyMotion>
 }
