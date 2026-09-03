@@ -1,6 +1,6 @@
 import type { ActiveSlacking, SlackingSession } from '../types'
 import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
-import { keys, loadJSON, saveJSON } from './storage'
+import { keys, loadArray, loadJSON, saveJSON } from './storage'
 
 export interface CompletedSlackingInput {
   id: string
@@ -113,7 +113,7 @@ export function migrateLegacySlackingSessionLocalDates(sessions: SlackingSession
 }
 
 export function loadSlackingSessions(): SlackingSession[] {
-  const stored = loadJSON<SlackingSession[]>(keys.sessions, [])
+  const stored = loadArray<SlackingSession>(keys.sessions)
   const migrated = migrateLegacySlackingSessionLocalDates(stored)
   if (migrated !== stored) saveJSON(keys.sessions, migrated)
   return migrated

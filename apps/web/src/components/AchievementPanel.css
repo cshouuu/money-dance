@@ -1,7 +1,7 @@
 .achievement-panel{margin-top:18px;padding:22px;border:1px solid #dedbd1;border-radius:22px;background:linear-gradient(145deg,rgba(252,250,245,.96),rgba(238,237,224,.86));box-shadow:0 10px 30px rgba(36,41,32,.04)}
 .achievement-heading{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:12px}
 .achievement-title-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:#e2e6c9;color:#53634f}
-.achievement-heading p{margin:0 0 3px;font:500 11px 'DM Mono';letter-spacing:.09em;color:#62685e}
+.achievement-heading p{margin:0 0 3px;font:500 11px ui-monospace,'SFMono-Regular',Menlo,Monaco,Consolas,'Liberation Mono',monospace;letter-spacing:.09em;color:#62685e}
 .achievement-heading h2{margin:0;font-size:18px}
 .achievement-current{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}
 .achievement-current small{font-size:11px;color:#62685e}
@@ -13,7 +13,7 @@
 .achievement-medals{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:20px 0 0;padding:0;list-style:none}
 .achievement-medals li{min-width:0;padding:14px 8px 12px;border:1px solid #dedcd3;border-radius:15px;text-align:center;background:rgba(250,248,242,.72)}
 .achievement-medal{position:relative;width:50px;height:50px;margin:0 auto 9px;border-radius:50%;display:grid;place-items:center;background:#dfded7;color:#9b9e96}
-.achievement-medal>span{position:absolute;top:17px;font:700 11px 'DM Mono'}
+.achievement-medal>span{position:absolute;top:17px;font:700 11px ui-monospace,'SFMono-Regular',Menlo,Monaco,Consolas,'Liberation Mono',monospace}
 .achievement-medal>i{position:absolute;right:-2px;bottom:-1px;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:#f3f1ea;border:1px solid #d5d3ca;color:#93968e}
 .achievement-medals li>b,.achievement-medals li>small,.achievement-medals li>em{display:block;overflow-wrap:anywhere}
 .achievement-medals li>b{font-size:12px}

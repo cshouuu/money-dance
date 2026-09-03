@@ -12,12 +12,12 @@ import { loadLedger, saveLedger } from '../lib/ledger'
 import { getMonthlyWorkStats } from '../lib/monthlyStats'
 import { getPaydayCountdown } from '../lib/payday'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
-import { calculateOvertimeEarnings, createCompletedOvertimeSession, createOvertimeLedgerEntries, loadOvertimeSessions, overtimeIntervalsOverlap, splitOvertimeSessionByLocalDay } from '../lib/overtime'
-import { keys, loadJSON, saveJSON } from '../lib/storage'
+import { calculateOvertimeEarnings, createCompletedOvertimeSession, createOvertimeLedgerEntries, loadActiveOvertime, loadOvertimeSessions, overtimeIntervalsOverlap, splitOvertimeSessionByLocalDay } from '../lib/overtime'
+import { keys, saveJSON } from '../lib/storage'
 import { sessionStartLocalDate } from '../lib/sessionBusinessDate'
 import { loadSlackingSessions, slackingPaidDurationSeconds } from '../lib/slacking'
 import { useNow } from '../lib/useNow'
-import { getWishProgress } from '../lib/wishProgress'
+import { getWishProgress, loadWishes } from '../lib/wishProgress'
 import { closeActiveWorkSession, commitFlexibleOvertimeSettlement, commitFlexibleWorkCorrection, commitFlexibleWorkStart, freezeFlexibleWorkForSettlement, getAutomaticFlexibleSettlementMode, getCurrentWorkRecord, getFlexibleBaseSettlementAmount, getFlexibleEarnedAmount, getFlexibleOvertimeWindow, getFlexibleSettlementRequirement, getFlexibleWorkedSeconds, hasFlexiblePlannedEndReached, isFlexibleFullDaySettlement, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, settleFlexibleWorkRecord, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
 import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession, WishItem } from '../types'
 import './Dashboard.css'
@@ -53,8 +53,8 @@ export function Dashboard() {
   const [ledger, setLedger] = useState(() => loadLedger())
   const [slackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
-  const [activeOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
-  const [wishes] = useState<WishItem[]>(() => loadJSON<WishItem[]>(keys.wishes, []))
+  const [activeOvertime] = useState<ActiveOvertime | null>(loadActiveOvertime)
+  const [wishes] = useState<WishItem[]>(loadWishes)
   const [dialogPurpose, setDialogPurpose] = useState<'start' | 'adjust' | null>(null)
   const [pendingEndRecord, setPendingEndRecord] = useState<DailyWorkRecord | null>(() => {
     const currentRecord = getCurrentWorkRecord(workRecords, new Date())
@@ -264,7 +264,7 @@ export function Dashboard() {
     const latestSessions = loadOvertimeSessions()
     const otherSessions = latestSessions.filter(session => session.id !== pendingEndRecord.overtimeSessionId)
     const hasCompletedOverlap = otherSessions.some(session => overtimeOverlapsSegments(session, window.segments))
-    const latestActiveOvertime = loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)
+    const latestActiveOvertime = loadActiveOvertime()
     const activeStart = latestActiveOvertime ? new Date(latestActiveOvertime.startTime).getTime() : Number.NaN
     const hasActiveOverlap = Number.isFinite(activeStart) && window.segments.some(segment => (
       activeStart < new Date(segment.endTime).getTime()

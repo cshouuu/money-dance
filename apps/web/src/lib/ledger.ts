@@ -2,7 +2,7 @@ import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salar
 import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
 import { attendancePayModeLabel, attendanceStatusLabel, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, loadAttendanceRecords, loadChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
-import { keys, loadJSON, saveJSON } from './storage'
+import { keys, loadArray, saveJSON } from './storage'
 import { loadOvertimeSessions, migrateLegacyOvertimeLedgerDates } from './overtime'
 import { livingCostConfigurationBeforeDate, livingCostConfigurationForDate, normalizeLivingCostHistory, salaryProfileForBusinessDate } from './profile'
 import { getFlexibleEarnedAmount, isFlexibleFullDaySettlement, loadWorkRecords } from './work'
@@ -32,7 +32,7 @@ export interface SummaryResult {
 }
 
 export function loadLedger(): LedgerEntry[] {
-  const entries = loadJSON<LedgerEntry[]>(keys.ledger, [])
+  const entries = loadArray<LedgerEntry>(keys.ledger)
   const overtimeMigrated = migrateLegacyOvertimeLedgerDates(entries, loadOvertimeSessions())
   const migrated = migrateLegacySalaryOverrideLocalDates(overtimeMigrated)
   if (migrated !== entries) saveLedger(migrated)

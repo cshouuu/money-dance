@@ -23,6 +23,7 @@ import {
   createCompletedOvertimeSession,
   createOvertimeLedgerEntries,
   hasOverlappingOvertime,
+  loadActiveOvertime,
   loadOvertimeSessions,
   overtimeIntervalsOverlap,
   overtimePayLabel,
@@ -31,7 +32,7 @@ import {
 import { toLocalDateValue } from '../lib/form'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
 import { resolveSessionStartBusinessDate } from '../lib/sessionBusinessDate'
-import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
+import { keys, removeJSON, saveJSON } from '../lib/storage'
 import { runReversibleStorageTransaction } from '../lib/storageTransaction'
 import { createWebTimerSessionId, sameTimerStart, upsertTimerSession } from '../lib/timerStop'
 import { useNow } from '../lib/useNow'
@@ -81,7 +82,7 @@ export function Overtime() {
     attendanceRecords,
     holidaySettings,
   )), [attendanceRecords, currentDate, holidaySettings, profile])
-  const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
+  const [active, setActive] = useState<ActiveOvertime | null>(loadActiveOvertime)
   const [sessions, setSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [achievementState, setAchievementState] = useState(() => reconcileAchievementSessions(
     'overtime',
@@ -135,7 +136,7 @@ export function Overtime() {
     const startAt = new Date(option.startTime).getTime()
     if (!Number.isFinite(startAt)) return '请选择有效的实际开始时间。'
     if (startAt > new Date(endTime).getTime()) return '实际开始时间不能晚于现在。'
-    const storedActive = loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)
+    const storedActive = loadActiveOvertime()
     if (storedActive) {
       setActive(storedActive)
       return '已有一段加班正在计时，请先结束后再开始。'
@@ -161,7 +162,7 @@ export function Overtime() {
     if (!Number.isFinite(endAt)) return '请选择有效的结束时间。'
     if (endAt > new Date(nowTime).getTime()) return '补记的结束时间不能晚于现在。'
     const storedSessions = loadOvertimeSessions()
-    const storedActive = loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)
+    const storedActive = loadActiveOvertime()
     const otherSessions = storedSessions.filter(session => session.id !== input.id)
     if (hasOverlappingOvertime(otherSessions, input.startTime, input.endTime)) return '这段时间与已有加班记录重叠，请调整后再保存。'
     if (storedActive && overtimeIntervalsOverlap(input.startTime, input.endTime, storedActive.startTime, nowTime)) return '这段时间与正在进行的加班重叠，请调整后再保存。'

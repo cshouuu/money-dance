@@ -205,7 +205,7 @@ The generated `android/` directory is intentionally reproducible from source and
 
 The web app is installable as a PWA from Safari through **Add to Home Screen**. It includes standalone display metadata, viewport safe-area support, an app manifest, icon, and an offline service worker.
 
-Normal UI and feature deployments do not require users to add the PWA to the home screen again. The current service worker uses a network-first strategy, so reopening the installed PWA fetches the current deployed app when the network is available.
+Normal UI and feature deployments do not require users to add the PWA to the home screen again. The service worker starts from one complete, versioned application shell so HTML and hashed assets cannot be mixed across releases. Once the current UI has rendered, it checks for an update, activates the fully precached worker, and reloads once into that version. A static startup screen and a cache-only recovery action keep slow networks or an interrupted update from presenting a blank page; recovery never removes localStorage user data.
 
 A Capacitor iOS project can also be generated later on macOS with Xcode using the same `capacitor.config.json`. A free Apple ID can be used for limited Personal Team device testing; App Store / TestFlight distribution is intentionally out of scope until a paid Apple Developer membership exists.
 

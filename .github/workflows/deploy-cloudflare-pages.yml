@@ -72,3 +72,6 @@ jobs:
           done
           echo "R2 download function health check failed" >&2
           exit 1
+      - name: Verify deployed PWA shell
+        if: steps.cloudflare.outputs.configured == 'true'
+        run: node apps/web/scripts/verify-live-pwa.mjs https://money-dance-6gl.pages.dev/

@@ -1,7 +1,7 @@
 import { DEFAULT_PROFILE, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
 import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
-import { keys, loadJSON, saveJSON } from './storage'
+import { isStoredRecord, keys, loadJSON, saveJSON } from './storage'
 
 export function normalizeLivingCostMode(value: unknown): SalaryProfile['livingCostMode'] {
   return value === 'daily-ledger' ? 'daily-ledger' : 'deduct'
@@ -191,7 +191,8 @@ export function normalizeSalaryHistoryMode(value: unknown): SalaryProfile['salar
 }
 
 export function loadProfile(now = new Date()): SalaryProfile {
-  const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
+  const loaded = loadJSON<unknown>(keys.profile, {})
+  const stored = isStoredRecord(loaded) ? loaded as Partial<SalaryProfile> : {}
   const hasStoredProfile = Object.keys(stored).length > 0
   const profile = { ...DEFAULT_PROFILE, ...stored }
   const storedHistoryMode = (stored as { salaryHistoryMode?: unknown }).salaryHistoryMode
@@ -223,7 +224,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
   const migrated = normalizedLivingCostHistory.length === 0 && migratedBase.includeLivingCost && migratedBase.livingCostMode === 'daily-ledger'
     ? withLivingCostHistoryEvent(migratedBase, now)
     : migratedBase
-  if (
+  if (isStoredRecord(loaded) && (
     storedHistoryMode !== migrated.salaryHistoryMode || storedPayday !== migrated.payday ||
     storedPaydayAdjustment !== migrated.paydayAdjustment || storedMonthlyRateBasis !== migrated.monthlyRateBasis ||
     JSON.stringify(storedSalaryDeductions) !== JSON.stringify(migrated.salaryDeductions) ||
@@ -231,12 +232,13 @@ export function loadProfile(now = new Date()): SalaryProfile {
     JSON.stringify(storedLivingCostHistory) !== JSON.stringify(migrated.livingCostHistory) ||
     !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode ||
     !stored.alternatingAnchorDate || !stored.alternatingAnchorType
-  ) saveJSON(keys.profile, migrated)
+  )) saveJSON(keys.profile, migrated)
   return migrated
 }
 
 export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryProfile | null {
-  const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
+  const loaded = loadJSON<unknown>(keys.profile, {})
+  const stored = isStoredRecord(loaded) ? loaded as Partial<SalaryProfile> : {}
   const previousConfiguration: LivingCostConfiguration = {
     mode: (stored.includeLivingCost ?? DEFAULT_PROFILE.includeLivingCost)
       ? normalizeLivingCostMode(stored.livingCostMode)

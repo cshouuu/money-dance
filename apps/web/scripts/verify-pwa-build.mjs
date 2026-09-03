@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { access, readFile } from 'node:fs/promises'
+import { runInNewContext } from 'node:vm'
 
 const distUrl = new URL('../dist/', import.meta.url)
 const indexHtml = await readFile(new URL('index.html', distUrl), 'utf8')
 const serviceWorker = await readFile(new URL('sw.js', distUrl), 'utf8')
+const headers = await readFile(new URL('_headers', distUrl), 'utf8')
 const assetUrls = [...indexHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(match => match[1])
 
 assert(assetUrls.length >= 2, 'index.html should reference the built JavaScript and CSS assets')
@@ -11,11 +13,76 @@ assert(!serviceWorker.includes('__MONEY_DANCE_'), 'service worker build placehol
 assert.match(serviceWorker, /money-dance-[a-f0-9]{12}/, 'service worker cache must be versioned per build')
 assert(serviceWorker.includes("request.mode === 'navigate'"), 'only navigation requests may use the document fallback')
 assert(!serviceWorker.includes("cached || caches.match('/')"), 'asset failures must never fall back to index.html')
+assert(serviceWorker.includes("event.data?.type === 'SKIP_WAITING'"), 'updates must activate only after the app requests it')
+assert(!/precacheCurrentBuild\(\)\.then\(\(\) => self\.skipWaiting\(\)\)/.test(serviceWorker), 'install must not replace the active worker automatically')
+assert(serviceWorker.includes('async function cacheFirstNavigation'), 'installed navigation must start from its versioned cache')
+const navigationHandler = serviceWorker.slice(
+  serviceWorker.indexOf('async function cacheFirstNavigation'),
+  serviceWorker.indexOf('async function cacheFirstBuildAsset'),
+)
+assert(navigationHandler.indexOf('cache.match(OFFLINE_DOCUMENT)') < navigationHandler.indexOf('fetchWithTimeout(request)'), 'navigation must check the versioned document before the network')
+assert(!serviceWorker.includes('cache.put(OFFLINE_DOCUMENT'), 'network HTML must never overwrite a versioned application shell')
+assert(indexHtml.includes('id="boot-status"'), 'the static shell must show a startup state before React loads')
+assert(indexHtml.includes('money-dance:boot-failed'), 'the static shell must recover from a React startup failure')
+assert.match(headers, /\/sw\.js[\s\S]*Cache-Control: no-cache, no-store, must-revalidate/, 'the service worker script must bypass CDN/browser caching')
 
 for (const assetUrl of assetUrls) {
   await access(new URL(assetUrl.slice(1), distUrl))
   assert(serviceWorker.includes(JSON.stringify(assetUrl)), `${assetUrl} must be precached`)
+  if (assetUrl.endsWith('.css')) {
+    const css = await readFile(new URL(assetUrl.slice(1), distUrl), 'utf8')
+    assert(!css.includes('fonts.googleapis.com'), 'startup CSS must not depend on Google Fonts')
+  }
 }
+
+const workerOrigin = 'https://money-dance.example'
+class WorkerRequest extends Request {
+  constructor(input, init) {
+    super(typeof input === 'string' ? new URL(input, workerOrigin) : input, init)
+  }
+}
+const workerListeners = new Map()
+let workerNetworkCalls = 0
+let waitingWorkerActivations = 0
+const cachedDocument = new Response('<!doctype html><p>cached-shell</p>', {
+  headers: { 'content-type': 'text/html; charset=utf-8' },
+})
+runInNewContext(serviceWorker, {
+  AbortController,
+  Request: WorkerRequest,
+  Response,
+  URL,
+  caches: {
+    open: async () => ({
+      match: async key => key === '/index.html' ? cachedDocument.clone() : undefined,
+      put: async () => undefined,
+    }),
+    keys: async () => [],
+    delete: async () => true,
+  },
+  clearTimeout,
+  fetch: async () => {
+    workerNetworkCalls += 1
+    throw new Error('network should not be used for a cached launch')
+  },
+  self: {
+    location: { origin: workerOrigin },
+    clients: { claim: async () => undefined },
+    skipWaiting: () => { waitingWorkerActivations += 1 },
+    addEventListener: (type, listener) => workerListeners.set(type, listener),
+  },
+  setTimeout,
+})
+let navigationResponse
+workerListeners.get('fetch')({
+  request: { method: 'GET', mode: 'navigate', url: `${workerOrigin}/` },
+  respondWith: response => { navigationResponse = response },
+})
+const cachedLaunch = await navigationResponse
+assert.equal(await cachedLaunch.text(), '<!doctype html><p>cached-shell</p>', 'a cached launch must return its versioned document')
+assert.equal(workerNetworkCalls, 0, 'a cached launch must not wait for the network')
+workerListeners.get('message')({ data: { type: 'SKIP_WAITING' } })
+assert.equal(waitingWorkerActivations, 1, 'the worker must activate after the rendered app requests it')
 
 const { onRequest } = await import('../functions/assets/[[path]].js')
 const htmlFallback = await onRequest({

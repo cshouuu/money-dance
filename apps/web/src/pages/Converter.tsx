@@ -9,9 +9,9 @@ import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInval
 import { createId } from '../lib/id'
 import { appendLedgerEntry } from '../lib/ledger'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
-import { keys, loadJSON, saveJSON } from '../lib/storage'
+import { keys, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
-import { getWishProgress } from '../lib/wishProgress'
+import { getWishProgress, loadWishes } from '../lib/wishProgress'
 import { loadWorkRecords } from '../lib/work'
 import type { WishItem } from '../types'
 import './Converter.css'
@@ -34,7 +34,7 @@ export function Converter() {
   const [profile] = useState(() => loadProfile())
   const [attendanceRecords] = useState(() => loadAttendanceRecords())
   const [workRecords] = useState(() => loadWorkRecords())
-  const [items, setItems] = useState<WishItem[]>(() => loadJSON(keys.wishes, []))
+  const [items, setItems] = useState<WishItem[]>(loadWishes)
   const [name, setName] = useState(search.get('name') || '')
   const [price, setPrice] = useState(search.get('price') || '')
   const [pending, setPending] = useState<PendingAction>(null)
