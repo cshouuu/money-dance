@@ -5,13 +5,13 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { getPageCount, getPageItems, Pagination } from '../components/Pagination'
 import { formatOwnershipDuration, MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
-import { keys, loadRecordArray, saveJSON } from '../lib/storage'
+import { keys, loadJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import type { OwnedItem } from '../types'
 import './Assets.css'
 
 export function Assets() {
-  const now=useNow(60_000); const [items,setItems]=useState<OwnedItem[]>(()=>loadRecordArray<OwnedItem>(keys.assets,item=>typeof item.id==='string'&&typeof item.name==='string'&&typeof item.price==='number'&&Number.isFinite(item.price)&&item.price>=0&&typeof item.purchaseDate==='string'&&typeof item.category==='string'&&typeof item.createdAt==='string')); const [page,setPage]=useState(1); const [name,setName]=useState(''); const [price,setPrice]=useState(''); const [date,setDate]=useState(()=>toLocalDateValue()); const [category,setCategory]=useState('数码'); const [pendingDelete,setPendingDelete]=useState<OwnedItem|null>(null)
+  const now=useNow(60_000); const [items,setItems]=useState<OwnedItem[]>(()=>loadJSON(keys.assets,[])); const [page,setPage]=useState(1); const [name,setName]=useState(''); const [price,setPrice]=useState(''); const [date,setDate]=useState(()=>toLocalDateValue()); const [category,setCategory]=useState('数码'); const [pendingDelete,setPendingDelete]=useState<OwnedItem|null>(null)
   const currentPage=Math.min(page,getPageCount(items.length)); const visibleItems=getPageItems(items,currentPage)
   const add=(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const p=parseNumberInput(price);const d=new Date(`${date}T00:00:00`);if(!e.currentTarget.reportValidity()||!name.trim()||p===null||p<0||p>MAX_MONEY_AMOUNT||Number.isNaN(d.getTime())||d>now)return;const next=[{id:createId(),name:name.trim(),price:p,purchaseDate:d.toISOString(),category,createdAt:new Date().toISOString()},...items];setItems(next);saveJSON(keys.assets,next);setPage(1);setName('');setPrice('')}
   const remove=()=>{if(!pendingDelete)return;const next=items.filter(i=>i.id!==pendingDelete.id);setItems(next);saveJSON(keys.assets,next);setPendingDelete(null)}

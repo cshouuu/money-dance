@@ -4,19 +4,6 @@ import { loadChinaHolidaySettings } from './attendance'
 import { toLocalDateValue } from './form'
 import { calculatePaidTimeEarnings, estimatePaidEarningsCompletionDate } from './paidTime'
 import { salaryProfileForBusinessDate } from './profile'
-import { keys, loadRecordArray } from './storage'
-
-export function loadWishes(): WishItem[] {
-  return loadRecordArray<WishItem>(keys.wishes, item => (
-    typeof item.id === 'string'
-    && typeof item.name === 'string'
-    && typeof item.price === 'number'
-    && Number.isFinite(item.price)
-    && item.price >= 0
-    && typeof item.createdAt === 'string'
-    && (item.purchasedAt === undefined || typeof item.purchasedAt === 'string')
-  ))
-}
 
 export interface WishProgress {
   earnedAmount: number

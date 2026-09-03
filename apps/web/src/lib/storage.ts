@@ -7,30 +7,6 @@ export function loadJSON<T>(key: string, fallback: T): T {
   }
 }
 
-export type StoredRecord = Record<string, unknown>
-
-export function isStoredRecord(value: unknown): value is StoredRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-/**
- * Keeps a malformed or legacy container from crashing startup. The original
- * localStorage value is deliberately left untouched so users never lose data
- * merely because a newer build cannot understand it.
- */
-export function loadArray<T>(key: string): T[] {
-  const value = loadJSON<unknown>(key, [])
-  return Array.isArray(value) ? value as T[] : []
-}
-
-export function loadRecordArray<T extends object>(
-  key: string,
-  isValid: (value: StoredRecord) => boolean = () => true,
-): T[] {
-  return loadArray<unknown>(key)
-    .filter((value): value is StoredRecord => isStoredRecord(value) && isValid(value)) as T[]
-}
-
 export const STORAGE_CHANGED_EVENT = 'money-dance:storage-changed'
 
 function notifyStorageChanged(key: string): void {

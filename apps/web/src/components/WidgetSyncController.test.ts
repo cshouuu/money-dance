@@ -26,7 +26,6 @@ vi.mock('../lib/widgetActions', () => ({ applyWidgetActions: mocks.applyWidgetAc
 vi.mock('../lib/profile', () => ({ loadProfile: mocks.loadProfile }))
 vi.mock('../lib/work', () => ({ loadWorkRecords: mocks.loadWorkRecords }))
 vi.mock('../lib/attendance', () => ({ loadAttendanceRecords: mocks.loadAttendanceRecords }))
-vi.mock('../lib/overtime', () => ({ loadActiveOvertime: mocks.loadJSON }))
 vi.mock('../lib/widgetState', () => ({ buildWidgetSnapshot: mocks.buildWidgetSnapshot }))
 vi.mock('../lib/storage', () => ({
   STORAGE_CHANGED_EVENT: 'money-dance:storage-changed',

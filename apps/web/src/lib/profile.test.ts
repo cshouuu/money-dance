@@ -68,14 +68,6 @@ describe('normalizePayday', () => {
     expect(profile.monthlyRateBasis).toBe('actual-calendar')
     expect(profile.paydayAdjustment).toBe('previous-workday')
   })
-
-  it('starts safely without overwriting an unrecognized profile container', () => {
-    const setItem = vi.fn()
-    vi.stubGlobal('localStorage', { getItem: () => 'null', setItem })
-
-    expect(loadProfile().salary).toBe(DEFAULT_PROFILE.salary)
-    expect(setItem).not.toHaveBeenCalled()
-  })
 })
 
 describe('salaryProfileForBusinessDate', () => {

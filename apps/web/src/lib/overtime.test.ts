@@ -6,29 +6,11 @@ import {
   hasOverlappingOvertime,
   migrateLegacyOvertimeLedgerDates,
   migrateLegacyOvertimeSessionLocalDates,
-  normalizeActiveOvertime,
   splitOvertimeSessionByLocalDay,
 } from './overtime'
 
 afterEach(() => {
   vi.unstubAllEnvs()
-})
-
-describe('active overtime recovery', () => {
-  it('rejects malformed persisted timers instead of crashing startup', () => {
-    expect(normalizeActiveOvertime(null)).toBeNull()
-    expect(normalizeActiveOvertime({ startTime: 'invalid', payMode: 'unpaid' })).toBeNull()
-    expect(normalizeActiveOvertime({ startTime: new Date().toISOString(), payMode: 'fixed', fixedAmount: '20' })).toBeNull()
-  })
-
-  it('normalizes a valid persisted timer', () => {
-    const startTime = new Date(2026, 8, 3, 18, 0).toISOString()
-    expect(normalizeActiveOvertime({ startTime, payMode: 'multiplier', multiplier: 1.5 })).toMatchObject({
-      startTime,
-      payMode: 'multiplier',
-      multiplier: 1.5,
-    })
-  })
 })
 
 function session(start: Date, end: Date): Pick<OvertimeSession, 'startTime' | 'endTime'> {

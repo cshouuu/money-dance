@@ -1,8 +1,6 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import { AppErrorBoundary } from './components/AppErrorBoundary'
-import { registerMoneyDanceServiceWorker } from './lib/serviceWorker'
 import './styles.css'
 import './mobile.css'
 
@@ -17,19 +15,14 @@ function BootSignal() {
   return null
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <AppErrorBoundary>
-      <App />
-      <BootSignal />
-    </AppErrorBoundary>
-  </StrictMode>,
-)
+createRoot(rootElement).render(<StrictMode><App/><BootSignal/></StrictMode>)
 
 const isNativeShell = 'Capacitor' in window
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 if ('serviceWorker' in navigator && !isNativeShell && !isLocalDev) {
-  const register = () => registerMoneyDanceServiceWorker().catch(() => undefined)
-  if (document.readyState === 'complete') register()
-  else window.addEventListener('load', register, { once: true })
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+      .then(registration => registration.update())
+      .catch(() => undefined)
+  })
 }

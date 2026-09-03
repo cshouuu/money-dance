@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadAttendanceRecords } from '../lib/attendance'
-import { loadActiveOvertime } from '../lib/overtime'
 import { loadProfile } from '../lib/profile'
-import { STORAGE_CHANGED_EVENT, keys } from '../lib/storage'
+import { STORAGE_CHANGED_EVENT, keys, loadJSON } from '../lib/storage'
 import {
   ackWidgetActions,
   consumeWidgetLaunchTarget,
@@ -15,6 +14,7 @@ import { applyWidgetActions } from '../lib/widgetActions'
 import { buildWidgetSnapshot } from '../lib/widgetState'
 import { loadWorkRecords } from '../lib/work'
 import { loadActiveSlacking } from '../lib/slacking'
+import type { ActiveOvertime } from '../types'
 
 const SYNC_DEBOUNCE_MS = 180
 const SAFE_LAUNCH_TARGET = /^\/(?:$|(?:slacking|overtime)(?:[/?#]|$))/
@@ -41,7 +41,7 @@ function createSnapshot() {
     workRecords: loadWorkRecords(),
     attendanceRecords: loadAttendanceRecords(),
     activeSlacking: loadActiveSlacking(),
-    activeOvertime: loadActiveOvertime(),
+    activeOvertime: loadJSON<ActiveOvertime | null>(keys.activeOvertime, null),
   })
 }
 

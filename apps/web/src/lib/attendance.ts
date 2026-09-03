@@ -2,7 +2,7 @@ import type { AlternatingWeekType, SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
-import { isStoredRecord, keys, loadJSON, loadRecordArray, saveJSON } from './storage'
+import { keys, loadJSON, saveJSON } from './storage'
 
 const CHINA_HOLIDAY_SETTINGS_KEY = 'money-dance.china-holiday-calendar.v1'
 const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -35,11 +35,7 @@ export const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
 ]
 
 export function loadAttendanceRecords(): AttendanceRecord[] {
-  return loadRecordArray<AttendanceRecord>(keys.attendanceRecords, record => (
-    typeof record.date === 'string'
-    && (record.status === 'normal' || record.status === 'leave' || record.status === 'holiday')
-    && typeof record.updatedAt === 'string'
-  ))
+  return loadJSON<AttendanceRecord[]>(keys.attendanceRecords, [])
 }
 
 export function saveAttendanceRecords(records: AttendanceRecord[]): boolean {
@@ -55,14 +51,13 @@ export function upsertAttendanceRecord(records: AttendanceRecord[], record: Atte
 
 export function loadChinaHolidaySettings(now = new Date()): ChinaHolidaySettings {
   const today = toLocalDateValue(now)
-  const loaded = loadJSON<unknown>(CHINA_HOLIDAY_SETTINGS_KEY, {})
-  const stored = isStoredRecord(loaded) ? loaded as Partial<ChinaHolidaySettings> : {}
+  const stored = loadJSON<Partial<ChinaHolidaySettings>>(CHINA_HOLIDAY_SETTINGS_KEY, {})
   const normalized = {
     enabled: stored.enabled ?? true,
     effectiveFrom: DATE_VALUE_PATTERN.test(stored.effectiveFrom ?? '') ? stored.effectiveFrom! : today,
     dataVersion: CHINA_HOLIDAY_DATA_VERSION,
   }
-  if (isStoredRecord(loaded) && (stored.enabled === undefined || stored.effectiveFrom !== normalized.effectiveFrom || stored.dataVersion !== normalized.dataVersion)) {
+  if (stored.enabled === undefined || stored.effectiveFrom !== normalized.effectiveFrom || stored.dataVersion !== normalized.dataVersion) {
     saveJSON(CHINA_HOLIDAY_SETTINGS_KEY, normalized)
   }
   return normalized

@@ -61,7 +61,7 @@
 
 .wish-progress{grid-area:progress;display:grid;gap:7px;padding-top:12px;border-top:1px solid var(--line)}
 .wish-progress-heading,.wish-progress-meta{display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--muted);font-size:10px;line-height:1.4}
-.wish-progress-heading b{color:#50604d;font-weight:750}.wish-progress-heading strong{color:#4f624c;font:650 12px ui-monospace,'SFMono-Regular',Menlo,Monaco,Consolas,'Liberation Mono',monospace}
+.wish-progress-heading b{color:#50604d;font-weight:750}.wish-progress-heading strong{color:#4f624c;font:650 12px 'DM Mono'}
 .wish-progress-track{height:7px;overflow:hidden;border-radius:999px;background:#e9e7df}
 .wish-progress-track>i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#b9ca7e,#64785c);transition:width .35s ease}
 .wish-progress-meta span:last-child{text-align:right}

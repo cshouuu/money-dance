@@ -5,7 +5,7 @@ import type {
   OvertimeSession,
   OvertimeStartOption,
 } from '../types'
-import { keys, loadArray, loadJSON, saveJSON } from './storage'
+import { keys, loadJSON, saveJSON } from './storage'
 import {
   isSessionLocalDate,
   isSessionTimezoneOffsetMinutes,
@@ -24,33 +24,6 @@ export function overtimePayLabel(option: Pick<ActiveOvertime, 'payMode' | 'multi
   if (option.payMode === 'unpaid') return '无加班费'
   if (option.payMode === 'fixed') return `固定 ¥${(option.fixedAmount ?? 0).toFixed(2)}`
   return `${option.multiplier ?? 1} 倍工资`
-}
-
-export function normalizeActiveOvertime(value: unknown): ActiveOvertime | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  if (typeof record.startTime !== 'string') return null
-  const metadata = resolveSessionStartBusinessDate(
-    record.startTime,
-    typeof record.startLocalDate === 'string' ? record.startLocalDate : undefined,
-    typeof record.startTimezoneOffsetMinutes === 'number' ? record.startTimezoneOffsetMinutes : undefined,
-  )
-  if (!metadata) return null
-  if (record.payMode === 'unpaid') return { payMode: 'unpaid', startTime: new Date(record.startTime).toISOString(), ...metadata }
-  if (record.payMode === 'fixed' && typeof record.fixedAmount === 'number' && Number.isFinite(record.fixedAmount) && record.fixedAmount > 0) {
-    return { payMode: 'fixed', fixedAmount: record.fixedAmount, startTime: new Date(record.startTime).toISOString(), ...metadata }
-  }
-  if (record.payMode === 'multiplier' && typeof record.multiplier === 'number' && Number.isFinite(record.multiplier) && record.multiplier > 0) {
-    return { payMode: 'multiplier', multiplier: record.multiplier, startTime: new Date(record.startTime).toISOString(), ...metadata }
-  }
-  return null
-}
-
-export function loadActiveOvertime(): ActiveOvertime | null {
-  const stored = loadJSON<unknown>(keys.activeOvertime, null)
-  const normalized = normalizeActiveOvertime(stored)
-  if (normalized && JSON.stringify(normalized) !== JSON.stringify(stored)) saveJSON(keys.activeOvertime, normalized)
-  return normalized
 }
 
 export interface CompletedOvertimeInput extends OvertimeStartOption {
@@ -323,8 +296,8 @@ function isUntouchedGeneratedOvertimeEntry(entry: LedgerEntry, session: Overtime
 }
 
 export function loadOvertimeSessions(): OvertimeSession[] {
-  const stored = loadArray<OvertimeSession>(keys.overtimeSessions)
-  const ledger = loadArray<LedgerEntry>(keys.ledger)
+  const stored = loadJSON<OvertimeSession[]>(keys.overtimeSessions, [])
+  const ledger = loadJSON<LedgerEntry[]>(keys.ledger, [])
   const migrated = migrateLegacyOvertimeSessionLocalDates(stored, ledger)
   if (migrated !== stored) saveJSON(keys.overtimeSessions, migrated)
   return migrated

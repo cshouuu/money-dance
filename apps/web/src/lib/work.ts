@@ -4,7 +4,7 @@ import { attendanceLeavePeriod, chinaHolidayForDate, getCustomAttendanceAmount, 
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
 import { createId } from './id'
 import { salaryProfileForBusinessDate } from './profile'
-import { keys, loadRecordArray, saveJSON } from './storage'
+import { keys, loadJSON, saveJSON } from './storage'
 
 export interface TodayWorkSummary {
   mode: WorkMode
@@ -33,18 +33,7 @@ export interface FlexibleOvertimeWindow {
 }
 
 export function loadWorkRecords(): DailyWorkRecord[] {
-  return loadRecordArray<DailyWorkRecord>(keys.workRecords, record => (
-    typeof record.date === 'string'
-    && (record.mode === 'scheduled' || record.mode === 'flexible')
-    && (record.status === 'ready' || record.status === 'working' || record.status === 'paused' || record.status === 'ended')
-    && Array.isArray(record.sessions)
-    && record.sessions.every(session => (
-      typeof session === 'object' && session !== null
-      && typeof (session as { id?: unknown }).id === 'string'
-      && typeof (session as { startTime?: unknown }).startTime === 'string'
-      && ((session as { endTime?: unknown }).endTime === undefined || typeof (session as { endTime?: unknown }).endTime === 'string')
-    ))
-  ))
+  return loadJSON<DailyWorkRecord[]>(keys.workRecords, [])
 }
 
 export function saveWorkRecords(records: DailyWorkRecord[]): boolean {
