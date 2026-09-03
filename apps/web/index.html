@@ -14,8 +14,14 @@
     <link rel="icon" href="/money-dance-icon.svg" type="image/svg+xml" />
     <title>Money Dance · 薪流</title>
     <style>
+      #boot-status[hidden]{display:none}
+      #boot-status{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;padding:24px;background:#f5f2ea;color:#1d241c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif}
+      #boot-status>div{display:grid;justify-items:center;gap:12px}
+      #boot-status img{width:62px;height:62px;border-radius:18px;box-shadow:0 12px 30px rgba(32,43,32,.12)}
+      #boot-status strong{font-size:18px;letter-spacing:.01em}
+      #boot-status span{color:#73796f;font-size:12px}
       #boot-recovery[hidden]{display:none}
-      #boot-recovery{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:#f5f2ea;color:#1d241c;font-family:Inter,'Noto Sans SC',system-ui,sans-serif}
+      #boot-recovery{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:24px;background:#f5f2ea;color:#1d241c;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',sans-serif}
       #boot-recovery>div{width:min(420px,100%);padding:26px;border:1px solid #dedbd1;border-radius:22px;background:#fcfaf5;box-shadow:0 18px 50px rgba(32,43,32,.12)}
       #boot-recovery p{margin:0;color:#73796f;font-size:13px;line-height:1.7}
       #boot-recovery strong{display:block;margin-bottom:10px;font-size:20px}
@@ -25,6 +31,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-status" role="status" aria-live="polite">
+      <div>
+        <img src="/money-dance-icon.svg" alt="" width="62" height="62" />
+        <strong>Money Dance</strong>
+        <span>正在打开应用…</span>
+      </div>
+    </div>
     <div id="boot-recovery" role="alert" hidden>
       <div>
         <strong>Money Dance 没有正常启动</strong>
@@ -35,18 +48,24 @@
     <script>
       (() => {
         window.__MONEY_DANCE_BOOTED__ = false
+        const status = document.getElementById('boot-status')
         const recovery = document.getElementById('boot-recovery')
         const retry = document.getElementById('boot-recovery-retry')
-        let timer = window.setTimeout(showRecovery, 10000)
+        let timer = window.setTimeout(showRecovery, 12000)
 
         function showRecovery() {
-          if (!window.__MONEY_DANCE_BOOTED__) recovery.hidden = false
+          if (!window.__MONEY_DANCE_BOOTED__) {
+            status.hidden = true
+            recovery.hidden = false
+          }
         }
 
         window.addEventListener('money-dance:booted', () => {
           window.clearTimeout(timer)
+          status.hidden = true
           recovery.hidden = true
         }, { once: true })
+        window.addEventListener('money-dance:boot-failed', showRecovery)
         window.addEventListener('error', showRecovery, true)
         window.addEventListener('unhandledrejection', showRecovery)
 
@@ -65,7 +84,7 @@
                 .map(name => caches.delete(name)))
             }
           } finally {
-            window.location.reload()
+            window.location.replace(`/?cache-recovery=${Date.now()}`)
           }
         })
       })()

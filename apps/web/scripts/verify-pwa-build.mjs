@@ -4,6 +4,7 @@ import { access, readFile } from 'node:fs/promises'
 const distUrl = new URL('../dist/', import.meta.url)
 const indexHtml = await readFile(new URL('index.html', distUrl), 'utf8')
 const serviceWorker = await readFile(new URL('sw.js', distUrl), 'utf8')
+const headers = await readFile(new URL('_headers', distUrl), 'utf8')
 const assetUrls = [...indexHtml.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map(match => match[1])
 
 assert(assetUrls.length >= 2, 'index.html should reference the built JavaScript and CSS assets')
@@ -11,10 +12,19 @@ assert(!serviceWorker.includes('__MONEY_DANCE_'), 'service worker build placehol
 assert.match(serviceWorker, /money-dance-[a-f0-9]{12}/, 'service worker cache must be versioned per build')
 assert(serviceWorker.includes("request.mode === 'navigate'"), 'only navigation requests may use the document fallback')
 assert(!serviceWorker.includes("cached || caches.match('/')"), 'asset failures must never fall back to index.html')
+assert(serviceWorker.includes('alwaysReturnResponse'), 'fetch handlers must convert internal failures into responses')
+assert(!serviceWorker.includes('skipWaiting'), 'updates must not take over clients during an active session')
+assert(indexHtml.includes('id="boot-recovery"'), 'the static shell must include cache recovery UI')
+assert(!indexHtml.includes('localStorage.clear'), 'cache recovery must never clear user data')
+assert.match(headers, /\/sw\.js[\s\S]*Cache-Control: no-cache, no-store, must-revalidate/, 'sw.js must bypass HTTP caches')
 
 for (const assetUrl of assetUrls) {
   await access(new URL(assetUrl.slice(1), distUrl))
   assert(serviceWorker.includes(JSON.stringify(assetUrl)), `${assetUrl} must be precached`)
+  if (assetUrl.endsWith('.css')) {
+    const stylesheet = await readFile(new URL(assetUrl.slice(1), distUrl), 'utf8')
+    assert(!stylesheet.includes('fonts.googleapis.com'), 'startup must not depend on Google Fonts')
+  }
 }
 
 const { onRequest } = await import('../functions/assets/[[path]].js')

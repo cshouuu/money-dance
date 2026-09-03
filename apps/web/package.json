@@ -6,9 +6,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/verify-pwa-build.mjs",
+    "build": "tsc -b && vite build && node scripts/verify-pwa-build.mjs && node scripts/verify-service-worker.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
+    "test:pwa": "node scripts/verify-service-worker.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
