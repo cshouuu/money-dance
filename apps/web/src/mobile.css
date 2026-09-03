@@ -15,7 +15,24 @@ body{padding-top:var(--md-safe-area-top);padding-left:var(--md-safe-area-left);p
 
 @media(max-width:900px){
   .page{padding-bottom:calc(108px + var(--md-safe-area-bottom))}
+  html{scroll-padding-bottom:calc(126px + var(--md-safe-area-bottom))}
   button,a{-webkit-tap-highlight-color:transparent}
+
+  input:not([type=checkbox]):not([type=radio]),select,textarea{
+    font-size:16px!important;
+  }
+
+  input,select,textarea,[contenteditable=true]{
+    scroll-margin-top:18px;
+    scroll-margin-bottom:calc(132px + var(--md-safe-area-bottom));
+  }
+
+  .primary-button,.ghost-button,.stop-button,.buy-button,.pagination button,.dimension-tabs button,.direction-switch button{
+    min-height:44px;
+  }
+
+  .icon-button,.converter-actions .icon-button{width:44px!important;height:44px!important}
+  .direction-switch{height:44px}
 
   .input-card,.settings-card,.hero-card,.metric-card,.timer-card,.summary-strip,.asset-card,.list-card,.ledger-row,.empty{
     transition:transform .28s cubic-bezier(.22,.8,.24,1),box-shadow .28s ease,background-color .25s ease,border-color .25s ease,opacity .25s ease;

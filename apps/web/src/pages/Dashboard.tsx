@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
+import { NumberTicker } from '../ui/NumberTicker'
 import { loadAchievementState, reconcileAchievementSessions, saveAchievementState } from '../lib/achievements'
 import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isConfiguredWorkday, isHalfDayLeave, loadAttendanceRecords, loadChinaHolidaySettings } from '../lib/attendance'
 import { toLocalDateValue, toLocalTimeValue } from '../lib/form'
@@ -23,6 +24,7 @@ import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSet
 import './Dashboard.css'
 
 const money = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const moneyFromCents = (cents: number) => money(cents / 100)
 
 function overtimeOverlapsSegments(session: OvertimeSession, segments: readonly { startTime: string; endTime: string }[]): boolean {
   const sessionSegments = session.segments?.length ? session.segments : [{ startTime: session.startTime, endTime: session.endTime }]
@@ -370,7 +372,7 @@ export function Dashboard() {
     <div className={`hero-card${work.dayType === 'work' && work.mode === 'flexible' ? ' flexible-work' : ''}`}>
       <div className="hero-glow" />
       <div className="hero-heading-row"><p className="hero-label"><Sparkles size={16}/> {heroLabel}</p><span className="hero-mode-status">{modeStatus}</span></div>
-      <div className="money-ticker">{money(earned)}</div>
+      <NumberTicker className="money-ticker" value={earned * 100} format={moneyFromCents} duration={0.38} stagger={0} startOnView={false} />
       <p className="rate-line">{work.dayType === 'rest'
         ? '休息日不自动计薪'
         : work.officialHolidayName

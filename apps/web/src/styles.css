@@ -4,3 +4,54 @@
 @media(max-width:560px){.page{padding:27px 15px 88px}.page-header{margin-bottom:24px}.page-header .ghost-button{display:none}.hero-card{border-radius:22px;padding:29px 22px 24px;min-height:auto}.money-ticker{font-size:40px;letter-spacing:-2px}.rate-line{margin-bottom:32px}.hero-meta{gap:13px;flex-wrap:wrap}.metric-grid{gap:10px}.input-card,.asset-form{grid-template-columns:1fr}.live-result{padding:12px;background:#efede5;border-radius:11px}.asset-grid{grid-template-columns:1fr}.list-card{grid-template-columns:40px 1fr auto}.list-card>.icon-button{display:none}.form-grid{grid-template-columns:1fr}.rate-preview{grid-template-columns:1fr 1fr}.summary-strip{gap:15px}.summary-strip .text-button{display:none}}
 .hero-heading-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px}.hero-mode-status{font:9px 'DM Mono';color:#aab5a1;background:#344035;border:1px solid #465346;border-radius:100px;padding:6px 9px;white-space:nowrap}.hero-mode-switch,.hero-work-link{border:0;background:transparent;color:#bdc9b2;font-size:10px;text-decoration:underline;text-decoration-color:#667463;text-underline-offset:3px;cursor:pointer}.hero-mode-switch{margin-left:auto}.flexible-work .rate-line{margin-bottom:18px}.work-controls{position:relative;min-height:39px;display:flex;align-items:center;gap:9px;margin-bottom:27px}.hero-work-primary,.hero-work-secondary{height:39px;border-radius:11px;padding:0 15px;border:1px solid #687765;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:650;cursor:pointer}.hero-work-primary{background:#e3eabe;color:#283026;border-color:#e3eabe}.hero-work-secondary{background:#344035;color:#e8ecdf}.work-ended-label{font-size:11px;color:#d2dac7;background:#344035;border-radius:10px;padding:10px 13px}.progress-row.flexible{grid-template-columns:auto minmax(80px,1fr) auto}.progress-row.flexible>span:last-child{text-align:right;white-space:nowrap}.flexible-work .hero-meta{margin-top:20px}
 @media(max-width:560px){.hero-heading-row{align-items:flex-start}.hero-mode-status{font-size:8px}.work-controls{align-items:stretch;flex-wrap:wrap;margin-bottom:23px}.hero-work-primary,.hero-work-secondary{flex:1}.hero-work-link{width:100%;text-align:left;padding:3px 0}.progress-row.flexible{gap:9px;font-size:9px}.hero-mode-switch{width:100%;text-align:left;margin-top:2px}.flexible-work .money-ticker{margin-top:17px}}
+
+/* UI refresh V2: component density and hierarchy only; palette tokens above stay unchanged. */
+body{overflow-x:hidden}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.beui-number-ticker.money-ticker{display:flex;width:max-content}
+
+@media(min-width:901px){
+  .page{max-width:1180px;padding:42px 38px 82px}
+  .page-header{margin-bottom:27px}
+  .page-header h1{font-size:31px;letter-spacing:-1.2px}
+  .hero-card{min-height:292px;padding:31px 34px 27px;border-radius:22px}
+  .money-ticker{margin-top:18px;font-size:56px}
+  .rate-line{margin-bottom:36px}
+  .metric-card{padding:20px 21px;border-radius:17px}
+  .metric-card h3{font-size:25px}
+  .metric-icon{top:18px;right:18px;width:32px;height:32px}
+  .section-title{margin-top:31px}
+  .input-card,.settings-card{padding:22px;border-radius:19px}
+  .timer-card{padding:32px 24px;border-radius:22px}
+  .asset-card{border-radius:17px}
+}
+
+@media(max-width:900px){
+  .page{max-width:720px;padding-top:30px}
+  .page-header{gap:18px;margin-bottom:25px}
+  .page-header h1{font-size:27px;letter-spacing:-1px}
+  .hero-card{border-radius:20px}
+  .metric-card,.input-card,.settings-card,.timer-card,.asset-card{border-radius:17px}
+  .metric-card{padding:19px 20px}
+}
+
+@media(max-width:560px){
+  .page{padding-top:23px;padding-right:16px;padding-left:16px}
+  .page-header{margin-bottom:21px}
+  .page-header h1{margin-top:3px;font-size:25px;line-height:1.17;letter-spacing:-.8px}
+  .page-header p:not(.eyebrow){font-size:12px;line-height:1.55}
+  .hero-card{padding:23px 20px 21px;border-radius:18px}
+  .money-ticker{margin-top:17px;font-size:41px;letter-spacing:-2.2px}
+  .rate-line{margin:8px 0 28px}
+  .progress-row{gap:10px}
+  .hero-meta{margin-top:18px;padding-top:16px}
+  .metric-card{min-height:128px;padding:17px 18px}
+  .metric-card h3{font-size:22px}
+  .metric-icon{top:16px;right:16px;width:31px;height:31px}
+  .dashboard-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dashboard-metric-grid .overtime-metric{grid-column:1/-1}
+  .section-title{margin:29px 0 13px}
+  .input-card,.settings-card{padding:18px}
+  .timer-card{padding:29px 20px;border-radius:20px}
+  .list-card,.ledger-row{border-radius:14px}
+}
