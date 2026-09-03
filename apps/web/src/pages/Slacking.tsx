@@ -380,8 +380,9 @@ export function Slacking() {
     setPendingDelete(null)
   }, [achievementState, pendingDelete, sessions])
 
-  return <section className="page">
+  return <section className="page timer-page slacking-page">
     <header className="page-header"><div><p className="eyebrow">SLACKING TIMER</p><h1>摸鱼，也要有收益感。</h1><p>计时基于真实时间戳，刷新、锁屏、切换页面都不会让时间丢失。</p></div></header>
+    <div className="timer-workspace">
     <div className={`timer-card ${active ? 'running' : ''}`}>
       <div className="fish-orbit slacking-visual" role="img" aria-label={`摸鱼状态：${timerVisual.label}`} title={`摸鱼状态：${timerVisual.label}`}>{timerVisual.emoji}</div>
       <p>{active ? '正在摸鱼……' : '今天准备摸一会儿？'}</p>
@@ -393,8 +394,11 @@ export function Slacking() {
       <button type="button" className="timer-backfill-button" onClick={() => setTimeDialogPurpose('backfill')}><History size={15}/>补记已结束摸鱼</button>
       <span className="timer-rate">+ ¥{rate.toFixed(5)} / 秒 · 午休和非工作时段不计收益</span>
     </div>
-    <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>累计计薪摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
-    <section className="slacking-wage-milestones" aria-labelledby="slacking-wage-title"><div className="section-title"><div><p className="eyebrow">WAGE MILESTONES</p><h2 id="slacking-wage-title">这份工资，摸回多少了？</h2></div><span>按当前到手薪资折算</span></div><div className="slacking-wage-grid">{wageMilestones.map(item => <article key={item.id} className={item.achieved ? 'achieved' : ''}><span className="slacking-wage-icon"><Trophy size={17}/></span><div><small>{item.label}</small><strong>¥{item.amount.toFixed(2)}</strong></div><div className="slacking-wage-progress"><i style={{ width: `${item.progress}%` }}/></div><em>{item.achieved ? '已达成' : item.amount > 0 ? `还差 ¥${item.remaining.toFixed(2)}` : '请先设置有效薪资'}</em></article>)}</div></section>
+    <div className="timer-side-panel">
+      <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>累计计薪摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+      <section className="slacking-wage-milestones" aria-labelledby="slacking-wage-title"><div className="section-title"><div><p className="eyebrow">WAGE MILESTONES</p><h2 id="slacking-wage-title">这份工资，摸回多少了？</h2></div><span>按当前到手薪资折算</span></div><div className="slacking-wage-grid">{wageMilestones.map(item => <article key={item.id} className={item.achieved ? 'achieved' : ''}><span className="slacking-wage-icon"><Trophy size={17}/></span><div><small>{item.label}</small><strong>¥{item.amount.toFixed(2)}</strong></div><div className="slacking-wage-progress"><i style={{ width: `${item.progress}%` }}/></div><em>{item.achieved ? '已达成' : item.amount > 0 ? `还差 ¥${item.remaining.toFixed(2)}` : '请先设置有效薪资'}</em></article>)}</div></section>
+    </div>
+    </div>
     <AchievementPanel kind="slacking" state={achievementState} activeSeconds={livePaidSeconds} saveFailed={achievementSaveFailed}/>
     <div className="list-section"><div className="section-title"><h2>摸鱼记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有摸鱼记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const paidSeconds = slackingPaidDurationSeconds(session); const visual = slackingSessionVisual(paidSeconds); const excludedSeconds = Math.max(0, session.durationSeconds - paidSeconds); return <article className="list-card slacking-record" key={session.id}><div className="item-avatar fish slacking-record-visual" role="img" aria-label={visual.label} title={visual.label}>{visual.emoji}</div><div className="item-main"><b>{formatSessionTime(session.startTime)}</b><span>至 {formatSessionTime(session.endTime)} · 计薪 {formatDuration(paidSeconds)}{excludedSeconds > 0 ? ` · 已排除 ${formatDuration(excludedSeconds)}` : ''}</span></div><div className="item-result"><small>本次摸鱼</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button slacking-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次摸鱼记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
     <SlackingTimeDialog open={timeDialogPurpose !== null} purpose={timeDialogPurpose ?? 'start'} onStart={start} onBackfill={saveBackfill} onCancel={closeTimeDialog}/>

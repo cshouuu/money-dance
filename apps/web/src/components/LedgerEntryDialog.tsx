@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateTime, toLocalDateValue } from '../lib/form'
 import { summaryEntryDateValue, type SummaryEntry } from '../lib/ledger'
 import type { LedgerDirection } from '../types'
+import { Input, Tabs, TabsTrigger } from '../ui/BeuiControls'
 import './LedgerEntryDialog.css'
 import { useModalViewport } from './useModalViewport'
 
@@ -59,8 +60,8 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
   return createPortal(<div className="dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
     <form className="ledger-entry-dialog" role="dialog" aria-modal="true" aria-labelledby="ledger-entry-dialog-title" onSubmit={submit}>
       <div className="ledger-dialog-header"><div><p className="eyebrow">LEDGER DETAIL</p><h2 id="ledger-entry-dialog-title">{entry ? '编辑收支明细' : '记一笔收支'}</h2></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
-      <fieldset className="ledger-direction-field"><legend>收支类型</legend><div className="direction-switch"><button type="button" className={direction==='expense'?'active expense':''} aria-pressed={direction==='expense'} onClick={()=>setDirection('expense')}><ArrowUpRight size={15}/>支出</button><button type="button" className={direction==='income'?'active income':''} aria-pressed={direction==='income'} onClick={()=>setDirection('income')}><ArrowDownLeft size={15}/>收入</button></div></fieldset>
-      <div className="ledger-dialog-fields"><label><span>明细名称</span><input required maxLength={50} value={source} onChange={event=>setSource(event.target.value)} placeholder="例如：午餐、兼职收入"/></label><label><span>金额</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={amount} onKeyDown={preventInvalidNumberKey} onChange={event=>setAmount(normalizeDecimalInput(event.target.value))} placeholder="0.00"/></div></label><label><span>发生日期</span><input required type="date" max={toLocalDateValue()} value={date} disabled={salaryDateLocked} onChange={event=>setDate(event.target.value)}/></label></div>
+      <fieldset className="ledger-direction-field"><legend>收支类型</legend><Tabs className="direction-switch" value={direction} onValueChange={value=>setDirection(value as LedgerDirection)}><TabsTrigger value="expense" tone="expense"><ArrowUpRight size={15}/>支出</TabsTrigger><TabsTrigger value="income" tone="income"><ArrowDownLeft size={15}/>收入</TabsTrigger></Tabs></fieldset>
+      <div className="ledger-dialog-fields"><Input label="明细名称" required maxLength={50} value={source} onValueChange={setSource} placeholder="例如：午餐、兼职收入"/><Input label="金额" required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={amount} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value=>setAmount(normalizeDecimalInput(value))} placeholder="0.00"/><Input label="发生日期" required type="date" max={toLocalDateValue()} value={date} disabled={salaryDateLocked} onValueChange={setDate}/></div>
       {salaryDateLocked && <p className="ledger-dialog-note">工资调整会继续对应原工资，所属日期不可修改；保存后以手工金额为准。</p>}
       <div className="ledger-dialog-actions"><button type="button" className="dialog-cancel" onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm">{entry ? '保存调整' : '添加明细'}</button></div>
     </form>

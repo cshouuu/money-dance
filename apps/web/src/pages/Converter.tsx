@@ -14,6 +14,7 @@ import { useNow } from '../lib/useNow'
 import { getWishProgress } from '../lib/wishProgress'
 import { loadWorkRecords } from '../lib/work'
 import type { WishItem } from '../types'
+import { Button, Input } from '../ui/BeuiControls'
 import './Converter.css'
 
 function formatWorkDays(workSeconds: number, paidSecondsPerDay: number) {
@@ -106,13 +107,14 @@ export function Converter() {
     ? priceToWorkSeconds(previewPrice, rates.second)
     : null
 
-  return <section className="page">
+  return <section className="page converter-page">
     <header className="page-header"><div><p className="eyebrow">TIME CONVERTER</p><h1>这个东西，值你工作多久？</h1><p>把价格换算成真实的工作时间，并持续看看离它还有多远。</p></div></header>
     <form className="input-card" onSubmit={add}>
-      <label><span>想买什么</span><input required maxLength={60} autoComplete="off" value={name} onChange={event => setName(event.target.value)} placeholder="例如：AirPods Pro" /></label>
-      <label><span>价格</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} onKeyDown={preventInvalidNumberKey} onChange={event => setPrice(normalizeDecimalInput(event.target.value))} placeholder="1899" /></div></label>
+      <div className="form-card-heading"><span>NEW WISH</span><div><b>添加一个心愿</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
+      <Input label="想买什么" required maxLength={60} autoComplete="off" value={name} onValueChange={setName} placeholder="例如：AirPods Pro" />
+      <Input label="价格" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => setPrice(normalizeDecimalInput(value))} placeholder="1899" />
       {previewWorkSeconds !== null ? <div className="live-result converter-live-result"><small>连续纯工时（24小时制）</small><strong>{formatDuration(previewWorkSeconds)}</strong><span>按你的工作日程 ≈ {formatWorkDays(previewWorkSeconds, rates.paidSecondsPerDay)} 个工作日</span></div> : null}
-      <button className="primary-button" type="submit"><Plus size={17} /> 保存换算</button>
+      <Button type="submit" size="lg" ripple><Plus size={17} /> 保存换算</Button>
     </form>
     <div className="list-section">
       <div className="section-title"><h2>心愿清单</h2><span>{wishlistItems.length} 项</span></div>

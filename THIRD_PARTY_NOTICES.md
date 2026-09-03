@@ -6,6 +6,13 @@ The UI refresh adapts selected interaction components from
 - `animated-sidebar`
 - `bottom-sheet`
 - `number-ticker`
+- `button-base`
+- `checkbox`
+- `input`
+- `radio`
+- `select`
+- `switch`
+- `tabs`
 
 ## ui-components
 

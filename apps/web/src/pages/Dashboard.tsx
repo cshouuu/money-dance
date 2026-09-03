@@ -361,14 +361,11 @@ export function Dashboard() {
     <header className="page-header">
       <div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</p><h1>今天的时间，正在变成钱。</h1></div>
       <div className="dashboard-header-actions">
-        <Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
-          <CalendarDays size={17} />
-          <span><small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置'}</b></span>
-        </Link>
         <Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16} /></Link>
       </div>
     </header>
 
+    <div className="dashboard-overview-grid">
     <div className={`hero-card${work.dayType === 'work' && work.mode === 'flexible' ? ' flexible-work' : ''}`}>
       <div className="hero-glow" />
       <div className="hero-heading-row"><p className="hero-label"><Sparkles size={16}/> {heroLabel}</p><span className="hero-mode-status">{modeStatus}</span></div>
@@ -403,10 +400,19 @@ export function Dashboard() {
       </>}
     </div>
 
-    <div className="metric-grid dashboard-metric-grid">
+    <aside className="dashboard-insights" aria-label="今日概览">
+      <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.dayType === 'work' ? '计薪中' : '今日休息'}</span></div>
+      <Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
+        <span className="payday-icon"><CalendarDays size={17} /></span>
+        <span><small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置发薪日'}</b></span>
+        <ArrowUpRight size={15}/>
+      </Link>
+      <div className="metric-grid dashboard-metric-grid">
       <article className="metric-card"><div className="metric-icon"><Clock3 size={18}/></div><p>你的时间单价</p><h3>{money(workRates.hourly)}<small> / 小时</small></h3><span>{money(workRates.minute)} / 分钟 · ¥{workRates.second.toFixed(4)} / 秒</span></article>
       <article className="metric-card accent"><div className="metric-icon"><Fish size={18}/></div><p>今日摸鱼收益</p><h3>{money(slackingMoney)}</h3><span>{formatDuration(slackingSeconds)} · {earned ? (slackingMoney / earned * 100).toFixed(1) : '0.0'}% 今日收入</span><Link to="/slacking">去摸鱼计时 →</Link></article>
       <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
+      </div>
+    </aside>
     </div>
 
     <div className="section-title dashboard-performance-title"><div><p className="eyebrow">MONTHLY SCORE</p><h2>本月战绩</h2></div><span>{now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}</span></div>
