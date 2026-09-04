@@ -402,15 +402,31 @@ export function Dashboard() {
 
     <aside className="dashboard-insights" aria-label="今日概览">
       <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.dayType === 'work' ? '计薪中' : '今日休息'}</span></div>
-      <Link className={`payday-countdown${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
-        <span className="payday-icon"><CalendarDays size={17} /></span>
-        <span><small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small><b>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置发薪日'}</b></span>
-        <ArrowUpRight size={15}/>
-      </Link>
-      <div className="metric-grid dashboard-metric-grid">
-      <article className="metric-card"><div className="metric-icon"><Clock3 size={18}/></div><p>你的时间单价</p><h3>{money(workRates.hourly)}<small> / 小时</small></h3><span>{money(workRates.minute)} / 分钟 · ¥{workRates.second.toFixed(4)} / 秒</span></article>
-      <article className="metric-card accent"><div className="metric-icon"><Fish size={18}/></div><p>今日摸鱼收益</p><h3>{money(slackingMoney)}</h3><span>{formatDuration(slackingSeconds)} · {earned ? (slackingMoney / earned * 100).toFixed(1) : '0.0'}% 今日收入</span><Link to="/slacking">去摸鱼计时 →</Link></article>
-      <article className="metric-card overtime-metric"><div className="metric-icon"><BriefcaseBusiness size={18}/></div><p>今日加班收入</p><h3>{money(overtimeMoney)}</h3><span>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</span><Link to="/overtime">去加班计时 →</Link></article>
+      <div className="dashboard-insight-grid">
+        <Link className={`dashboard-insight-card${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
+          <span className="dashboard-insight-card-heading"><i><CalendarDays size={16}/></i><b>发薪日</b></span>
+          <strong>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置'}</strong>
+          <small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small>
+          <ArrowUpRight className="dashboard-insight-arrow" size={15}/>
+        </Link>
+        <Link className="dashboard-insight-card" to="/settings">
+          <span className="dashboard-insight-card-heading"><i><Clock3 size={16}/></i><b>时间单价</b></span>
+          <strong>{money(workRates.hourly)}<em>/ 小时</em></strong>
+          <small>{money(workRates.minute)} / 分钟</small>
+          <ArrowUpRight className="dashboard-insight-arrow" size={15}/>
+        </Link>
+        <Link className="dashboard-insight-card" to="/slacking">
+          <span className="dashboard-insight-card-heading"><i><Fish size={16}/></i><b>摸鱼收益</b></span>
+          <strong>{money(slackingMoney)}</strong>
+          <small>{formatDuration(slackingSeconds)} · {earned ? (slackingMoney / earned * 100).toFixed(1) : '0.0'}% 今日收入</small>
+          <ArrowUpRight className="dashboard-insight-arrow" size={15}/>
+        </Link>
+        <Link className="dashboard-insight-card" to="/overtime">
+          <span className="dashboard-insight-card-heading"><i><BriefcaseBusiness size={16}/></i><b>加班收入</b></span>
+          <strong>{money(overtimeMoney)}</strong>
+          <small>{formatDuration(overtimeSeconds)}{activeOvertime ? ' · 正在加班' : ''}</small>
+          <ArrowUpRight className="dashboard-insight-arrow" size={15}/>
+        </Link>
       </div>
     </aside>
     </div>
