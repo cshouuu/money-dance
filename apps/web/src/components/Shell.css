@@ -24,7 +24,7 @@
 .sidebar-top{position:relative;display:flex;height:80px;flex:0 0 80px;align-items:center;gap:8px}
 .app-shell .brand{display:flex;min-width:0;align-items:center;gap:10px;margin:0;padding:0 38px 0 2px}
 .app-shell .brand-mark{display:grid;width:38px;height:38px;flex:0 0 38px;place-items:center;overflow:hidden;border:1px solid rgba(95,116,91,.22);border-radius:12px;background:var(--lime);box-shadow:0 5px 14px rgba(95,116,91,.11)}
-.app-shell .brand-mark img{width:100%;height:100%;border-radius:inherit}
+.app-shell .brand-mark img{display:block;width:100%;height:100%;border-radius:inherit;object-fit:cover}
 .brand-copy{display:flex;min-width:0;flex-direction:column;overflow:hidden;white-space:nowrap;transition:opacity .16s ease,transform .2s ease}
 .app-shell .brand-copy b{overflow:hidden;color:var(--ink);font-size:14px;letter-spacing:-.25px;text-overflow:ellipsis}
 .app-shell .brand-copy small{margin-top:2px;color:var(--muted);font:600 8px 'DM Mono';letter-spacing:.13em}
@@ -48,14 +48,14 @@
 
 .app-shell .main{margin-left:232px;transition:margin-left .36s cubic-bezier(.22,.8,.24,1)}
 .app-shell.sidebar-collapsed .main{margin-left:76px}
-.app-shell.sidebar-collapsed .sidebar-top{height:118px;flex-basis:118px}
+.app-shell.sidebar-collapsed .sidebar-top{height:116px;flex-basis:116px;flex-direction:column;justify-content:center;gap:8px}
 .app-shell.sidebar-collapsed .brand{width:100%;justify-content:center;padding:0}
 .app-shell.sidebar-collapsed .brand-copy,
 .app-shell.sidebar-collapsed .nav-group>p,
 .app-shell.sidebar-collapsed .nav-item>span,
 .app-shell.sidebar-collapsed .privacy-note{pointer-events:none;opacity:0;transform:translateX(-4px)}
-.app-shell.sidebar-collapsed .sidebar-toggle{top:70px;right:50%;transform:translateX(50%)}
-.app-shell.sidebar-collapsed .sidebar-toggle:active{transform:translateX(50%) scale(.96)}
+.app-shell.sidebar-collapsed .sidebar-toggle{position:static;flex:0 0 34px;transform:none}
+.app-shell.sidebar-collapsed .sidebar-toggle:active{transform:scale(.96)}
 .app-shell.sidebar-collapsed .sidebar-navigation{gap:8px}
 .app-shell.sidebar-collapsed .nav-group{gap:5px}
 .app-shell.sidebar-collapsed .nav-item{justify-content:center;gap:0;padding:9px}
