@@ -1,5 +1,5 @@
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
-import { Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { CheckCircle2, Clock3, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -22,9 +22,25 @@ function formatWorkDays(workSeconds: number, paidSecondsPerDay: number) {
   return (workSeconds / paidSecondsPerDay).toFixed(2)
 }
 
-function formatEstimate(value: Date | null) {
-  if (!value) return '当前日程下暂无法估算'
-  return `预计 ${value.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 达成`
+function formatMoney(value: number) {
+  return `¥${Math.max(0, value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+}
+
+export type WishEstimateState = 'complete' | 'reached' | 'pending' | 'unavailable'
+
+export function formatWishEstimate(value: Date | null, now: Date, complete: boolean): { label: string; state: WishEstimateState } {
+  if (complete) return { label: '已达成', state: 'complete' }
+  if (!value || Number.isNaN(value.getTime())) return { label: '当前日程下暂无法估算', state: 'unavailable' }
+  if (value.getTime() <= now.getTime()) return { label: '已到达预计达成时间', state: 'reached' }
+
+  const includeYear = value.getFullYear() !== now.getFullYear()
+  const date = [
+    ...(includeYear ? [value.getFullYear()] : []),
+    value.getMonth() + 1,
+    value.getDate(),
+  ].join('/')
+  const time = `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+  return { label: `预计 ${date} ${time} 达成`, state: 'pending' }
 }
 
 type PendingAction = { type: 'delete' | 'purchase'; item: WishItem } | null
@@ -123,23 +139,37 @@ export function Converter() {
         : <><div className="item-list">{visibleItems.map(item => {
             const progress = visibleProgress.get(item.id)
             const workSeconds = progress?.requiredSeconds ?? priceToWorkSeconds(item.price, rates.second)
-            const percent = (progress?.progress ?? 0) * 100
+            const remainingSeconds = progress?.remainingSeconds ?? workSeconds
+            const earnedAmount = progress?.earnedAmount ?? 0
+            const remainingAmount = progress?.remainingAmount ?? Math.max(0, item.price - earnedAmount)
+            const complete = (progress?.progress ?? (item.price <= 0 ? 1 : 0)) >= 1 || remainingAmount <= 0
+            const percent = Math.min(100, Math.max(0, (progress?.progress ?? 0) * 100))
+            const estimate = formatWishEstimate(progress?.estimatedAt ?? null, now, complete)
             return <article className="list-card converter-card" key={item.id}>
-              <div className="item-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</div>
-              <div className="item-main"><b>{item.name}</b><span>¥{item.price.toLocaleString('zh-CN')}</span></div>
-              <div className="item-result converter-result">
-                <div><small>连续纯工时（24小时制）</small><strong>{formatDuration(workSeconds)}</strong></div>
-                <div><small>按你的工作日程</small><strong>≈ {formatWorkDays(workSeconds, rates.paidSecondsPerDay)} 个工作日</strong></div>
-              </div>
-              <div className="converter-actions">
-                <button className="buy-button" type="button" onClick={() => setPending({ type: 'purchase', item })}><ShoppingBag size={15} /><span>已买</span></button>
-                <button className="icon-button" type="button" onClick={() => setPending({ type: 'delete', item })} aria-label={`删除 ${item.name}`} title="删除"><Trash2 size={17} /></button>
-              </div>
+              <header className="converter-card-header">
+                <div className="item-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</div>
+                <div className="converter-wish-title"><b>{item.name}</b><span>目标金额</span></div>
+                <strong className="converter-wish-price">{formatMoney(item.price)}</strong>
+              </header>
               <div className="wish-progress">
-                <div className="wish-progress-heading"><span>从加入心愿起，已赚到 <b>¥{(progress?.earnedAmount ?? 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}</b></span><strong>{percent.toFixed(0)}%</strong></div>
+                <div className="wish-progress-heading"><span>心愿进度</span><strong>{percent.toFixed(0)}%</strong></div>
                 <div className="wish-progress-track" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
-                <div className="wish-progress-meta"><span>还差 {formatDuration(progress?.remainingSeconds ?? workSeconds)} 纯工时</span><span>{formatEstimate(progress?.estimatedAt ?? null)}</span></div>
+                <div className="wish-progress-money"><span>已积累 <b>{formatMoney(earnedAmount)}</b></span><span>还差 <b>{formatMoney(remainingAmount)}</b></span></div>
               </div>
+              <div className="converter-time-summary">
+                <div><span>还需纯工时</span><strong>{formatDuration(remainingSeconds)}</strong></div>
+                <p>目标总工时 <b>{formatDuration(workSeconds)}</b><i>·</i>约 <b>{formatWorkDays(workSeconds, rates.paidSecondsPerDay)}</b> 个工作日</p>
+              </div>
+              <footer className="converter-card-footer">
+                <span className={`wish-estimate ${estimate.state}`} title={estimate.label}>
+                  {estimate.state === 'complete' ? <CheckCircle2 size={16} /> : <Clock3 size={16} />}
+                  <span>{estimate.label}</span>
+                </span>
+                <div className="converter-actions">
+                  <Button className="buy-button" variant="secondary" size="sm" onClick={() => setPending({ type: 'purchase', item })}><ShoppingBag size={15} /><span>已买</span></Button>
+                  <Button className="wish-delete-button" variant="secondary" size="icon" onClick={() => setPending({ type: 'delete', item })} aria-label={`删除 ${item.name}`} title="删除"><Trash2 size={17} /></Button>
+                </div>
+              </footer>
             </article>
           })}</div><Pagination total={wishlistItems.length} page={currentPage} onPageChange={setPage} /></>}
     </div>
