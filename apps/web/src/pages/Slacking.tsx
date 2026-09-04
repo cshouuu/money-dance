@@ -396,7 +396,33 @@ export function Slacking() {
     </div>
     <div className="timer-side-panel">
       <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>累计计薪摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
-      <section className="slacking-wage-milestones" aria-labelledby="slacking-wage-title"><div className="section-title"><div><p className="eyebrow">WAGE MILESTONES</p><h2 id="slacking-wage-title">这份工资，摸回多少了？</h2></div><span>按当前到手薪资折算</span></div><div className="slacking-wage-grid">{wageMilestones.map(item => <article key={item.id} className={item.achieved ? 'achieved' : ''}><span className="slacking-wage-icon"><Trophy size={17}/></span><div><small>{item.label}</small><strong>¥{item.amount.toFixed(2)}</strong></div><div className="slacking-wage-progress"><i style={{ width: `${item.progress}%` }}/></div><em>{item.achieved ? '已达成' : item.amount > 0 ? `还差 ¥${item.remaining.toFixed(2)}` : '请先设置有效薪资'}</em></article>)}</div></section>
+      <section className="slacking-wage-milestones" aria-labelledby="slacking-wage-title">
+        <div className="section-title">
+          <div><p className="eyebrow">WAGE MILESTONES</p><h2 id="slacking-wage-title">这份工资，摸回多少了？</h2></div>
+          <span>按当前到手薪资折算</span>
+        </div>
+        <div className="slacking-wage-grid">
+          {wageMilestones.map(item => (
+            <article key={item.id} className={item.achieved ? 'achieved' : ''}>
+              <span className="slacking-wage-icon"><Trophy size={17}/></span>
+              <span
+                className="slacking-wage-pie"
+                role="progressbar"
+                aria-label={`${item.label}进度`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(item.progress)}
+                style={{ background: `conic-gradient(#6d38c4 ${item.progress}%, #e7e3ed 0)` }}
+              >
+                <b>{Math.round(item.progress)}%</b>
+              </span>
+              <div className="slacking-wage-copy"><small>{item.label}</small><strong>¥{item.amount.toFixed(2)}</strong></div>
+              <div className="slacking-wage-progress" role="presentation"><i style={{ width: `${item.progress}%` }}/></div>
+              <em>{item.achieved ? '已达成' : item.amount > 0 ? `还差 ¥${item.remaining.toFixed(2)}` : '请先设置有效薪资'}</em>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
     </div>
     <AchievementPanel kind="slacking" state={achievementState} activeSeconds={livePaidSeconds} saveFailed={achievementSaveFailed}/>
