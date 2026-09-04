@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatWishEstimate } from './Converter'
+import { formatWishEstimate } from './converterEstimate'
 
 describe('formatWishEstimate', () => {
   const now = new Date(2026, 8, 4, 10, 0)
