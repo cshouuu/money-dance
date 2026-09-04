@@ -33,6 +33,10 @@ function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
     && (item.type !== 'percentage' || item.value <= 100))
 }
 
+function initialDeductionValueInputs(deductions: readonly SalaryDeduction[]): Record<string, string> {
+  return Object.fromEntries(deductions.map(item => [item.id, item.value === 0 ? '' : String(item.value)]))
+}
+
 function buildProfile(
   profile: SalaryProfile,
   salaryInput: string,
@@ -67,6 +71,9 @@ export function Settings() {
   const [monthlyLivingCostInput, setMonthlyLivingCostInput] = useState(String(initialProfile.monthlyLivingCost))
   const [monthlyWorkDaysInput, setMonthlyWorkDaysInput] = useState(String(initialProfile.monthlyWorkDays))
   const [workDaysPerWeekInput, setWorkDaysPerWeekInput] = useState(String(initialProfile.workDaysPerWeek))
+  const [deductionValueInputs, setDeductionValueInputs] = useState<Record<string, string>>(
+    () => initialDeductionValueInputs(initialProfile.salaryDeductions),
+  )
   const [salaryEffectiveDateInput, setSalaryEffectiveDateInput] = useState(initialProfile.salaryEffectiveDate || toLocalDateValue())
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -127,11 +134,13 @@ export function Settings() {
   }
 
   const addDeduction = () => {
+    const id = createId()
     setSaved(false)
+    setDeductionValueInputs(current => ({ ...current, [id]: '' }))
     setProfile(current => ({
       ...current,
       salaryDeductions: [...current.salaryDeductions, {
-        id: createId(),
+        id,
         name: '社保',
         type: 'fixed',
         value: 0,
@@ -148,8 +157,24 @@ export function Settings() {
     }))
   }
 
+  const updateDeductionValue = (id: string, value: string) => {
+    const normalized = normalizeDecimalInput(value)
+    setDeductionValueInputs(current => ({ ...current, [id]: normalized }))
+    updateDeduction(id, { value: normalized === '' ? 0 : Number(normalized) })
+  }
+
+  const selectDeductionType = (id: string, type: SalaryDeductionType) => {
+    setDeductionValueInputs(current => ({ ...current, [id]: '' }))
+    updateDeduction(id, { type, value: 0 })
+  }
+
   const removeDeduction = (id: string) => {
     setSaved(false)
+    setDeductionValueInputs(current => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
     setProfile(current => ({
       ...current,
       salaryDeductions: current.salaryDeductions.filter(item => item.id !== id),
@@ -158,11 +183,29 @@ export function Settings() {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const form = event.currentTarget
+    const firstInvalidInput = form.querySelector<HTMLInputElement>('input:invalid')
+    if (firstInvalidInput) {
+      const sectionId = firstInvalidInput.closest<HTMLElement>('.settings-section-content')?.id
+      const sectionByContentId: Record<string, string> = {
+        'salary-profile': 'salary',
+        'work-schedule': 'work',
+        'salary-deductions': 'deductions',
+        'salary-history': 'history',
+      }
+      setSaved(false)
+      setOpenSection(sectionId ? sectionByContentId[sectionId] ?? 'salary' : 'salary')
+      window.setTimeout(() => {
+        firstInvalidInput.focus()
+        firstInvalidInput.reportValidity()
+      }, 0)
+      return
+    }
     if (!draftProfile || !rates) {
       setOpenSection(calculationError ? 'work' : 'salary')
       return
     }
-    if (!event.currentTarget.reportValidity()) return
+    if (!form.reportValidity()) return
     const salaryEffectiveDate = draftProfile.salaryHistoryMode === 'custom' ? salaryEffectiveDateInput : toLocalDateValue()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveDate) || salaryEffectiveDate > toLocalDateValue()) return
     const savedProfile = saveProfile({ ...draftProfile, salaryEffectiveDate })
@@ -231,10 +274,11 @@ export function Settings() {
     {profile.salaryDeductions.length === 0
       ? <div className="salary-deductions-empty">暂未设置，当前时间单价按未扣除金额计算。</div>
       : <div className="salary-deduction-list">{profile.salaryDeductions.map(item => {
+        const deductionValueInput = deductionValueInputs[item.id] ?? (item.value === 0 ? '' : String(item.value))
         const itemMonthlyDeduction = rateProfile
           ? calculateMonthlySalaryDeductions({ ...rateProfile, salaryDeductions: [item] })
           : 0
-        const formattedMonthlyDeduction = `¥${itemMonthlyDeduction.toFixed(2)}`
+        const formattedMonthlyDeduction = deductionValueInput === '' ? '—' : `¥${itemMonthlyDeduction.toFixed(2)}`
         return <article className="salary-deduction-row" data-enabled={item.enabled} key={item.id}>
           <header className="salary-deduction-card-header">
             <Checkbox className="deduction-enabled" checked={item.enabled} onCheckedChange={enabled => updateDeduction(item.id, { enabled })} ariaLabel={`启用${item.name}`}/>
@@ -246,8 +290,8 @@ export function Settings() {
             <Button type="button" variant="secondary" size="icon" className="deduction-delete-button" onClick={() => removeDeduction(item.id)} aria-label={`删除${item.name}`} title="删除扣除项"><Trash2 size={16}/></Button>
           </header>
           <div className="salary-deduction-fields">
-            <SelectField label="扣除方式" value={item.type} onValueChange={value => updateDeduction(item.id, { type: value as SalaryDeductionType, value: 0 })}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></SelectField>
-            <Input label={item.type === 'percentage' ? '工资比例' : '每月金额'} required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={String(item.value)} leftIcon={item.type === 'percentage' ? '%' : '¥'} onKeyDown={preventInvalidNumberKey} onValueChange={value => updateDeduction(item.id, { value: Number(normalizeDecimalInput(value) || 0) })}/>
+            <SelectField label="扣除方式" value={item.type} onValueChange={value => selectDeductionType(item.id, value as SalaryDeductionType)}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></SelectField>
+            <Input label={item.type === 'percentage' ? '工资比例' : '每月金额'} required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={deductionValueInput} leftIcon={item.type === 'percentage' ? '%' : '¥'} onKeyDown={preventInvalidNumberKey} onValueChange={value => updateDeductionValue(item.id, value)} placeholder={item.type === 'percentage' ? '例如：10' : '例如：500'}/>
           </div>
           <footer className="salary-deduction-card-meta">
             <span className="salary-deduction-status"><i/>{item.enabled ? '已计入到手工资' : '暂不计入到手工资'}</span>
@@ -277,7 +321,7 @@ export function Settings() {
 
   return <section className="page settings-page">
     <header className="page-header"><div><p className="eyebrow">SALARY PROFILE</p><h1>先定义，你的一小时值多少钱。</h1><p>支持按实际工作日折算，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
-    <form className="settings-card" onSubmit={submit}>
+    <form className="settings-card" noValidate onSubmit={submit}>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
         <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
         <div className="settings-rate-details"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
