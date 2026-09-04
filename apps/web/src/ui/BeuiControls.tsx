@@ -8,8 +8,10 @@ import {
   type HTMLMotionProps,
 } from 'motion/react'
 import {
+  Children,
   createContext,
   forwardRef,
+  isValidElement,
   useCallback,
   useContext,
   useEffect,
@@ -20,8 +22,9 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type Ref,
-  type SelectHTMLAttributes,
 } from 'react'
+import { createPortal } from 'react-dom'
+import { DateTimeField } from './DateTimeField'
 import './BeuiControls.css'
 
 const PRESS_SPRING = { type: 'spring', stiffness: 500, damping: 30, mass: 0.6 } as const
@@ -119,8 +122,8 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   rootClassName?: string
 }
 
-/** Color-adapted beUI `input`, retaining native input validation and date/time pickers. */
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
+/** Color-adapted beUI text and number input branch. */
+const NativeInput = forwardRef<HTMLInputElement, InputProps>(function NativeInput({
   label,
   onValueChange,
   hint,
@@ -170,15 +173,33 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({
   </label>
 })
 
-export interface SelectFieldProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'onChange'> {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(props, ref) {
+  if (props.type === 'date' || props.type === 'time' || props.type === 'datetime-local') {
+    const { leftIcon: _leftIcon, rightIcon: _rightIcon, className: _className, ...pickerProps } = props
+    return <DateTimeField {...pickerProps} ref={ref} type={props.type as 'date' | 'time' | 'datetime-local'}/>
+  }
+  return <NativeInput {...props} ref={ref}/>
+})
+
+type SelectOption = { value: string; label: ReactNode; disabled: boolean }
+
+export interface SelectFieldProps {
   label: string
   onValueChange: (value: string) => void
   hint?: ReactNode
   rootClassName?: string
+  className?: string
+  id?: string
+  name?: string
+  value?: string | number | readonly string[]
+  defaultValue?: string | number | readonly string[]
+  children?: ReactNode
+  disabled?: boolean
+  required?: boolean
 }
 
-/** Native-semantic adaptation of beUI `select`, so mobile keeps its familiar picker. */
-export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField({
+/** Position-aware animated adaptation of beUI `select`. */
+export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(function SelectField({
   label,
   onValueChange,
   hint,
@@ -186,28 +207,144 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
   className,
   id: idProp,
   children,
-  onFocus,
-  onBlur,
-  ...props
+  value: rawValue,
+  defaultValue,
+  name,
+  disabled,
+  required,
 }, ref) {
   const id = idProp ?? useId()
-  const [focused, setFocused] = useState(false)
-  return <label className={classes('beui-field', rootClassName)} htmlFor={id}>
-    <span className="beui-field-label">{label}</span>
-    <div className={classes('beui-select-shell', focused && 'focused')}>
-      <select
-        {...props}
-        ref={ref}
-        id={id}
-        className={className}
-        onChange={event => onValueChange(event.target.value)}
-        onFocus={event => { setFocused(true); onFocus?.(event) }}
-        onBlur={event => { setFocused(false); onBlur?.(event) }}
-      >{children}</select>
-      <m.span aria-hidden="true" animate={{ rotate: focused ? 180 : 0 }} transition={PRESS_SPRING}><ChevronDown size={16}/></m.span>
-    </div>
+  const reduce = useReducedMotion()
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [open, setOpen] = useState(false)
+  const [internalValue, setInternalValue] = useState(() => String(Array.isArray(defaultValue) ? defaultValue[0] ?? '' : defaultValue ?? ''))
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, placement: 'bottom' as 'bottom' | 'top' })
+  const controlled = rawValue !== undefined
+  const value = String(Array.isArray(rawValue) ? rawValue[0] ?? '' : rawValue ?? internalValue)
+
+  const options = useMemo<SelectOption[]>(() => Children.toArray(children).flatMap(child => {
+    if (!isValidElement<{ value?: string | number; disabled?: boolean; children?: ReactNode }>(child) || child.type !== 'option') return []
+    const optionValue = String(child.props.value ?? child.props.children ?? '')
+    return [{ value: optionValue, label: child.props.children, disabled: Boolean(child.props.disabled) }]
+  }), [children])
+  const selected = options.find(option => option.value === value) ?? options[0]
+
+  const setRefs = (node: HTMLButtonElement | null) => {
+    triggerRef.current = node
+    if (typeof ref === 'function') ref(node)
+    else if (ref) ref.current = node
+  }
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const estimatedHeight = Math.min(280, options.length * 45 + 10)
+    const spaceBelow = window.innerHeight - rect.bottom
+    const placement = spaceBelow < estimatedHeight + 12 && rect.top > spaceBelow ? 'top' : 'bottom'
+    const width = Math.max(180, rect.width)
+    setPosition({
+      top: placement === 'bottom' ? rect.bottom + 7 : Math.max(8, rect.top - estimatedHeight - 7),
+      left: Math.min(Math.max(8, rect.left), window.innerWidth - width - 8),
+      width,
+      placement,
+    })
+  }, [options.length])
+
+  useEffect(() => {
+    if (!open) return
+    updatePosition()
+    const selectedIndex = Math.max(0, options.findIndex(option => option.value === value))
+    setActiveIndex(selectedIndex)
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
+    }
+    const reposition = () => updatePosition()
+    document.addEventListener('pointerdown', closeOnOutside)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutside)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [open, options, updatePosition, value])
+
+  const choose = (option: SelectOption) => {
+    if (option.disabled) return
+    if (!controlled) setInternalValue(option.value)
+    onValueChange(option.value)
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
+
+  const moveActive = (direction: 1 | -1) => {
+    if (!options.length) return
+    let next = activeIndex
+    for (let attempts = 0; attempts < options.length; attempts += 1) {
+      next = (next + direction + options.length) % options.length
+      if (!options[next]?.disabled) break
+    }
+    setActiveIndex(next)
+  }
+
+  return <div className={classes('beui-field', rootClassName)}>
+    <label id={`${id}-label`} className="beui-field-label" htmlFor={id}>{label}</label>
+    <button
+      ref={setRefs}
+      id={id}
+      type="button"
+      className={classes('beui-select-shell', 'beui-select-trigger', open && 'focused', className)}
+      disabled={disabled}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-labelledby={`${id}-label ${id}-value`}
+      aria-required={required || undefined}
+      onClick={() => setOpen(current => !current)}
+      onKeyDown={event => {
+        if (event.key === 'Escape') { setOpen(false); return }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault()
+          if (!open) setOpen(true)
+          else moveActive(event.key === 'ArrowDown' ? 1 : -1)
+          return
+        }
+        if (open && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          const option = options[activeIndex]
+          if (option) choose(option)
+        }
+      }}
+    >
+      <span id={`${id}-value`} className="beui-select-value">{selected?.label ?? '请选择'}</span>
+      <m.span className="beui-select-chevron" aria-hidden="true" animate={{ rotate: open ? 180 : 0 }} transition={reduce ? { duration: 0 } : PRESS_SPRING}><ChevronDown size={16}/></m.span>
+    </button>
+    {name && <input type="hidden" name={name} value={selected?.value ?? ''}/>}
     {hint && <span className="beui-field-message">{hint}</span>}
-  </label>
+    {typeof document !== 'undefined' && createPortal(<AnimatePresence>{open && <m.div
+      ref={menuRef}
+      className={classes('beui-select-popover', `placement-${position.placement}`)}
+      style={{ top: position.top, left: position.left, width: position.width }}
+      role="listbox"
+      aria-labelledby={`${id}-label`}
+      initial={reduce ? { opacity: 1 } : { opacity: 0, y: position.placement === 'bottom' ? -7 : 7, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: position.placement === 'bottom' ? -5 : 5, scale: 0.985 }}
+      transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 32, mass: 0.65 }}
+    >{options.map((option, index) => <button
+      key={`${option.value}-${index}`}
+      type="button"
+      role="option"
+      aria-selected={option.value === selected?.value}
+      disabled={option.disabled}
+      data-active={activeIndex === index || undefined}
+      onPointerMove={() => setActiveIndex(index)}
+      onClick={() => choose(option)}
+    ><span>{option.label}</span>{option.value === selected?.value && <Check size={15}/>}</button>)}</m.div>}</AnimatePresence>, document.body)}
+  </div>
 })
 
 export interface SwitchProps {
