@@ -227,21 +227,34 @@ export function Settings() {
   </div>
 
   const deductionsSection = <div className="settings-section-content" id="salary-deductions">
-    <div className="salary-deductions-header"><div><b>每月工资扣除</b><small>社保、公积金、个税或其他扣除，可填写固定金额或工资比例</small></div><Button type="button" variant="ghost" size="sm" onClick={addDeduction}><Plus size={15}/>添加扣除项</Button></div>
+    <div className="salary-deductions-header"><div><b>每月工资扣除</b><small>管理每月固定扣除项</small></div><Button type="button" variant="secondary" size="sm" onClick={addDeduction}><Plus size={15}/>新增</Button></div>
     {profile.salaryDeductions.length === 0
       ? <div className="salary-deductions-empty">暂未设置，当前时间单价按未扣除金额计算。</div>
-      : <div className="salary-deduction-list">{profile.salaryDeductions.map(item => <article className="salary-deduction-row" data-enabled={item.enabled} key={item.id}>
-        <header className="salary-deduction-card-header">
-          <Checkbox className="deduction-enabled" checked={item.enabled} onCheckedChange={enabled => updateDeduction(item.id, { enabled })} ariaLabel={`启用${item.name}`}/>
-          <Input rootClassName="deduction-name-field" label="扣除项名称" required maxLength={30} value={item.name} onValueChange={value => updateDeduction(item.id, { name: value })}/>
-          <button type="button" className="icon-button deduction-delete-button" onClick={() => removeDeduction(item.id)} aria-label={`删除${item.name}`} title="删除扣除项"><Trash2 size={16}/></button>
-        </header>
-        <div className="salary-deduction-fields">
-          <SelectField label="扣除方式" value={item.type} onValueChange={value => updateDeduction(item.id, { type: value as SalaryDeductionType, value: 0 })}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></SelectField>
-          <Input label={item.type === 'percentage' ? '工资比例' : '每月金额'} required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={String(item.value)} leftIcon={item.type === 'percentage' ? '%' : '¥'} onKeyDown={preventInvalidNumberKey} onValueChange={value => updateDeduction(item.id, { value: Number(normalizeDecimalInput(value) || 0) })}/>
-        </div>
-        <footer className="salary-deduction-card-meta"><span><i/>{item.enabled ? '已计入到手工资' : '暂不计入'}</span><strong>{item.type === 'percentage' ? `${item.value}% 工资` : `¥${item.value.toFixed(2)} / 月`}</strong></footer>
-      </article>)}</div>}
+      : <div className="salary-deduction-list">{profile.salaryDeductions.map(item => {
+        const itemMonthlyDeduction = rateProfile
+          ? calculateMonthlySalaryDeductions({ ...rateProfile, salaryDeductions: [item] })
+          : 0
+        const formattedMonthlyDeduction = `¥${itemMonthlyDeduction.toFixed(2)}`
+        return <article className="salary-deduction-row" data-enabled={item.enabled} key={item.id}>
+          <header className="salary-deduction-card-header">
+            <Checkbox className="deduction-enabled" checked={item.enabled} onCheckedChange={enabled => updateDeduction(item.id, { enabled })} ariaLabel={`启用${item.name}`}/>
+            <div className="salary-deduction-card-identity">
+              <Input rootClassName="deduction-name-field" label="扣除项名称" required maxLength={30} value={item.name} placeholder="扣除项名称" onValueChange={value => updateDeduction(item.id, { name: value })}/>
+              <small>{item.enabled ? '已启用 · 每月扣除' : '已停用 · 暂不扣除'}</small>
+            </div>
+            <div className="salary-deduction-card-amount"><strong>{formattedMonthlyDeduction}</strong><span>/ 月</span></div>
+            <Button type="button" variant="secondary" size="icon" className="deduction-delete-button" onClick={() => removeDeduction(item.id)} aria-label={`删除${item.name}`} title="删除扣除项"><Trash2 size={16}/></Button>
+          </header>
+          <div className="salary-deduction-fields">
+            <SelectField label="扣除方式" value={item.type} onValueChange={value => updateDeduction(item.id, { type: value as SalaryDeductionType, value: 0 })}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></SelectField>
+            <Input label={item.type === 'percentage' ? '工资比例' : '每月金额'} required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={String(item.value)} leftIcon={item.type === 'percentage' ? '%' : '¥'} onKeyDown={preventInvalidNumberKey} onValueChange={value => updateDeduction(item.id, { value: Number(normalizeDecimalInput(value) || 0) })}/>
+          </div>
+          <footer className="salary-deduction-card-meta">
+            <span className="salary-deduction-status"><i/>{item.enabled ? '已计入到手工资' : '暂不计入到手工资'}</span>
+            <span className="salary-deduction-estimate"><small>本月预计扣除</small><strong>{formattedMonthlyDeduction}</strong></span>
+          </footer>
+        </article>
+      })}</div>}
     {monthlyDeductions > 0 && <p className="salary-deduction-total">预计每月扣除 <b>¥{monthlyDeductions.toFixed(2)}</b>，时间单价已自动按到手金额计算。</p>}
 
     <div className="living-cost-block">
