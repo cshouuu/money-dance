@@ -4,7 +4,7 @@
   z-index:60;
   border:0;
   padding:0;
-  background:rgba(29,36,28,.28);
+  background:rgba(var(--theme-strong-rgb),.28);
   -webkit-backdrop-filter:blur(3px);
   backdrop-filter:blur(3px);
   cursor:pointer;
@@ -27,20 +27,20 @@
   outline:none;
   background:var(--paper);
   color:var(--ink);
-  box-shadow:0 -14px 44px rgba(33,40,31,.15);
+  box-shadow:0 -14px 44px rgba(var(--theme-strong-rgb),.15);
   will-change:transform;
 }
 
-.beui-bottom-sheet:focus-visible{box-shadow:0 -14px 44px rgba(33,40,31,.15),inset 0 0 0 2px var(--green)}
+.beui-bottom-sheet:focus-visible{box-shadow:0 -14px 44px rgba(var(--theme-strong-rgb),.15),inset 0 0 0 2px var(--green)}
 .beui-bottom-sheet-header{padding:8px 18px 0}
 .beui-bottom-sheet-handle{display:flex;width:72px;min-height:28px;margin:0 auto;align-items:center;justify-content:center;border:0;background:transparent;touch-action:none;cursor:grab}
 .beui-bottom-sheet-handle:active{cursor:grabbing}
-.beui-bottom-sheet-handle>span{display:block;width:38px;height:5px;border-radius:99px;background:#c9c8bf}
+.beui-bottom-sheet-handle>span{display:block;width:38px;height:5px;border-radius:99px;background:var(--line-strong)}
 .beui-bottom-sheet-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:5px 0 15px}
 .beui-bottom-sheet-heading h2{margin:0;color:var(--ink);font-size:18px;line-height:1.25;letter-spacing:-.35px}
 .beui-bottom-sheet-heading p{margin:5px 0 0;color:var(--muted);font-size:11px;line-height:1.55}
-.beui-bottom-sheet-close{display:grid;width:44px;height:44px;flex:0 0 44px;place-items:center;border:1px solid var(--line);border-radius:13px;background:#efede6;color:var(--muted);cursor:pointer}
-.beui-bottom-sheet-close:hover{color:var(--ink);background:#e9e7df}
+.beui-bottom-sheet-close{display:grid;width:44px;height:44px;flex:0 0 44px;place-items:center;border:1px solid var(--line);border-radius:13px;background:var(--surface-soft);color:var(--muted);cursor:pointer}
+.beui-bottom-sheet-close:hover{color:var(--ink);background:var(--surface-muted)}
 .beui-bottom-sheet-content{max-height:calc(100vh - 132px);max-height:calc(100dvh - 132px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:0 18px calc(22px + var(--md-safe-area-bottom))}
 
 .beui-number-ticker{display:inline-flex;align-items:center;font-variant-numeric:tabular-nums}

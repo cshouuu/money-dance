@@ -6,10 +6,10 @@
   gap:0;
   padding:18px 20px;
   overflow:hidden;
-  border-color:#deddd4;
+  border-color:var(--line);
   border-radius:21px;
-  background:rgba(252,250,245,.94);
-  box-shadow:0 10px 30px rgba(35,43,32,.04);
+  background:rgba(var(--theme-paper-rgb),.94);
+  box-shadow:0 10px 30px rgba(var(--theme-strong-rgb),.04);
 }
 
 .converter-card-header{
@@ -25,8 +25,8 @@
   width:44px;
   height:44px;
   border-radius:14px;
-  background:linear-gradient(145deg,#efeee7,#e3e4d8);
-  color:#315039;
+  background:linear-gradient(145deg,var(--surface-soft),var(--surface-muted));
+  color:var(--positive);
   font:500 19px 'DM Mono';
 }
 
@@ -36,7 +36,7 @@
 
 .converter-wish-price{
   padding-left:12px;
-  color:#244730;
+  color:var(--dark);
   font:550 21px 'DM Mono';
   letter-spacing:-.5px;
   white-space:nowrap;
@@ -57,28 +57,28 @@
   line-height:1.35;
 }
 
-.wish-progress-heading{color:#31463a;font-size:12px}
-.wish-progress-heading strong{color:#244730;font:550 16px 'DM Mono'}
+.wish-progress-heading{color:var(--green);font-size:12px}
+.wish-progress-heading strong{color:var(--dark);font:550 16px 'DM Mono'}
 
 .wish-progress-track{
   height:7px;
   overflow:hidden;
-  border:1px solid #ddddd4;
+  border:1px solid var(--line);
   border-radius:999px;
-  background:#f1efe8;
+  background:var(--surface-soft);
 }
 
 .wish-progress-track>i{
   display:block;
   height:100%;
   border-radius:inherit;
-  background:linear-gradient(90deg,#afbe78,#73895e);
+  background:linear-gradient(90deg,var(--accent-border),var(--green));
   transition:width .35s ease;
 }
 
-.wish-progress-money{color:#5e685d;font-size:10px}
+.wish-progress-money{color:var(--muted);font-size:10px}
 .wish-progress-money span:last-child{text-align:right}
-.wish-progress-money b{color:#35513c;font:550 12px 'DM Mono'}
+.wish-progress-money b{color:var(--positive);font:550 12px 'DM Mono'}
 
 .converter-time-summary{
   display:grid;
@@ -95,8 +95,8 @@
   gap:16px;
 }
 
-.converter-time-summary>div>span{color:#6e746b;font-size:12px;white-space:nowrap}
-.converter-time-summary>div>strong{color:#244730;font:550 20px 'DM Mono';letter-spacing:-.35px;text-align:right}
+.converter-time-summary>div>span{color:var(--muted);font-size:12px;white-space:nowrap}
+.converter-time-summary>div>strong{color:var(--dark);font:550 20px 'DM Mono';letter-spacing:-.35px;text-align:right}
 
 .converter-time-summary p{
   display:flex;
@@ -104,13 +104,13 @@
   flex-wrap:wrap;
   gap:0 5px;
   margin:0;
-  color:#777c74;
+  color:var(--muted);
   font-size:10px;
   line-height:1.55;
 }
 
-.converter-time-summary p b{color:#5a6259;font:500 10px 'DM Mono'}
-.converter-time-summary p i{padding:0 2px;color:#9a9e96;font-style:normal}
+.converter-time-summary p b{color:var(--muted);font:500 10px 'DM Mono'}
+.converter-time-summary p i{padding:0 2px;color:var(--muted);font-style:normal}
 
 .converter-card-footer{
   display:grid;
@@ -129,8 +129,8 @@
   padding:0 12px;
   overflow:hidden;
   border-radius:12px;
-  background:#f0eee7;
-  color:#3f5943;
+  background:var(--surface-soft);
+  color:var(--green);
   font-size:10px;
   font-weight:600;
   line-height:1.25;
@@ -138,9 +138,9 @@
 
 .wish-estimate>svg{flex:0 0 auto}
 .wish-estimate>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.wish-estimate.complete{background:#e5ead0;color:#42583d}
+.wish-estimate.complete{background:var(--positive-soft);color:var(--positive)}
 .wish-estimate.reached{background:#eee7d8;color:#755f3f}
-.wish-estimate.unavailable{color:#777c74}
+.wish-estimate.unavailable{color:var(--muted)}
 
 .converter-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px}
 
@@ -148,35 +148,35 @@
   min-width:74px;
   min-height:40px;
   padding:0 13px;
-  border-color:#c5c9a9;
+  border-color:var(--accent-border);
   border-radius:12px;
-  background:#e8eadb;
-  color:#315039;
+  background:var(--accent-faint);
+  color:var(--positive);
   box-shadow:none;
 }
 
-.converter-actions .buy-button:hover:not(:disabled){border-color:#afb58d;background:#dfe4c9}
+.converter-actions .buy-button:hover:not(:disabled){border-color:var(--accent-border);background:var(--accent-faint)}
 .converter-actions .buy-button .beui-button-content{gap:6px}
 
 .converter-actions .wish-delete-button{
   width:40px;
   height:40px;
   flex:0 0 40px;
-  border-color:#d4d2c8;
+  border-color:var(--line-strong);
   border-radius:12px;
-  background:#fbfaf5;
-  color:#888d86;
+  background:var(--surface-raised);
+  color:var(--muted);
   box-shadow:none;
 }
 
-.converter-actions .wish-delete-button:hover:not(:disabled){border-color:#cbbdb5;background:#f2e8e2;color:#875b4c}
+.converter-actions .wish-delete-button:hover:not(:disabled){border-color:#cbbdb5;background:var(--negative-soft);color:var(--negative)}
 
-.purchase-toast{position:fixed;right:24px;bottom:24px;z-index:70;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:14px;width:min(420px,calc(100vw - 30px));padding:14px 14px 14px 17px;background:var(--dark);color:#f7f4e8;border-radius:16px;box-shadow:0 18px 48px rgba(28,35,27,.24);animation:purchase-toast-in .36s cubic-bezier(.22,.8,.24,1) both}
+.purchase-toast{position:fixed;right:24px;bottom:24px;z-index:70;display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:14px;width:min(420px,calc(100vw - 30px));padding:14px 14px 14px 17px;background:var(--dark);color:var(--on-dark);border-radius:16px;box-shadow:0 18px 48px rgba(var(--theme-strong-rgb),.24);animation:purchase-toast-in .36s cubic-bezier(.22,.8,.24,1) both}
 .purchase-toast>div{display:flex;flex-direction:column;gap:3px}
 .purchase-toast b{font-size:12px}
-.purchase-toast span{font-size:9px;color:#acb5a9;line-height:1.5}
-.purchase-toast a{font-size:10px;font-weight:700;color:#243023;background:#dfe8b6;text-decoration:none;border-radius:9px;padding:8px 10px;white-space:nowrap}
-.purchase-toast button{border:0;background:transparent;color:#aeb6a6;font-size:20px;cursor:pointer;padding:4px}
+.purchase-toast span{font-size:9px;color:var(--on-dark-muted);line-height:1.5}
+.purchase-toast a{font-size:10px;font-weight:700;color:var(--dark);background:var(--lime);text-decoration:none;border-radius:9px;padding:8px 10px;white-space:nowrap}
+.purchase-toast button{border:0;background:transparent;color:var(--on-dark-muted);font-size:20px;cursor:pointer;padding:4px}
 
 @keyframes purchase-toast-in{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 

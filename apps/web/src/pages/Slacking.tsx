@@ -412,7 +412,7 @@ export function Slacking() {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={Math.round(item.progress)}
-                style={{ background: `conic-gradient(#6d38c4 ${item.progress}%, #e7e3ed 0)` }}
+                style={{ background: `conic-gradient(var(--green) ${item.progress}%, var(--accent-faint) 0)` }}
               >
                 <b>{Math.round(item.progress)}%</b>
               </span>

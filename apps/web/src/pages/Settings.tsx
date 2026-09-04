@@ -13,9 +13,10 @@ import {
   type WorkMode,
   type WorkWeekMode,
 } from '@salary-flow/core'
-import { CheckCircle2, CircleDollarSign, Clock3, History, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, Clock3, History, Palette, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { AppUpdateCard } from '../components/AppUpdateCard'
+import { ThemePaletteGrid } from '../components/ThemePicker'
 import { BouncyAccordion } from '../ui/BouncyAccordion'
 import { Button, Checkbox, ChoiceCard, ChoiceGroup, Input, SelectField, Switch } from '../ui/BeuiControls'
 import { alternatingWeekTypeForDate, getWeekStartDateValue } from '../lib/attendance'
@@ -319,8 +320,12 @@ export function Settings() {
     {profile.salaryHistoryMode === 'custom' && <Input rootClassName="history-date-field" label="历史开始日期" required type="date" max={toLocalDateValue()} value={salaryEffectiveDateInput} onValueChange={value => { setSaved(false); setSalaryEffectiveDateInput(value) }} hint="从这一天开始重新计算工作收入，更早的日期不受影响。"/>}
   </div>
 
+  const appearanceSection = <div className="settings-section-content" id="appearance-theme">
+    <ThemePaletteGrid className="settings-theme-picker"/>
+  </div>
+
   return <section className="page settings-page">
-    <header className="page-header"><div><p className="eyebrow">SALARY PROFILE</p><h1>先定义，你的一小时值多少钱。</h1><p>支持按实际工作日折算，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
+    <header className="page-header"><div><p className="eyebrow">PROFILE & APPEARANCE</p><h1>先定义，你的一小时值多少钱。</h1><p>选择喜欢的整体配色，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
     <form className="settings-card" noValidate onSubmit={submit}>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
         <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
@@ -331,6 +336,7 @@ export function Settings() {
         value={openSection}
         onValueChange={setOpenSection}
         items={[
+          { id: 'appearance', icon: <Palette size={18}/>, title: <><b>外观与配色</b><small>经典主题与 11 组双配色</small></>, description: appearanceSection },
           { id: 'salary', icon: <CircleDollarSign size={18}/>, title: <><b>工资与发薪</b><small>工资周期、发薪日和折算方式</small></>, description: salarySection },
           { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>默认作息、上下班与午休时间</small></>, description: workSection },
           { id: 'deductions', icon: <ReceiptText size={18}/>, title: <><b>扣除与生活成本</b><small>工资扣除项和每月生活支出</small></>, description: deductionsSection },

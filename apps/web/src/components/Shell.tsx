@@ -8,6 +8,7 @@ import {
   Fish,
   Grid2X2,
   Heart,
+  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Settings2,
@@ -17,7 +18,11 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { AnimatedSidebar } from '../ui/AnimatedSidebar'
 import { BottomSheet } from '../ui/BottomSheet'
+import { ThemePickerSheet } from './ThemePicker'
+import { initializeTheme } from './theme'
 import './Shell.css'
+
+initializeTheme()
 
 const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
@@ -43,6 +48,7 @@ export function Shell() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [themePickerOpen, setThemePickerOpen] = useState(false)
 
   useEffect(() => setMobileOpen(false), [location.pathname])
 
@@ -105,6 +111,15 @@ export function Shell() {
       </nav>
 
       <div className="sidebar-footer">
+        <button
+          type="button"
+          className="nav-item theme-switcher-button"
+          title={sidebarCollapsed ? '一键换肤' : undefined}
+          onClick={() => setThemePickerOpen(true)}
+        >
+          <Palette size={18}/>
+          <span>一键换肤</span>
+        </button>
         {renderDesktopItem(settingsItem)}
         <p className="privacy-note">Local-first · 薪资默认只保存在你的浏览器</p>
       </div>
@@ -138,8 +153,13 @@ export function Shell() {
     >
       <nav className="mobile-drawer-grid" aria-label="全部功能">
         {drawerItems.map(item => renderMobileItem(item, true))}
+        <button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
+          <Palette size={20}/>
+          <span>一键换肤</span>
+        </button>
       </nav>
     </BottomSheet>
+    <ThemePickerSheet open={themePickerOpen} onOpenChange={setThemePickerOpen}/>
     </div>
   </LazyMotion>
 }
