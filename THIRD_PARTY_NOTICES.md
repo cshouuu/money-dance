@@ -4,6 +4,7 @@ The UI refresh adapts selected interaction components from
 [`starc007/ui-components`](https://github.com/starc007/ui-components):
 
 - `animated-sidebar`
+- `bouncy-accordion`
 - `bottom-sheet`
 - `number-ticker`
 - `button-base`
@@ -13,6 +14,7 @@ The UI refresh adapts selected interaction components from
 - `select`
 - `switch`
 - `tabs`
+- `wheel-picker`
 
 ## ui-components
 
