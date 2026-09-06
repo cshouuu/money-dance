@@ -24,6 +24,7 @@ import {
   type Ref,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { selectPopoverPosition } from './selectPopoverPosition'
 import { DateTimeField } from './DateTimeField'
 import './BeuiControls.css'
 
@@ -220,7 +221,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
   const [open, setOpen] = useState(false)
   const [internalValue, setInternalValue] = useState(() => String(Array.isArray(defaultValue) ? defaultValue[0] ?? '' : defaultValue ?? ''))
   const [activeIndex, setActiveIndex] = useState(0)
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, placement: 'bottom' as 'bottom' | 'top' })
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0, maxHeight: 280, placement: 'bottom' })
   const controlled = rawValue !== undefined
   const value = String(Array.isArray(rawValue) ? rawValue[0] ?? '' : rawValue ?? internalValue)
 
@@ -240,17 +241,13 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current
     if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
-    const estimatedHeight = Math.min(280, options.length * 45 + 10)
-    const spaceBelow = window.innerHeight - rect.bottom
-    const placement = spaceBelow < estimatedHeight + 12 && rect.top > spaceBelow ? 'top' : 'bottom'
-    const width = Math.max(180, rect.width)
-    setPosition({
-      top: placement === 'bottom' ? rect.bottom + 7 : Math.max(8, rect.top - estimatedHeight - 7),
-      left: Math.min(Math.max(8, rect.left), window.innerWidth - width - 8),
-      width,
-      placement,
-    })
+    const viewport = window.visualViewport
+    setPosition(selectPopoverPosition(trigger.getBoundingClientRect(), options.length, {
+      top: viewport?.offsetTop ?? 0,
+      left: viewport?.offsetLeft ?? 0,
+      width: viewport?.width ?? window.innerWidth,
+      height: viewport?.height ?? window.innerHeight,
+    }))
   }, [options.length])
 
   useEffect(() => {
@@ -266,10 +263,14 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
     document.addEventListener('pointerdown', closeOnOutside)
     window.addEventListener('resize', reposition)
     window.addEventListener('scroll', reposition, true)
+    window.visualViewport?.addEventListener('resize', reposition)
+    window.visualViewport?.addEventListener('scroll', reposition)
     return () => {
       document.removeEventListener('pointerdown', closeOnOutside)
       window.removeEventListener('resize', reposition)
       window.removeEventListener('scroll', reposition, true)
+      window.visualViewport?.removeEventListener('resize', reposition)
+      window.visualViewport?.removeEventListener('scroll', reposition)
     }
   }, [open, options, updatePosition, value])
 
@@ -327,7 +328,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
     {typeof document !== 'undefined' && createPortal(<AnimatePresence>{open && <m.div
       ref={menuRef}
       className={classes('beui-select-popover', `placement-${position.placement}`)}
-      style={{ top: position.top, left: position.left, width: position.width }}
+      style={{ top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight }}
       role="listbox"
       aria-labelledby={`${id}-label`}
       initial={reduce ? { opacity: 1 } : { opacity: 0, y: position.placement === 'bottom' ? -7 : 7, scale: 0.98 }}
