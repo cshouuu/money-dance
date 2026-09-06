@@ -37,6 +37,7 @@ export function removeJSON(key: string): boolean {
 export const keys = {
   profile: 'salary-flow.profile.v1',
   wishes: 'salary-flow.wishes.v1',
+  widgetWishes: 'salary-flow.widget-wishes.v1',
   sessions: 'salary-flow.sessions.v1',
   activeSlacking: 'salary-flow.active-slacking.v1',
   overtimeSessions: 'salary-flow.overtime-sessions.v1',

@@ -44,6 +44,7 @@ public class WidgetBridgePlugin extends Plugin {
             WidgetStateStore.setRealtimeEnabled(getContext(), true);
         }
         WidgetRenderer.updateAll(getContext());
+        MoneyDanceWishWidgetProvider.updateAll(getContext());
         WidgetTickerService.reconcile(getContext());
         call.resolve(status());
     }

@@ -25,7 +25,7 @@ export function getWishProgress(
   const settings = loadChinaHolidaySettings(now)
   const currentProfile = salaryProfileForBusinessDate(profile, toLocalDateValue(now), [...attendanceRecords], settings)
   const rates = calculateRates(currentProfile)
-  const createdAt = new Date(item.createdAt)
+  const createdAt = new Date(item.startedAt ?? item.createdAt)
   const progressStart = Number.isNaN(createdAt.getTime()) || createdAt > now ? now : createdAt
   const rawEarnedAmount = calculatePaidTimeEarnings(
     profile,

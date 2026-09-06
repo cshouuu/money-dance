@@ -48,14 +48,14 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
 
   useEffect(() => {
     if (!open) return
-    setStartTime(recordTime(record, 'start') || toLocalTimeValue())
+    setStartTime(recordTime(record, 'start') || (purpose === 'adjust' ? plannedStart : toLocalTimeValue()))
     setEndTime(recordTime(record, 'end'))
     const recordEndTime = record?.sessions.at(-1)?.endTime
     setEndDate(recordEndTime ? toLocalDateValue(new Date(recordEndTime)) : date)
     setPlannedEndDate(date)
     setPlannedEndTime('')
     setError('')
-  }, [date, open, purpose, record])
+  }, [date, open, plannedStart, purpose, record])
   useDialogFocus(open, onCancel, dialogRef, closeButtonRef)
 
   if (!open) return null
@@ -77,6 +77,10 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!event.currentTarget.reportValidity()) return
+    if (!isFlexibleStartTimeAllowed(date, startTime) || (endTime && localDateWithTime(endDate, endTime) > new Date())) {
+      setError('实际工作时间不能晚于当前时间。')
+      return
+    }
     if (endTime && localDateWithTime(endDate, endTime) <= localDateWithTime(date, startTime)) {
       setError('结束时间需要晚于开始时间。')
       return

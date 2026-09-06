@@ -27,6 +27,7 @@ vi.mock('../lib/profile', () => ({ loadProfile: mocks.loadProfile }))
 vi.mock('../lib/work', () => ({ loadWorkRecords: mocks.loadWorkRecords }))
 vi.mock('../lib/attendance', () => ({ loadAttendanceRecords: mocks.loadAttendanceRecords }))
 vi.mock('../lib/widgetState', () => ({ buildWidgetSnapshot: mocks.buildWidgetSnapshot }))
+vi.mock('../lib/wishWidget', () => ({ buildWishWidgetSnapshot: () => ({ wishes: [], timeline: [] }) }))
 vi.mock('../lib/storage', () => ({
   STORAGE_CHANGED_EVENT: 'money-dance:storage-changed',
   keys: {
@@ -92,7 +93,7 @@ describe('widget sync transaction', () => {
       'ack-actions',
       'consume-target',
     ])
-    expect(mocks.syncWidgetSnapshot).toHaveBeenCalledWith({ version: 1 }, ['action-1'])
+    expect(mocks.syncWidgetSnapshot).toHaveBeenCalledWith({ version: 1, wishWidget: { wishes: [], timeline: [] } }, ['action-1'])
   })
 
   it('does not mirror or acknowledge when applying local storage fails', async () => {
@@ -120,7 +121,7 @@ describe('widget sync transaction', () => {
       acknowledgedActions: true,
       launchTarget: '/overtime?start=1',
     })
-    expect(mocks.syncWidgetSnapshot).toHaveBeenCalledWith({ version: 1 }, ['action-1'])
+    expect(mocks.syncWidgetSnapshot).toHaveBeenCalledWith({ version: 1, wishWidget: { wishes: [], timeline: [] } }, ['action-1'])
     expect(mocks.ackWidgetActions).toHaveBeenCalledWith(['action-1'])
   })
 

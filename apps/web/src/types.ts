@@ -3,6 +3,8 @@ export interface WishItem {
   name: string
   price: number
   createdAt: string
+  /** Optional user-selected start; legacy wishes retain their creation instant. */
+  startedAt?: string
   purchasedAt?: string
 }
 

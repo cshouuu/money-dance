@@ -1,5 +1,5 @@
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
-import { CheckCircle2, Clock3, Plus, ShoppingBag, Trash2 } from 'lucide-react'
+import { CheckCircle2, Clock3, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -12,9 +12,10 @@ import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
 import { keys, loadJSON, saveJSON } from '../lib/storage'
 import { useNow } from '../lib/useNow'
 import { getWishProgress } from '../lib/wishProgress'
+import { isWidgetBridgeAvailable } from '../lib/widgetBridge'
 import { loadWorkRecords } from '../lib/work'
 import type { WishItem } from '../types'
-import { Button, Input } from '../ui/BeuiControls'
+import { Button, Input, SelectField } from '../ui/BeuiControls'
 import { formatWishEstimate } from './converterEstimate'
 import './Converter.css'
 
@@ -38,6 +39,10 @@ export function Converter() {
   const [items, setItems] = useState<WishItem[]>(() => loadJSON(keys.wishes, []))
   const [name, setName] = useState(search.get('name') || '')
   const [price, setPrice] = useState(search.get('price') || '')
+  const [startedDate, setStartedDate] = useState(() => toLocalDateValue())
+  const [editing, setEditing] = useState<WishItem | null>(null)
+  const [formError, setFormError] = useState('')
+  const [widgetIds, setWidgetIds] = useState<string[]>(() => loadJSON(keys.widgetWishes, []))
   const [pending, setPending] = useState<PendingAction>(null)
   const [showPurchaseToast, setShowPurchaseToast] = useState(false)
   const [page, setPage] = useState(1)
@@ -60,9 +65,18 @@ export function Converter() {
     event.preventDefault()
     const parsedPrice = parseNumberInput(price)
     if (!event.currentTarget.reportValidity() || !name.trim() || parsedPrice === null || parsedPrice < 0 || parsedPrice > MAX_MONEY_AMOUNT) return
-    const next = [{ id: createId(), name: name.trim(), price: parsedPrice, createdAt: new Date().toISOString() }, ...items]
+    const start = new Date(startedDate + 'T00:00:00')
+    if (!Number.isFinite(start.getTime()) || start > new Date()) return
+    const startedAt = editing && startedDate === toLocalDateValue(new Date(editing.startedAt ?? editing.createdAt))
+      ? editing.startedAt : start.toISOString()
+    const next = editing
+      ? items.map(item => item.id === editing.id ? { ...item, name: name.trim(), price: parsedPrice, startedAt } : item)
+      : [{ id: createId(), name: name.trim(), price: parsedPrice, createdAt: new Date().toISOString(), startedAt }, ...items]
+    if (!saveJSON(keys.wishes, next)) { setFormError('心愿暂时无法保存，请重试。'); return }
+    setFormError('')
+    setEditing(null)
+    setStartedDate(toLocalDateValue())
     setItems(next)
-    saveJSON(keys.wishes, next)
     setPage(1)
     setName('')
     setPrice('')
@@ -109,13 +123,17 @@ export function Converter() {
 
   return <section className="page converter-page">
     <header className="page-header"><div><p className="eyebrow">TIME CONVERTER</p><h1>这个东西，值你工作多久？</h1><p>把价格换算成真实的工作时间，并持续看看离它还有多远。</p></div></header>
-    <form className="input-card" onSubmit={add}>
-      <div className="form-card-heading"><span>NEW WISH</span><div><b>添加一个心愿</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
+    <form id="wish-form" className="input-card" onSubmit={add}>
+      <div className="form-card-heading"><span>{editing ? 'EDIT WISH' : 'NEW WISH'}</span><div><b>{editing ? '编辑心愿' : '添加一个心愿'}</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
       <Input label="想买什么" required maxLength={60} autoComplete="off" value={name} onValueChange={setName} placeholder="例如：AirPods Pro" />
       <Input label="价格" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => setPrice(normalizeDecimalInput(value))} placeholder="1899" />
+      <Input label="心愿起始日期" required type="date" max={toLocalDateValue()} value={startedDate} onValueChange={setStartedDate} hint="从这一天起，按工作记录和作息累计进度" />
+      {formError && <p role="alert">{formError}</p>}
       {previewWorkSeconds !== null ? <div className="live-result converter-live-result"><small>连续纯工时（24小时制）</small><strong>{formatDuration(previewWorkSeconds)}</strong><span>按你的工作日程 ≈ {formatWorkDays(previewWorkSeconds, rates.paidSecondsPerDay)} 个工作日</span></div> : null}
-      <Button type="submit" size="lg" ripple><Plus size={17} /> 保存换算</Button>
+      <Button type="submit" size="lg" ripple><Plus size={17} /> {editing ? '保存修改' : '保存换算'}</Button>
+      {editing && <Button variant="secondary" onClick={() => { setEditing(null); setName(''); setPrice(''); setStartedDate(toLocalDateValue()); setFormError('') }}>取消编辑</Button>}
     </form>
+    {isWidgetBridgeAvailable() && <div className="input-card widget-wish-settings"><div className="form-card-heading"><span>ANDROID WIDGET</span><div><b>桌面心愿</b><small>指定最多 3 个心愿，在桌面点击名称切换饼图。约每小时刷新，打开应用立即刷新。</small></div></div>{[0, 1, 2].map(index => <SelectField key={index} label={'心愿 ' + (index + 1)} value={wishlistItems.some(item => item.id === widgetIds[index]) ? widgetIds[index] : ''} onValueChange={id => { const next = [0, 1, 2].map(i => i === index ? id : widgetIds[i] ?? ''); if (saveJSON(keys.widgetWishes, next)) setWidgetIds(next); else setFormError('桌面心愿暂时无法保存，请重试。') }}><option value="">暂不展示</option>{wishlistItems.filter(item => item.id === widgetIds[index] || !widgetIds.includes(item.id)).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</SelectField>)}</div>}
     <div className="list-section">
       <div className="section-title"><h2>心愿清单</h2><span>{wishlistItems.length} 项</span></div>
       {wishlistItems.length === 0
@@ -150,6 +168,7 @@ export function Converter() {
                   <span>{estimate.label}</span>
                 </span>
                 <div className="converter-actions">
+                  <Button variant="secondary" size="icon" aria-label={'编辑 ' + item.name} onClick={() => { setEditing(item); setName(item.name); setPrice(String(item.price)); setStartedDate(toLocalDateValue(new Date(item.startedAt ?? item.createdAt))); document.getElementById('wish-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}><Pencil size={16}/></Button>
                   <Button className="buy-button" variant="secondary" size="sm" onClick={() => setPending({ type: 'purchase', item })}><ShoppingBag size={15} /><span>已买</span></Button>
                   <Button className="wish-delete-button" variant="secondary" size="icon" onClick={() => setPending({ type: 'delete', item })} aria-label={`删除 ${item.name}`} title="删除"><Trash2 size={17} /></Button>
                 </div>

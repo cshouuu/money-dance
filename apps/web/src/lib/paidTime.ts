@@ -145,13 +145,18 @@ export function actualPaidIntervalsForDate(
     || isConfiguredWorkday(toLocalDateTime(businessDate), profile, settings)
   if (!isWorkday || (!record && profile.defaultWorkMode === 'flexible')) return []
 
-  const intervals = scheduledPaidIntervalsForDate(profile, businessDate)
-  if (!isHalfDayLeave(attendance)) return intervals
+  let intervals = scheduledPaidIntervalsForDate(profile, businessDate)
   const paidSeconds = intervals.reduce((total, interval) => total + intervalDurationSeconds(interval), 0)
   const half = paidSeconds / 2
-  return attendanceLeavePeriod(attendance) === 'morning'
+  if (isHalfDayLeave(attendance)) intervals = attendanceLeavePeriod(attendance) === 'morning'
     ? sliceIntervalsByPaidOffset(intervals, half, paidSeconds)
     : sliceIntervalsByPaidOffset(intervals, 0, half)
+  if (record?.sessions.length) {
+    return mergeIntervals(intervals.flatMap(interval => record.sessions.map(session =>
+      clippedInterval(interval, new Date(session.startTime), session.endTime ? new Date(session.endTime) : rangeEnd),
+    ).filter((item): item is PaidTimeInterval => item !== null)))
+  }
+  return intervals
 }
 
 /** Planned future slices; flexible users still use their configured target schedule. */

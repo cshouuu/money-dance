@@ -6,6 +6,7 @@ import { salaryProfileForBusinessDate } from './profile'
 import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
 import { normalizeActiveSlacking } from './slacking'
 import { getScheduledBusinessDate, summarizeTodayWork } from './work'
+import type { buildWishWidgetSnapshot } from './wishWidget'
 
 export const WIDGET_SNAPSHOT_VERSION = 1 as const
 export const WIDGET_SNAPSHOT_HORIZON_MS = 36 * 60 * 60 * 1000
@@ -37,6 +38,7 @@ export interface WidgetActiveOvertime {
 }
 
 export interface WidgetSnapshot {
+  wishWidget?: ReturnType<typeof buildWishWidgetSnapshot>
   version: typeof WIDGET_SNAPSHOT_VERSION
   syncedAt: number
   validUntil: number

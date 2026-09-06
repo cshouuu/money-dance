@@ -3,6 +3,7 @@ import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSe
 import { attendanceLeavePeriod, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
 import { createId } from './id'
+import { actualPaidIntervalsForDate } from './paidTime'
 import { salaryProfileForBusinessDate } from './profile'
 import { keys, loadJSON, saveJSON } from './storage'
 
@@ -273,7 +274,9 @@ export function getAutomaticFlexibleSettlementMode(
 
 export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRecord[], now = new Date(), _providedRates?: SalaryRates, attendanceRecords: AttendanceRecord[] = []): TodayWorkSummary {
   const today = toLocalDateValue(now)
-  const record = getCurrentWorkRecord(records, now)
+  const currentRecord = getCurrentWorkRecord(records, now)
+  const record = currentRecord?.mode === 'flexible' ? currentRecord
+    : getWorkRecord(records, getScheduledBusinessDate(profile, now)) ?? currentRecord
   const mode = record?.mode ?? profile.defaultWorkMode
   const businessDate = record?.date ?? (mode === 'scheduled' ? getScheduledBusinessDate(profile, now) : today)
   const attendance = attendanceRecords.find(item => item.date === businessDate)
@@ -331,6 +334,8 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const halfDayTarget = rates.paidSecondsPerDay * 0.5
   const workedSeconds = mode === 'flexible'
     ? record ? getFlexibleWorkedSeconds(record, now) : 0
+    : record?.sessions.length
+      ? getScheduledWorkedSeconds(profile, record, now, attendanceRecords)
     : isHalfDayLeave(attendance)
       ? attendanceLeavePeriod(attendance) === 'morning'
         ? Math.max(0, Math.min(halfDayTarget, automaticScheduledSeconds - halfDayTarget))
@@ -343,7 +348,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     mode,
     status: mode === 'flexible'
       ? record && hasFlexiblePlannedEndReached(record, now) ? 'ended' : record?.status ?? 'ready'
-      : 'working',
+      : record?.sessions.length && record.status === 'ended' ? 'ended' : 'working',
     dayType: 'work',
     workedSeconds,
     businessDate,
@@ -463,4 +468,14 @@ export function replaceFlexibleWorkTime(date: string, startTime: string, endTime
 
 export function scheduledOverride(date: string): DailyWorkRecord {
   return { date, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: new Date().toISOString() }
+}
+
+/** Explicit fixed-shift times intersect the configured paid schedule, including breaks. */
+export function getScheduledWorkedSeconds(profile: SalaryProfile, record: DailyWorkRecord, now = new Date(), attendanceRecords: AttendanceRecord[] = []): number {
+  return actualPaidIntervalsForDate(profile, record.date, now, [record], attendanceRecords)
+    .reduce((total, interval) => total + Math.max(0, Math.min(now.getTime(), interval.end.getTime()) - interval.start.getTime()) / 1000, 0)
+}
+
+export function replaceScheduledWorkTime(date: string, startTime: string, endTime?: string, endDate = date): DailyWorkRecord {
+  return { ...replaceFlexibleWorkTime(date, startTime, endTime, endDate), mode: 'scheduled' }
 }

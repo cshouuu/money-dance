@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="12dp"
+    android:background="@drawable/money_dance_widget_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+        <TextView android:id="@+id/wish_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="心愿进度" android:textColor="#2C3424" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/wish_manage" android:layout_width="48dp" android:layout_height="32dp" android:gravity="center" android:text="设置" android:textColor="#52612F" android:textSize="12sp" android:contentDescription="打开清单设置桌面心愿" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center_vertical">
+        <ImageView android:id="@+id/wish_pie" android:layout_width="100dp" android:layout_height="match_parent" android:adjustViewBounds="true" android:scaleType="fitCenter" android:contentDescription="心愿完成进度饼图" />
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center_vertical" android:paddingStart="8dp">
+            <TextView android:id="@+id/wish_slot_one" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center_vertical" android:textColor="#2C3424" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/wish_slot_two" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center_vertical" android:textColor="#2C3424" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:id="@+id/wish_slot_three" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center_vertical" android:textColor="#2C3424" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+        </LinearLayout>
+    </LinearLayout>
+    <TextView android:id="@+id/wish_amount" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingTop="4dp" android:textColor="#2C3424" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/wish_updated" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#626951" android:textSize="10sp" />
+</LinearLayout>
