@@ -1,0 +1,412 @@
+/* Theme roles shared by the application and its miniature previews.
+ * Hero surfaces are independent of action colors; light themes use dark text. */
+
+:root,
+.theme-picker-preview,
+[data-theme="classic"] {
+  --theme-canvas: #F5F2EA;
+  --theme-paper: #FCFAF5;
+  --theme-control: #F0EEE7;
+  --theme-surface-soft: #F0EEE7;
+  --theme-surface-muted: #E4E3DD;
+  --theme-line: #DCDDD9;
+  --theme-line-strong: #B3B8B6;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #526B49;
+  --theme-accent-strong: #253A29;
+  --theme-accent-hover: #213427;
+  --theme-accent-soft: #E5ECD9;
+  --theme-accent-faint: #EDF1E3;
+  --theme-accent-border: #B8C1B0;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #DFE8B6;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #1E281F;
+  --theme-hero-ink: #F8F6EB;
+  --theme-hero-muted: #CAD3C2;
+  --theme-hero-border: #454D44;
+  --theme-hero-tint: #2B342B;
+  --theme-hero-accent: #DFE8B6;
+  --theme-hero-track: #454D44;
+  --theme-paper-rgb: 252,250,245;
+  --theme-accent-rgb: 82,107,73;
+  --theme-strong-rgb: 37,58,41;
+  --theme-palette-a-rgb: 223,232,182;
+  --theme-palette-b-rgb: 229,236,217;
+}
+
+[data-theme="cloud-river"] {
+  --theme-canvas: #F3F7F9;
+  --theme-paper: #FFFFFF;
+  --theme-control: #EDF3F6;
+  --theme-surface-soft: #EDF3F6;
+  --theme-surface-muted: #E1E7EA;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #246B91;
+  --theme-accent-strong: #246B91;
+  --theme-accent-hover: #215C7D;
+  --theme-accent-soft: #E1EFF7;
+  --theme-accent-faint: #ECF5FA;
+  --theme-accent-border: #A7C4D3;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #F4DC84;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #DCEEF8;
+  --theme-hero-ink: #183B51;
+  --theme-hero-muted: #3F6073;
+  --theme-hero-border: #B9CEDA;
+  --theme-hero-tint: #D0E3EE;
+  --theme-hero-accent: #246B91;
+  --theme-hero-track: #B9CEDA;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 36,107,145;
+  --theme-strong-rgb: 36,107,145;
+  --theme-palette-a-rgb: 244,220,132;
+  --theme-palette-b-rgb: 225,239,247;
+}
+
+[data-theme="cobalt-ivory"] {
+  --theme-canvas: #F5F6F8;
+  --theme-paper: #FFFDF8;
+  --theme-control: #EEF1F5;
+  --theme-surface-soft: #EEF1F5;
+  --theme-surface-muted: #E2E5E9;
+  --theme-line: #DEDFDB;
+  --theme-line-strong: #B5B9B8;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #185BA0;
+  --theme-accent-strong: #185BA0;
+  --theme-accent-hover: #174F89;
+  --theme-accent-soft: #E4EDF9;
+  --theme-accent-faint: #EDF3F9;
+  --theme-accent-border: #A3BCD5;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FAEBD1;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #19599A;
+  --theme-hero-ink: #FFFFFF;
+  --theme-hero-muted: #DEE9F8;
+  --theme-hero-border: #4277AC;
+  --theme-hero-tint: #2763A0;
+  --theme-hero-accent: #FAEBD1;
+  --theme-hero-track: #4277AC;
+  --theme-paper-rgb: 255,253,248;
+  --theme-accent-rgb: 24,91,160;
+  --theme-strong-rgb: 24,91,160;
+  --theme-palette-a-rgb: 250,235,209;
+  --theme-palette-b-rgb: 228,237,249;
+}
+
+[data-theme="frost-cyan"] {
+  --theme-canvas: #F5F9F8;
+  --theme-paper: #FFFFFF;
+  --theme-control: #EDF4F3;
+  --theme-surface-soft: #EDF4F3;
+  --theme-surface-muted: #E1E8E8;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #087681;
+  --theme-accent-strong: #087681;
+  --theme-accent-hover: #0A6570;
+  --theme-accent-soft: #DDF2F2;
+  --theme-accent-faint: #E9F7F7;
+  --theme-accent-border: #9CC8CD;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FCF9E8;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #ECF8F6;
+  --theme-hero-ink: #174447;
+  --theme-hero-muted: #486A6B;
+  --theme-hero-border: #C6D8D7;
+  --theme-hero-tint: #DFEDEB;
+  --theme-hero-accent: #087681;
+  --theme-hero-track: #C6D8D7;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 8,118,129;
+  --theme-strong-rgb: 8,118,129;
+  --theme-palette-a-rgb: 252,249,232;
+  --theme-palette-b-rgb: 221,242,242;
+}
+
+[data-theme="rose-moon"] {
+  --theme-canvas: #F7F6F8;
+  --theme-paper: #FFFFFF;
+  --theme-control: #F3EFF2;
+  --theme-surface-soft: #F3EFF2;
+  --theme-surface-muted: #E6E4E7;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #9C405E;
+  --theme-accent-strong: #9C405E;
+  --theme-accent-hover: #833953;
+  --theme-accent-soft: #F8E6EC;
+  --theme-accent-faint: #FAEFF3;
+  --theme-accent-border: #D7B3BF;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #E8F0F2;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #F8E1E8;
+  --theme-hero-ink: #542437;
+  --theme-hero-muted: #775060;
+  --theme-hero-border: #DABFC8;
+  --theme-hero-tint: #EED6DD;
+  --theme-hero-accent: #9C405E;
+  --theme-hero-track: #DABFC8;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 156,64,94;
+  --theme-strong-rgb: 156,64,94;
+  --theme-palette-a-rgb: 232,240,242;
+  --theme-palette-b-rgb: 248,230,236;
+}
+
+[data-theme="misty-hill"] {
+  --theme-canvas: #F6F8F2;
+  --theme-paper: #FFFFFF;
+  --theme-control: #EFF3E9;
+  --theme-surface-soft: #EFF3E9;
+  --theme-surface-muted: #E3E7DF;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #436E32;
+  --theme-accent-strong: #436E32;
+  --theme-accent-hover: #3A5F2F;
+  --theme-accent-soft: #E4EEDB;
+  --theme-accent-faint: #EDF4E8;
+  --theme-accent-border: #B4C5AD;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FBF1D7;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #DCEBCE;
+  --theme-hero-ink: #284421;
+  --theme-hero-muted: #506348;
+  --theme-hero-border: #BCCDAF;
+  --theme-hero-tint: #D1E1C4;
+  --theme-hero-accent: #436E32;
+  --theme-hero-track: #BCCDAF;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 67,110,50;
+  --theme-strong-rgb: 67,110,50;
+  --theme-palette-a-rgb: 251,241,215;
+  --theme-palette-b-rgb: 228,238,219;
+}
+
+[data-theme="peach-sprout"] {
+  --theme-canvas: #FAF7F2;
+  --theme-paper: #FFFEFB;
+  --theme-control: #F3F0E9;
+  --theme-surface-soft: #F3F0E9;
+  --theme-surface-muted: #E6E5DF;
+  --theme-line: #DEE0DE;
+  --theme-line-strong: #B5BAB9;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #396548;
+  --theme-accent-strong: #396548;
+  --theme-accent-hover: #325741;
+  --theme-accent-soft: #E6F1E4;
+  --theme-accent-faint: #EFF6EC;
+  --theme-accent-border: #B0C1B3;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #BCE4BC;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #FFE0C3;
+  --theme-hero-ink: #294A36;
+  --theme-hero-muted: #626248;
+  --theme-hero-border: #D8C5AA;
+  --theme-hero-tint: #F2D7BB;
+  --theme-hero-accent: #396548;
+  --theme-hero-track: #D8C5AA;
+  --theme-paper-rgb: 255,254,251;
+  --theme-accent-rgb: 57,101,72;
+  --theme-strong-rgb: 57,101,72;
+  --theme-palette-a-rgb: 188,228,188;
+  --theme-palette-b-rgb: 230,241,228;
+}
+
+[data-theme="lemon-taro"] {
+  --theme-canvas: #F8F7FA;
+  --theme-paper: #FFFFFF;
+  --theme-control: #F1EFF7;
+  --theme-surface-soft: #F1EFF7;
+  --theme-surface-muted: #E4E4EB;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #6450BE;
+  --theme-accent-strong: #6450BE;
+  --theme-accent-hover: #5546A2;
+  --theme-accent-soft: #ECE7FB;
+  --theme-accent-faint: #F3EFFC;
+  --theme-accent-border: #C1B9E5;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FFE831;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #EAE3FF;
+  --theme-hero-ink: #382568;
+  --theme-hero-muted: #64527E;
+  --theme-hero-border: #CAC1E4;
+  --theme-hero-tint: #DFD8F6;
+  --theme-hero-accent: #6450BE;
+  --theme-hero-track: #CAC1E4;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 100,80,190;
+  --theme-strong-rgb: 100,80,190;
+  --theme-palette-a-rgb: 255,232,49;
+  --theme-palette-b-rgb: 236,231,251;
+}
+
+[data-theme="mist-coral"] {
+  --theme-canvas: #F3F8F5;
+  --theme-paper: #FFFFFF;
+  --theme-control: #EDF3EE;
+  --theme-surface-soft: #EDF3EE;
+  --theme-surface-muted: #E1E7E3;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #A0473C;
+  --theme-accent-strong: #A0473C;
+  --theme-accent-hover: #863F37;
+  --theme-accent-soft: #F9E6E0;
+  --theme-accent-faint: #FBEFEB;
+  --theme-accent-border: #D9B5B1;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #E0FFF4;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #FADBD2;
+  --theme-hero-ink: #65352B;
+  --theme-hero-muted: #7C5549;
+  --theme-hero-border: #DFBDB4;
+  --theme-hero-tint: #F1D1C8;
+  --theme-hero-accent: #A0473C;
+  --theme-hero-track: #DFBDB4;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 160,71,60;
+  --theme-strong-rgb: 160,71,60;
+  --theme-palette-a-rgb: 224,255,244;
+  --theme-palette-b-rgb: 249,230,224;
+}
+
+[data-theme="aqua-peach"] {
+  --theme-canvas: #F5F9F9;
+  --theme-paper: #FFFFFF;
+  --theme-control: #EDF4F4;
+  --theme-surface-soft: #EDF4F4;
+  --theme-surface-muted: #E1E8E8;
+  --theme-line: #DEE0E1;
+  --theme-line-strong: #B5BABC;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #246B70;
+  --theme-accent-strong: #246B70;
+  --theme-accent-hover: #215C62;
+  --theme-accent-soft: #DCF2F1;
+  --theme-accent-faint: #E8F7F6;
+  --theme-accent-border: #A7C4C6;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FFCEDE;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #D5F5F2;
+  --theme-hero-ink: #234D50;
+  --theme-hero-muted: #46686A;
+  --theme-hero-border: #B5D7D5;
+  --theme-hero-tint: #CAEBE8;
+  --theme-hero-accent: #246B70;
+  --theme-hero-track: #B5D7D5;
+  --theme-paper-rgb: 255,255,255;
+  --theme-accent-rgb: 36,107,112;
+  --theme-strong-rgb: 36,107,112;
+  --theme-palette-a-rgb: 255,206,222;
+  --theme-palette-b-rgb: 220,242,241;
+}
+
+[data-theme="cream-grass"] {
+  --theme-canvas: #FAF7F1;
+  --theme-paper: #FFFEFA;
+  --theme-control: #F3F0E8;
+  --theme-surface-soft: #F3F0E8;
+  --theme-surface-muted: #E6E5DE;
+  --theme-line: #DEE0DD;
+  --theme-line-strong: #B5BAB9;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #496B43;
+  --theme-accent-strong: #496B43;
+  --theme-accent-hover: #3F5C3D;
+  --theme-accent-soft: #EAF0E2;
+  --theme-accent-faint: #F1F5EA;
+  --theme-accent-border: #B6C3B1;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #FFEAD5;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #F7EBD8;
+  --theme-hero-ink: #394E34;
+  --theme-hero-muted: #62644F;
+  --theme-hero-border: #D5CFBA;
+  --theme-hero-tint: #ECE2CE;
+  --theme-hero-accent: #496B43;
+  --theme-hero-track: #D5CFBA;
+  --theme-paper-rgb: 255,254,250;
+  --theme-accent-rgb: 73,107,67;
+  --theme-strong-rgb: 73,107,67;
+  --theme-palette-a-rgb: 255,234,213;
+  --theme-palette-b-rgb: 234,240,226;
+}
+
+[data-theme="cyan-tide"] {
+  --theme-canvas: #F0F6F5;
+  --theme-paper: #FBFEFD;
+  --theme-control: #E9F1EF;
+  --theme-surface-soft: #E9F1EF;
+  --theme-surface-muted: #DDE5E4;
+  --theme-line: #DBE0DF;
+  --theme-line-strong: #B2BABB;
+  --theme-control-border: #7C8585;
+  --theme-ink: #252C30;
+  --theme-muted: #5F666B;
+  --theme-accent: #086C77;
+  --theme-accent-strong: #086C77;
+  --theme-accent-hover: #0A5D67;
+  --theme-accent-soft: #DCEDEA;
+  --theme-accent-faint: #E7F3F1;
+  --theme-accent-border: #9AC4C7;
+  --theme-on-strong: #FFFFFF;
+  --theme-secondary: #B1D5C9;
+  --theme-secondary-ink: #34423C;
+  --theme-hero-bg: #10525C;
+  --theme-hero-ink: #F7FFFD;
+  --theme-hero-muted: #C8E5E1;
+  --theme-hero-border: #3A7179;
+  --theme-hero-tint: #1E5C66;
+  --theme-hero-accent: #B1D5C9;
+  --theme-hero-track: #3A7179;
+  --theme-paper-rgb: 251,254,253;
+  --theme-accent-rgb: 8,108,119;
+  --theme-strong-rgb: 8,108,119;
+  --theme-palette-a-rgb: 177,213,201;
+  --theme-palette-b-rgb: 220,237,234;
+}

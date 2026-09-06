@@ -180,7 +180,7 @@ jobs:
 
           test -f "$NATIVE_ROOT/AppUpdaterPlugin.java"
           test -f "$JAVA_ROOT/AppUpdaterPlugin.java"
-          for source in WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider; do
+          for source in AppearancePlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider; do
             test -f "$NATIVE_ROOT/${source}.java"
             test -f "$JAVA_ROOT/${source}.java"
             cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
@@ -260,7 +260,7 @@ jobs:
           const source = fs.readFileSync(process.argv[2], 'utf8')
           const manifest = fs.readFileSync(process.argv[3], 'utf8')
           const superAt = source.indexOf('super.onCreate(savedInstanceState)')
-          for (const plugin of ['AppUpdaterPlugin', 'WidgetBridgePlugin']) {
+          for (const plugin of ['AppUpdaterPlugin', 'WidgetBridgePlugin', 'AppearancePlugin']) {
             const registerAt = source.indexOf(`registerPlugin(${plugin}.class)`)
             if (registerAt < 0 || superAt < 0 || registerAt > superAt) {
               console.error(`${plugin} must be registered before BridgeActivity creates the Capacitor Bridge`)

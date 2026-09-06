@@ -2,7 +2,7 @@
 .dashboard-header-actions .ghost-button{min-height:42px;padding:0 15px;border:1px solid var(--line);background:var(--paper)}
 
 .dashboard-overview-grid{display:grid;grid-template-columns:minmax(0,8fr) minmax(310px,4fr);gap:18px;align-items:stretch}
-.dashboard-overview-grid>.hero-card{min-height:0;padding:40px 42px 30px;border-radius:30px;box-shadow:0 24px 55px rgba(var(--theme-strong-rgb),.16)}
+.dashboard-overview-grid>.hero-card{min-height:0;padding:40px 42px 30px;border-radius:30px;box-shadow:0 8px 26px rgba(var(--theme-strong-rgb),.08)}
 .dashboard-overview-grid .money-ticker{margin-top:30px;font-size:clamp(54px,5.5vw,78px)}
 .dashboard-overview-grid .rate-line{margin:13px 0 55px}
 
@@ -22,7 +22,7 @@
 .dashboard-insight-arrow{position:absolute;right:13px;bottom:12px;color:var(--green)}
 .dashboard-insight-card.unset{background:var(--surface-soft)}.dashboard-insight-card.unset .dashboard-insight-card-heading>i{background:var(--line);color:var(--muted)}
 
-.dashboard-day-note{position:relative;display:flex;align-items:center;min-height:44px;margin-bottom:7px;padding:0 14px;border:1px solid var(--dark-hover);border-radius:13px;background:var(--dark-hover);color:var(--on-dark-muted);font-size:11px;line-height:1.5}
+.dashboard-day-note{position:relative;display:flex;align-items:center;min-height:44px;margin-bottom:7px;padding:0 14px;border:1px solid var(--theme-hero-tint);border-radius:13px;background:var(--theme-hero-tint);color:var(--theme-hero-muted);font-size:11px;line-height:1.5}
 .dashboard-performance-title{align-items:end}.dashboard-performance-title>span{color:var(--muted);font-size:10px}
 .dashboard-performance-card{display:grid;grid-template-columns:minmax(210px,.8fr) minmax(230px,1fr) minmax(260px,1.1fr);align-items:center;gap:24px;margin-bottom:30px;padding:24px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,var(--surface-raised) 0%,var(--accent-faint) 100%);box-shadow:0 12px 34px rgba(var(--theme-strong-rgb),.055)}
 .dashboard-performance-primary{display:flex;align-items:center;min-width:0}.dashboard-performance-primary>div{display:flex;min-width:0;flex-direction:column;gap:5px}.dashboard-performance-primary small,.dashboard-performance-primary span{color:var(--muted);font-size:9px}.dashboard-performance-primary strong{color:var(--ink);font:650 clamp(21px,2.4vw,30px) 'DM Mono';white-space:nowrap}

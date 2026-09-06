@@ -23,6 +23,7 @@ if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
 }
 
 const nativeJavaFiles = [
+  'AppearancePlugin.java',
   'AppUpdaterPlugin.java',
   'WidgetActionReceiver.java',
   'WidgetBridgePlugin.java',
@@ -142,8 +143,10 @@ public class MainActivity extends BridgeActivity {
         // must be registered first or they will not exist at runtime.
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(WidgetBridgePlugin.class);
+        registerPlugin(AppearancePlugin.class);
         captureWidgetLaunchTarget(getIntent());
         super.onCreate(savedInstanceState);
+        AppearancePlugin.applySaved(this, getBridge().getWebView());
     }
 
     @Override
@@ -156,6 +159,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        AppearancePlugin.applySaved(this, getBridge().getWebView());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && WidgetRenderer.hasWidgets(this)
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)

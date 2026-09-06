@@ -1,0 +1,84 @@
+/* Shared presentation of the existing beUI controls. Layout and calendar
+ * geometry remain in their component stylesheets. */
+body .hero-glow{display:none}
+body .hero-card{border:1px solid var(--theme-hero-border)}
+body .hero-label{color:var(--theme-hero-muted)}
+body .hero-mode-status{background:var(--secondary);color:var(--secondary-ink);border-color:transparent;font:600 11px/1.4 Inter,'Noto Sans SC',sans-serif}
+body .hero-mode-switch,body .hero-work-link{color:var(--theme-hero-ink);font-size:12px;text-decoration-color:currentColor}
+body .hero-card .hero-meta{color:var(--theme-hero-muted);font-size:12px;gap:12px 24px;flex-wrap:wrap}
+body .hero-card .rate-line{color:var(--theme-hero-muted)}
+body .hero-work-secondary{color:var(--theme-hero-ink);border-color:var(--theme-hero-border)}
+body .dashboard-day-note{padding:12px 14px;font-size:12px;border-color:var(--theme-hero-border)}
+body .settings-rate-overview{border-color:var(--theme-hero-border);box-shadow:0 8px 26px rgba(var(--theme-strong-rgb),.08)}
+body .settings-rate-primary{background:none}
+body .settings-rate-primary>span,body .settings-rate-primary>small,body .settings-rate-details small{font-size:12px}
+
+/* A running timer shares the theme's hero surface but keeps explicit actions. */
+body .timer-card.running{background:var(--theme-hero-bg);color:var(--theme-hero-ink)}
+body .timer-card :is(p,small,.timer-rate){color:var(--muted);font-size:12px;line-height:1.5}
+body .timer-card.running :is(p,small,.timer-rate){color:var(--theme-hero-muted)}
+body .timer-card.running :is(.timer-label,.timer-money,.timer-number){color:var(--theme-hero-ink)}
+body .timer-card.running :is(.timer-backfill-button,.timer-hint,.eyebrow){color:var(--theme-hero-muted)!important}
+body .timer-card.running :is(.overtime-orbit[class],.fish-orbit){background:var(--theme-hero-tint);color:var(--theme-hero-ink)}
+body .timer-card .stop-button{background:var(--dark);color:var(--on-dark);border:1px solid var(--theme-hero-border)}
+body .timer-card .timer-stop-error{background:var(--negative-soft);color:var(--negative)!important}
+
+/* Neutral surfaces give numbers and state indicators priority. */
+body .dashboard-insights{background:var(--paper);box-shadow:var(--shadow)}
+body .dashboard-insight-card{background:var(--paper)}
+body .dashboard-insight-card.unset{background:var(--paper)}
+body .dashboard-insight-card-heading>b{color:var(--muted);font-size:12px}
+body .dashboard-insight-card>strong{color:var(--ink);margin:16px 0 5px;letter-spacing:-.5px}
+body .dashboard-insight-card>strong>em{font-size:11px}
+body .dashboard-insight-card>small{font-size:12px;white-space:normal;overflow-wrap:anywhere;line-height:1.5}
+body .dashboard-insights-heading>span{font-size:11px}
+body .dashboard-performance-card,body .achievement-panel{background:var(--paper);box-shadow:var(--shadow)}
+body .dashboard-performance-details>div{background:var(--control-bg);border-color:var(--line)}
+body .dashboard-performance-details b{color:var(--ink);font-size:12px}
+body .dashboard-performance-details span,body .dashboard-performance-primary small,body .dashboard-performance-primary span,body .dashboard-performance-progress>small{font-size:12px}
+body .dashboard-performance-progress>div:first-child{color:var(--muted);font-size:12px}
+body :is(.dashboard-performance-track,.dashboard-wish-progress,.slacking-wage-progress,.achievement-progress-track){background:var(--surface-muted)}
+body .dashboard-performance-track>i,body .dashboard-wish-progress>i,body .achievement-progress-track>span{background:var(--green)}
+body .salary-deduction-row{background:var(--paper)}
+body .salary-deduction-card-meta{background:var(--control-bg)}
+body .salary-deduction-row[data-enabled=false]{background:var(--surface-soft)}
+body .slacking-wage-grid article.achieved{background:var(--paper);border-color:var(--green)}
+body .achievement-panel.overtime .achievement-title-icon{background:var(--secondary);color:var(--secondary-ink)}
+body .achievement-medals li.unlocked .achievement-medal{background:var(--accent-faint);color:var(--green);box-shadow:none}
+body .achievement-save-error{border-color:var(--negative);background:var(--negative-soft);color:var(--negative)}
+
+/* Opaque overlays, identifiable controls, and consistent keyboard focus. */
+body .beui-select-popover,body .beui-bottom-sheet,body .beui-picker-dialog{background:var(--paper)}
+body .beui-select-popover{box-shadow:0 8px 28px rgba(25,35,40,.14);backdrop-filter:none}
+body .beui-input-shell,body .beui-select-shell,body .beui-date-time-trigger{border-color:var(--control-border);background:var(--control-bg)}
+body .beui-input-shell.focused,body .beui-select-shell.focused{border-color:var(--green);background:var(--paper)}
+body .deduction-name-field .beui-input-shell{background:transparent;border-color:transparent}
+body .deduction-name-field .beui-input-shell.focused{border-color:var(--green);background:var(--paper)}
+body .beui-field-label{font-size:12px;line-height:1.5;color:var(--muted)}
+body .beui-field-message{font-size:12px;line-height:1.5;min-height:18px}
+body .beui-button-md,body .beui-button-lg,body .beui-select-popover>button{font-size:14px}
+body .beui-button-primary{box-shadow:0 3px 9px rgba(var(--theme-strong-rgb),.10)}
+body .beui-button-ghost{color:var(--ink)}
+body .beui-input-shell.error{border-color:var(--negative);box-shadow:0 0 0 3px var(--negative-soft)}
+body input:user-invalid,body select:user-invalid{border-color:var(--negative)!important;box-shadow:0 0 0 3px var(--negative-soft)!important}
+body :is(button,a,input,textarea,select):focus-visible{outline:2px solid var(--green);outline-offset:3px}
+body .beui-wheel-label{font-size:12px}
+body .beui-wheel-option{font-size:13px}
+body .beui-wheel-option[aria-selected=true]{font-size:15px;color:var(--ink)}
+body .beui-wheel-selection{background:var(--accent-faint);border-color:var(--green)}
+body .app-shell .sidebar,body .mobile-dock{background:var(--paper)}
+body .mobile-dock-more>span{box-shadow:0 3px 10px rgba(var(--theme-strong-rgb),.15)}
+
+@media(max-width:900px){
+  body .dashboard-insight-card{padding:12px;min-height:142px}
+  body .dashboard-insight-grid{grid-template-rows:repeat(2,minmax(142px,1fr))}
+  body .page-header p:not(.eyebrow){font-size:14px;line-height:1.6}
+  body .beui-input-shell input,body .beui-select-value,body .beui-date-time-value{font-size:16px}
+  body .salary-deduction-card-identity>small,body .salary-deduction-card-amount span,body .salary-deduction-card-meta>span,body .salary-deduction-estimate small,body .salary-deduction-total{font-size:12px}
+  body .salary-deduction-card-meta{flex-wrap:wrap;gap:8px}
+  body .salary-deduction-card-meta .salary-deduction-estimate strong{font-size:12px}
+  body .item-main span,body .item-result small,body .dashboard-wish-main small,body .dashboard-wish-time small,body .dashboard-wishlist-empty small{font-size:12px;line-height:1.5}
+  body .item-main b,body .item-result strong{font-size:14px}
+  body .beui-picker-wheels.type-datetime-local .beui-wheel-option{font-size:12px}
+  body .beui-picker-wheels.type-datetime-local .beui-wheel-option[aria-selected=true]{font-size:13px}
+}
