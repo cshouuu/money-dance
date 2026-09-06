@@ -6,6 +6,7 @@ import { salaryProfileForBusinessDate } from './profile'
 import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
 import { normalizeActiveSlacking } from './slacking'
 import { getScheduledBusinessDate, summarizeTodayWork } from './work'
+import type { buildWishWidgetSnapshot } from './wishWidget'
 
 export const WIDGET_SNAPSHOT_VERSION = 1 as const
 export const WIDGET_SNAPSHOT_HORIZON_MS = 36 * 60 * 60 * 1000
@@ -37,6 +38,7 @@ export interface WidgetActiveOvertime {
 }
 
 export interface WidgetSnapshot {
+  wishWidget?: ReturnType<typeof buildWishWidgetSnapshot>
   version: typeof WIDGET_SNAPSHOT_VERSION
   syncedAt: number
   validUntil: number
@@ -175,6 +177,9 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
   if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) return []
 
   const relevantDates = relevantDateValues(startAt, endAt)
+  // Fixed overnight corrections belong to their start date even when the
+  // snapshot is refreshed after midnight.
+  for (const date of [...relevantDates]) relevantDates.add(getScheduledBusinessDate(profile, toLocalDateTime(date)))
   const workRecords = options.workRecords.filter(record => (
     relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt)
   ))

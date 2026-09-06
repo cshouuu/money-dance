@@ -145,13 +145,18 @@ export function actualPaidIntervalsForDate(
     || isConfiguredWorkday(toLocalDateTime(businessDate), profile, settings)
   if (!isWorkday || (!record && profile.defaultWorkMode === 'flexible')) return []
 
-  const intervals = scheduledPaidIntervalsForDate(profile, businessDate)
-  if (!isHalfDayLeave(attendance)) return intervals
+  let intervals = scheduledPaidIntervalsForDate(profile, businessDate)
   const paidSeconds = intervals.reduce((total, interval) => total + intervalDurationSeconds(interval), 0)
   const half = paidSeconds / 2
-  return attendanceLeavePeriod(attendance) === 'morning'
+  if (isHalfDayLeave(attendance)) intervals = attendanceLeavePeriod(attendance) === 'morning'
     ? sliceIntervalsByPaidOffset(intervals, half, paidSeconds)
     : sliceIntervalsByPaidOffset(intervals, 0, half)
+  if (record?.sessions.length) {
+    return mergeIntervals(intervals.flatMap(interval => record.sessions.map(session =>
+      clippedInterval(interval, new Date(session.startTime), session.endTime ? new Date(session.endTime) : rangeEnd),
+    ).filter((item): item is PaidTimeInterval => item !== null)))
+  }
+  return intervals
 }
 
 /** Planned future slices; flexible users still use their configured target schedule. */
@@ -271,6 +276,7 @@ export function estimatePaidEarningsCompletionDate(
   requiredAmount: number,
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings = loadChinaHolidaySettings(startValue instanceof Date ? startValue : new Date(startValue)),
+  workRecords: readonly DailyWorkRecord[] = [],
 ): Date | null {
   const start = startValue instanceof Date ? new Date(startValue) : new Date(startValue)
   if (Number.isNaN(start.getTime()) || !Number.isFinite(requiredAmount)) return null
@@ -283,7 +289,11 @@ export function estimatePaidEarningsCompletionDate(
     const datedProfile = salaryProfileForBusinessDate(profile, businessDate, [...attendanceRecords], settings)
     const secondRate = calculateRates(datedProfile).second
     if (secondRate > 0) {
-      for (const interval of plannedPaidIntervalsForDate(profile, businessDate, attendanceRecords, settings)) {
+      const fixedRecord = workRecords.find(record => record.date === businessDate && record.mode === 'scheduled')
+      const intervals = fixedRecord
+        ? actualPaidIntervalsForDate(profile, businessDate, datePlusDays(businessDate, 2), [fixedRecord], attendanceRecords, settings)
+        : plannedPaidIntervalsForDate(profile, businessDate, attendanceRecords, settings)
+      for (const interval of intervals) {
         const intervalStart = new Date(Math.max(start.getTime(), interval.start.getTime()))
         if (interval.end <= intervalStart) continue
         const availableSeconds = Math.max(0, interval.end.getTime() - intervalStart.getTime()) / 1000

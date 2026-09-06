@@ -14,12 +14,15 @@ import { applyWidgetActions } from '../lib/widgetActions'
 import { buildWidgetSnapshot } from '../lib/widgetState'
 import { loadWorkRecords } from '../lib/work'
 import { loadActiveSlacking } from '../lib/slacking'
-import type { ActiveOvertime } from '../types'
+import type { ActiveOvertime, WishItem } from '../types'
+import { buildWishWidgetSnapshot } from '../lib/wishWidget'
 
 const SYNC_DEBOUNCE_MS = 180
-const SAFE_LAUNCH_TARGET = /^\/(?:$|(?:slacking|overtime)(?:[/?#]|$))/
+const SAFE_LAUNCH_TARGET = /^\/(?:$|(?:slacking|overtime|convert)(?:[/?#]|$))/
 const WIDGET_STORAGE_KEYS = new Set([
   keys.profile,
+  keys.wishes,
+  keys.widgetWishes,
   keys.workRecords,
   keys.attendanceRecords,
   keys.activeSlacking,
@@ -36,13 +39,18 @@ let currentSync: Promise<WidgetSyncOutcome> | null = null
 let rerunRequested = false
 
 function createSnapshot() {
-  return buildWidgetSnapshot({
-    profile: loadProfile(),
-    workRecords: loadWorkRecords(),
-    attendanceRecords: loadAttendanceRecords(),
+  const profile = loadProfile()
+  const workRecords = loadWorkRecords()
+  const attendanceRecords = loadAttendanceRecords()
+  const now = new Date()
+  return { ...buildWidgetSnapshot({
+    profile,
+    workRecords,
+    attendanceRecords,
+    now,
     activeSlacking: loadActiveSlacking(),
     activeOvertime: loadJSON<ActiveOvertime | null>(keys.activeOvertime, null),
-  })
+  }), wishWidget: buildWishWidgetSnapshot(profile, loadJSON<WishItem[]>(keys.wishes, []), loadJSON<string[]>(keys.widgetWishes, []), workRecords, attendanceRecords, now) }
 }
 
 export async function performWidgetSync(): Promise<WidgetSyncOutcome> {

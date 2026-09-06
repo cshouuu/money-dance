@@ -5,7 +5,7 @@ import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { loadOvertimeSessions, migrateLegacyOvertimeLedgerDates } from './overtime'
 import { livingCostConfigurationBeforeDate, livingCostConfigurationForDate, normalizeLivingCostHistory, salaryProfileForBusinessDate } from './profile'
-import { getFlexibleEarnedAmount, isFlexibleFullDaySettlement, loadWorkRecords } from './work'
+import { getFlexibleEarnedAmount, getScheduledWorkedSeconds, isFlexibleFullDaySettlement, loadWorkRecords } from './work'
 
 export type SummaryDimension = 'day' | 'month' | 'year'
 
@@ -216,7 +216,7 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     // The effective date only limits automatically generated history. A saved
     // attendance adjustment is an explicit instruction and must still be
     // reflected in the ledger, even when it predates the salary history range.
-    if (day < effectiveDate && !attendance) continue
+    if (day < effectiveDate && !attendance && !workRecord) continue
     let amount = 0
     let source = '工资收入'
     const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
@@ -241,7 +241,9 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
         else if (attendance?.status === 'normal' && !sameCalendarDay(day, today)) amount = rates.daily
       } else {
         if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, datedProfile, holidaySettings)) continue
-        amount = sameCalendarDay(day, today) ? calculateEarnedToday(datedProfile, now) : rates.daily
+        amount = workRecord?.sessions.length
+          ? getScheduledWorkedSeconds(datedProfile, workRecord, now, attendanceRecords) * rates.second
+          : sameCalendarDay(day, today) ? calculateEarnedToday(datedProfile, now) : rates.daily
       }
     }
     if (amount <= 0) continue

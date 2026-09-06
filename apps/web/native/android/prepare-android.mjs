@@ -33,9 +33,12 @@ const nativeJavaFiles = [
   'WidgetTickerService.java',
   'MoneyDanceWidgetProvider.java',
   'MoneyDanceSquareWidgetProvider.java',
+  'MoneyDanceWishWidgetProvider.java',
 ]
 
 const nativeResourceFiles = [
+  'layout/money_dance_wish_widget.xml',
+  'xml/money_dance_wish_widget_info.xml',
   'drawable/money_dance_widget_background.xml',
   'drawable/money_dance_widget_badge.xml',
   'drawable/money_dance_widget_button_primary.xml',
@@ -70,6 +73,7 @@ const nativeResourceFiles = [
 // before copying them so an unsupported spacer or custom view cannot ship as a
 // launcher-level "Problem loading widget" failure.
 const remoteViewsLayoutFiles = new Set([
+  'layout/money_dance_wish_widget.xml',
   'layout/money_dance_widget.xml',
   'layout/money_dance_widget_square.xml',
 ])
@@ -179,6 +183,8 @@ public class MainActivity extends BridgeActivity {
         String target;
         if ("/overtime".equals(path) && "1".equals(data.getQueryParameter("start"))) {
             target = WidgetContract.OVERTIME_LAUNCH_TARGET;
+        } else if ("/convert".equals(path)) {
+            target = "/convert";
         } else if ("/slacking".equals(path)) {
             target = WidgetContract.SLACKING_LAUNCH_TARGET;
         } else if (path == null || path.isEmpty() || "/".equals(path)) {
@@ -356,6 +362,13 @@ if (!manifest.includes('android:name=".MoneyDanceSquareWidgetProvider"')) {
   )
   if (nextManifest === manifest) throw new Error('Unable to inject Android 2x2 widget receiver')
   manifest = nextManifest
+}
+if (!manifest.includes('android:name=".MoneyDanceWishWidgetProvider"')) {
+  manifest = manifest.replace(/(<application\b[^>]*>)/, `$1
+        <receiver android:name=".MoneyDanceWishWidgetProvider" android:label="Money Dance · 心愿进度" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/money_dance_wish_widget_info" />
+        </receiver>`)
 }
 await writeFile(manifestPath, manifest)
 
