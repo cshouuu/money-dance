@@ -276,6 +276,7 @@ export function estimatePaidEarningsCompletionDate(
   requiredAmount: number,
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings = loadChinaHolidaySettings(startValue instanceof Date ? startValue : new Date(startValue)),
+  workRecords: readonly DailyWorkRecord[] = [],
 ): Date | null {
   const start = startValue instanceof Date ? new Date(startValue) : new Date(startValue)
   if (Number.isNaN(start.getTime()) || !Number.isFinite(requiredAmount)) return null
@@ -288,7 +289,11 @@ export function estimatePaidEarningsCompletionDate(
     const datedProfile = salaryProfileForBusinessDate(profile, businessDate, [...attendanceRecords], settings)
     const secondRate = calculateRates(datedProfile).second
     if (secondRate > 0) {
-      for (const interval of plannedPaidIntervalsForDate(profile, businessDate, attendanceRecords, settings)) {
+      const fixedRecord = workRecords.find(record => record.date === businessDate && record.mode === 'scheduled')
+      const intervals = fixedRecord
+        ? actualPaidIntervalsForDate(profile, businessDate, datePlusDays(businessDate, 2), [fixedRecord], attendanceRecords, settings)
+        : plannedPaidIntervalsForDate(profile, businessDate, attendanceRecords, settings)
+      for (const interval of intervals) {
         const intervalStart = new Date(Math.max(start.getTime(), interval.start.getTime()))
         if (interval.end <= intervalStart) continue
         const availableSeconds = Math.max(0, interval.end.getTime() - intervalStart.getTime()) / 1000

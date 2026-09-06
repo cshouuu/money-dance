@@ -68,6 +68,14 @@ describe('user feedback regressions', () => {
     expect(selectWidgetWishes(items, ['one', 'one', 'deleted', 'bought', 'two', 'three', 'four']).map(item => item.id)).toEqual(['one', 'two', 'three'])
   })
 
+  it('does not forecast more income on a fixed shift already ended early', () => {
+    const fridayWish = { ...wish, price: 100, createdAt: new Date('2026-08-28T09:00:00').toISOString() }
+    const record = replaceScheduledWorkTime('2026-08-28', '09:00', '12:00')
+    const progress = getWishProgress(fridayWish, profile, new Date('2026-08-28T14:00:00'), [record])
+    expect(progress.earnedAmount).toBe(30)
+    expect(progress.estimatedAt).toEqual(new Date('2026-08-31T17:00:00'))
+  })
+
   it('native hourly projections match app earnings through breaks, weekends and fixed corrections', () => {
     const records = [replaceScheduledWorkTime(date, '09:00', '16:00')]
     const snapshot = buildWishWidgetSnapshot(profile, [wish], ['one'], records, [], at('10:00'))

@@ -48,6 +48,6 @@ export function getWishProgress(
     requiredSeconds,
     remainingSeconds,
     requiredWorkDays: rates.paidSecondsPerDay > 0 ? requiredSeconds / rates.paidSecondsPerDay : Number.POSITIVE_INFINITY,
-    estimatedAt: estimatePaidEarningsCompletionDate(profile, now, remainingAmount, attendanceRecords, settings),
+    estimatedAt: estimatePaidEarningsCompletionDate(profile, now, remainingAmount, attendanceRecords, settings, workRecords),
   }
 }
