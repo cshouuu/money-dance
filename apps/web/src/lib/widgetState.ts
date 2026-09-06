@@ -177,6 +177,9 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
   if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) return []
 
   const relevantDates = relevantDateValues(startAt, endAt)
+  // Fixed overnight corrections belong to their start date even when the
+  // snapshot is refreshed after midnight.
+  for (const date of [...relevantDates]) relevantDates.add(getScheduledBusinessDate(profile, toLocalDateTime(date)))
   const workRecords = options.workRecords.filter(record => (
     relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt)
   ))

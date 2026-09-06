@@ -83,7 +83,7 @@ export function Dashboard() {
   const worked = work.workedSeconds
   const progress = targetSeconds > 0 ? Math.max(0, Math.min(100, (worked / targetSeconds) * 100)) : 0
   const hasReachedFlexibleTarget = work.mode === 'flexible' && worked >= targetSeconds
-  const workDate = work.record?.date ?? today
+  const workDate = work.businessDate
   const todaySlacking = useMemo(() => slackingSessions.filter(session => sessionStartLocalDate(session) === today), [slackingSessions, today])
   const slackingSeconds = useMemo(() => todaySlacking.reduce((total, session) => total + slackingPaidDurationSeconds(session), 0), [todaySlacking])
   const slackingMoney = useMemo(() => todaySlacking.reduce((total, session) => total + session.earnedAmount, 0), [todaySlacking])
@@ -253,7 +253,9 @@ export function Dashboard() {
   const resumeWork = useCallback(() => {
     if (work.record?.mode === 'flexible') persistRecord(resumeFlexibleWork(work.record))
   }, [work.record, persistRecord])
-  const useScheduledToday = useCallback(() => persistRecord(scheduledOverride(today)), [persistRecord, today])
+  const useScheduledToday = useCallback(() => {
+    if (!persistRecord(scheduledOverride(workDate))) setSettlementError('今天的工作安排暂时无法保存，请重试。')
+  }, [persistRecord, workDate])
   const settlePendingRecord = useCallback((settlementMode: FlexibleWorkSettlementMode) => {
     if (!pendingEndRecord || settlingRef.current) return
     settlingRef.current = true

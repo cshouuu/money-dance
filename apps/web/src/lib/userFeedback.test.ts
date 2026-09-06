@@ -5,6 +5,7 @@ import { replaceScheduledWorkTime, scheduledOverride, summarizeTodayWork } from 
 import { calculatePaidTimeEarnings } from './paidTime'
 import { summarizeLedger } from './ledger'
 import { buildWishWidgetSnapshot, selectWidgetWishes } from './wishWidget'
+import { buildWidgetSnapshot } from './widgetState'
 
 const profile = { ...DEFAULT_PROFILE, salaryType: 'daily' as const, salary: 80, paidBreak: false }
 const date = '2026-08-29'
@@ -46,6 +47,9 @@ describe('user feedback regressions', () => {
     expect(summary.businessDate).toBe(date)
     expect(summary.status).toBe('ended')
     expect(summary.workedSeconds).toBe(6 * 3600)
+    const widget = buildWidgetSnapshot({ profile: night, workRecords: [record], attendanceRecords: [], now: new Date('2026-08-30T08:00:00'), horizonMs: 3600_000 })
+    expect(widget.workTimeline[0].baseAmount).toBeCloseTo(summary.earnedAmount)
+    expect(widget.workTimeline[0].ratePerSecond).toBe(0)
   })
 
   it('preserves legacy wish progress, backdates separately and recalculates after a price change', () => {
