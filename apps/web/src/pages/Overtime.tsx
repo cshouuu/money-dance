@@ -423,6 +423,7 @@ export function Overtime() {
   return <section className="page overtime-page">
     <header className="page-header"><div><p className="eyebrow">OVERTIME TIMER</p><h1>加班，也得算得明白。</h1><p>有钱就算钱，没钱也把时间记下来。刷新、锁屏或切换页面都不会丢失计时。</p></div></header>
 
+    <div className="timer-workspace">
     <div className={`timer-card overtime-timer${active ? ' running' : ''}`}>
       <div className={`overtime-orbit level-${achievementSnapshot.highestLevel}`} role="img" aria-label={`加班状态：${timerVisual.label}`} title={`加班状态：${timerVisual.label}`}><timerVisual.Icon size={32}/></div>
       <p>{active ? '正在加班……' : '今天又要加班吗？'}</p>
@@ -435,7 +436,11 @@ export function Overtime() {
       <span className="timer-rate">{active ? active.payMode === 'unpaid' ? '只计时间 · 不计收入' : active.payMode === 'fixed' ? `本次固定加班费 ¥${(active.fixedAmount ?? 0).toFixed(2)}` : `+ ¥${(rates.second * (active.multiplier ?? 1)).toFixed(5)} / 秒 · ${active.multiplier ?? 1} 倍工资` : '开始时再选择有没有加班费'}</span>
     </div>
 
-    <div className="summary-strip overtime-summary"><div><small>历史加班收入</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>当前保留的加班时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-overtime-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+    <div className="timer-side-panel">
+      <div className="summary-strip overtime-summary"><div><small>历史加班收入</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>当前保留的加班时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-overtime-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>
+      <section className="timer-guide"><p className="eyebrow">HOW IT WORKS</p><h2>每次开始前，再决定怎么算。</h2><div><span><b>01</b><small>确认实际开始时间</small></span><span><b>02</b><small>选择无加班费、倍率或固定金额</small></span><span><b>03</b><small>结束后自动写入账本</small></span></div></section>
+    </div>
+    </div>
 
     <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds} saveFailed={achievementSaveFailed}/>
 

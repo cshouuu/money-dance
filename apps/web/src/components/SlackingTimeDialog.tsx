@@ -3,6 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { createId } from '../lib/id'
 import type { CompletedSlackingInput } from '../lib/slacking'
+import { Input } from '../ui/BeuiControls'
 import { useDialogFocus } from './useDialogFocus'
 import { useModalViewport } from './useModalViewport'
 import './SlackingTimeDialog.css'
@@ -102,7 +103,7 @@ export function SlackingTimeDialog({ open, purpose, onStart, onBackfill, onCance
       <p className="slacking-time-copy">{purpose === 'start' ? '想起来晚了没关系，可以把实际开始时间往前补。' : '填写真实开始和结束时间，补记会按当前工资计算收益，并正常计入成就。'}</p>
       {purpose === 'start' && <button type="button" className="slacking-now-button" onClick={() => saveStart(new Date())}><Clock3 size={16}/><span><b>从现在开始</b><small>立即开始计时</small></span></button>}
       {purpose === 'start' && <div className="slacking-time-divider"><span>或补记实际开始时间</span></div>}
-      <div className={`slacking-time-fields ${purpose}`}><label><span>开始日期与时间</span><input required type="datetime-local" max={nowInput} value={startTime} onChange={event => { setStartTime(event.target.value); setError('') }}/></label>{purpose === 'backfill' && <label><span>结束日期与时间</span><input required type="datetime-local" max={nowInput} value={endTime} onChange={event => { setEndTime(event.target.value); setError('') }}/></label>}</div>
+      <div className={`slacking-time-fields ${purpose}`}><Input label="开始日期与时间" required type="datetime-local" max={nowInput} value={startTime} onValueChange={value => { setStartTime(value); setError('') }}/>{purpose === 'backfill' && <Input label="结束日期与时间" required type="datetime-local" max={nowInput} value={endTime} onValueChange={value => { setEndTime(value); setError('') }}/>}</div>
       {error && <p className="slacking-time-error" role="alert">{error}</p>}
       <div className="slacking-time-actions"><button type="button" className="dialog-cancel" onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm"><History size={15}/>{purpose === 'start' ? '按这个时间开始' : '保存补记'}</button></div>
     </form>

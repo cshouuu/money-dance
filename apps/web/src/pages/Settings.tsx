@@ -13,9 +13,12 @@ import {
   type WorkMode,
   type WorkWeekMode,
 } from '@salary-flow/core'
-import { CheckCircle2, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, Clock3, History, Palette, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { AppUpdateCard } from '../components/AppUpdateCard'
+import { ThemePaletteGrid } from '../components/ThemePicker'
+import { BouncyAccordion } from '../ui/BouncyAccordion'
+import { Button, Checkbox, ChoiceCard, ChoiceGroup, Input, SelectField, Switch } from '../ui/BeuiControls'
 import { alternatingWeekTypeForDate, getWeekStartDateValue } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
@@ -29,6 +32,10 @@ function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
     && item.value >= 0
     && item.value <= MAX_MONEY_AMOUNT
     && (item.type !== 'percentage' || item.value <= 100))
+}
+
+function initialDeductionValueInputs(deductions: readonly SalaryDeduction[]): Record<string, string> {
+  return Object.fromEntries(deductions.map(item => [item.id, item.value === 0 ? '' : String(item.value)]))
 }
 
 function buildProfile(
@@ -65,9 +72,13 @@ export function Settings() {
   const [monthlyLivingCostInput, setMonthlyLivingCostInput] = useState(String(initialProfile.monthlyLivingCost))
   const [monthlyWorkDaysInput, setMonthlyWorkDaysInput] = useState(String(initialProfile.monthlyWorkDays))
   const [workDaysPerWeekInput, setWorkDaysPerWeekInput] = useState(String(initialProfile.workDaysPerWeek))
+  const [deductionValueInputs, setDeductionValueInputs] = useState<Record<string, string>>(
+    () => initialDeductionValueInputs(initialProfile.salaryDeductions),
+  )
   const [salaryEffectiveDateInput, setSalaryEffectiveDateInput] = useState(initialProfile.salaryEffectiveDate || toLocalDateValue())
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [openSection, setOpenSection] = useState<string | null>('salary')
 
   const draftProfile = buildProfile(profile, salaryInput, paydayInput, monthlyLivingCostInput, monthlyWorkDaysInput, workDaysPerWeekInput)
   let rates: SalaryRates | null = null
@@ -124,11 +135,13 @@ export function Settings() {
   }
 
   const addDeduction = () => {
+    const id = createId()
     setSaved(false)
+    setDeductionValueInputs(current => ({ ...current, [id]: '' }))
     setProfile(current => ({
       ...current,
       salaryDeductions: [...current.salaryDeductions, {
-        id: createId(),
+        id,
         name: '社保',
         type: 'fixed',
         value: 0,
@@ -145,8 +158,24 @@ export function Settings() {
     }))
   }
 
+  const updateDeductionValue = (id: string, value: string) => {
+    const normalized = normalizeDecimalInput(value)
+    setDeductionValueInputs(current => ({ ...current, [id]: normalized }))
+    updateDeduction(id, { value: normalized === '' ? 0 : Number(normalized) })
+  }
+
+  const selectDeductionType = (id: string, type: SalaryDeductionType) => {
+    setDeductionValueInputs(current => ({ ...current, [id]: '' }))
+    updateDeduction(id, { type, value: 0 })
+  }
+
   const removeDeduction = (id: string) => {
     setSaved(false)
+    setDeductionValueInputs(current => {
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
     setProfile(current => ({
       ...current,
       salaryDeductions: current.salaryDeductions.filter(item => item.id !== id),
@@ -155,7 +184,29 @@ export function Settings() {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!event.currentTarget.reportValidity() || !draftProfile || !rates) return
+    const form = event.currentTarget
+    const firstInvalidInput = form.querySelector<HTMLInputElement>('input:invalid')
+    if (firstInvalidInput) {
+      const sectionId = firstInvalidInput.closest<HTMLElement>('.settings-section-content')?.id
+      const sectionByContentId: Record<string, string> = {
+        'salary-profile': 'salary',
+        'work-schedule': 'work',
+        'salary-deductions': 'deductions',
+        'salary-history': 'history',
+      }
+      setSaved(false)
+      setOpenSection(sectionId ? sectionByContentId[sectionId] ?? 'salary' : 'salary')
+      window.setTimeout(() => {
+        firstInvalidInput.focus()
+        firstInvalidInput.reportValidity()
+      }, 0)
+      return
+    }
+    if (!draftProfile || !rates) {
+      setOpenSection(calculationError ? 'work' : 'salary')
+      return
+    }
+    if (!form.reportValidity()) return
     const salaryEffectiveDate = draftProfile.salaryHistoryMode === 'custom' ? salaryEffectiveDateInput : toLocalDateValue()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(salaryEffectiveDate) || salaryEffectiveDate > toLocalDateValue()) return
     const savedProfile = saveProfile({ ...draftProfile, salaryEffectiveDate })
@@ -174,75 +225,129 @@ export function Settings() {
     : monthlyDeductions > 0 ? '预计到手' : ''
   const currentWeekType = alternatingWeekTypeForDate(new Date(), profile)
 
-  return <section className="page">
-    <header className="page-header"><div><p className="eyebrow">SALARY PROFILE</p><h1>先定义，你的一小时值多少钱。</h1><p>支持按实际工作日折算，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
-    <form className="settings-card" onSubmit={submit}>
-      <div className="settings-section">
-        <h3>工资</h3>
-        <div className="form-grid">
-          <label><span>工资金额</span><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} onKeyDown={preventInvalidNumberKey} onChange={event => { setSaved(false); setSalaryInput(normalizeDecimalInput(event.target.value)) }}/></label>
-          <label><span>工资周期</span><select required value={profile.salaryType} onChange={event => set('salaryType', event.target.value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></select></label>
-          <label className="payday-field"><span>每月发薪日</span><input type="number" inputMode="numeric" min="1" max="31" step="1" value={paydayInput} onKeyDown={preventInvalidNumberKey} onChange={event => { setSaved(false); setPaydayInput(normalizeDecimalInput(event.target.value, 0)) }} placeholder="例如：10"/><small>可选 1—31 日；当月没有该日期时，按月末发薪。</small></label>
-          {profile.workWeekMode === 'fixed' && <label><span>每周工作日</span><input required type="number" inputMode="numeric" min="1" max="7" step="1" value={workDaysPerWeekInput} onKeyDown={preventInvalidNumberKey} onChange={event => updateWorkDaysPerWeek(event.target.value)}/></label>}
-        </div>
+  const salarySection = <div className="settings-section-content" id="salary-profile">
+    <div className="form-grid">
+      <Input label="工资金额" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setSalaryInput(normalizeDecimalInput(value)) }}/>
+      <SelectField label="工资周期" required value={profile.salaryType} onValueChange={value => set('salaryType', value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></SelectField>
+      <Input label="每月发薪日" rootClassName="payday-field" type="number" inputMode="numeric" min="1" max="31" step="1" value={paydayInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setPaydayInput(normalizeDecimalInput(value, 0)) }} placeholder="例如：10" hint="可选 1—31 日；当月没有该日期时，按月末发薪。"/>
+      {profile.workWeekMode === 'fixed' && <Input label="每周工作日" required type="number" inputMode="numeric" min="1" max="7" step="1" value={workDaysPerWeekInput} onKeyDown={preventInvalidNumberKey} onValueChange={updateWorkDaysPerWeek}/>}
+    </div>
 
-        {paydayInput && <fieldset className="work-mode-options payday-adjustment-options"><legend>发薪日遇到非工作日</legend>{([
-          ['previous-workday', '提前发放', '提前至上一个工作日，推荐'],
-          ['next-workday', '顺延发放', '顺延至下一个工作日'],
-          ['none', '保持日期', '不根据工作日调整'],
-        ] as [PaydayAdjustment, string, string][]).map(([value, title, description]) => <label key={value}><input type="radio" name="payday-adjustment" checked={profile.paydayAdjustment === value} onChange={() => set('paydayAdjustment', value)}/><span><b>{title}{value === 'previous-workday' && <small>推荐</small>}</b><em>{description}</em></span></label>)}</fieldset>}
+    {paydayInput && <ChoiceGroup className="payday-adjustment-options" legend="发薪日遇到非工作日" value={profile.paydayAdjustment} onValueChange={value => set('paydayAdjustment', value as PaydayAdjustment)}>{([
+      ['previous-workday', '提前发放', '提前至上一个工作日，推荐'],
+      ['next-workday', '顺延发放', '顺延至下一个工作日'],
+      ['none', '保持日期', '不根据工作日调整'],
+    ] as [PaydayAdjustment, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'previous-workday' ? '推荐' : undefined}/>)}</ChoiceGroup>}
 
-        <fieldset className="work-mode-options monthly-rate-options"><legend>月薪折算方式</legend>{([
-          ['actual-calendar', '按本月实际日历', '根据工作周、法定节假日和调休自动计算'],
-          ['average', '按月平均工作日', '使用固定平均值，时间单价不会每月变化'],
-        ] as [MonthlyRateBasis, string, string][]).map(([value, title, description]) => <label key={value}><input type="radio" name="monthly-rate-basis" checked={profile.monthlyRateBasis === value} onChange={() => set('monthlyRateBasis', value)}/><span><b>{title}{value === 'actual-calendar' && <small>推荐</small>}</b><em>{description}</em></span></label>)}</fieldset>
-        {profile.monthlyRateBasis === 'average'
-          ? <div className="form-grid monthly-average-field"><label><span>月平均工作日</span><input required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onChange={event => { setSaved(false); setMonthlyWorkDaysInput(normalizeDecimalInput(event.target.value)) }}/></label></div>
-          : <p className="work-mode-hint actual-calendar-hint">本月按 <b>{rateProfile?.monthlyWorkDays ?? '—'}</b> 个计薪日折算；节假日与调休变化会自动更新。</p>}
+    <ChoiceGroup className="monthly-rate-options" legend="月薪折算方式" value={profile.monthlyRateBasis} onValueChange={value => set('monthlyRateBasis', value as MonthlyRateBasis)}>{([
+      ['actual-calendar', '按本月实际日历', '根据工作周、法定节假日和调休自动计算'],
+      ['average', '按月平均工作日', '使用固定平均值，时间单价不会每月变化'],
+    ] as [MonthlyRateBasis, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'actual-calendar' ? '推荐' : undefined}/>)}</ChoiceGroup>
+    {profile.monthlyRateBasis === 'average'
+      ? <div className="form-grid monthly-average-field"><Input label="月平均工作日" required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setMonthlyWorkDaysInput(normalizeDecimalInput(value)) }}/></div>
+      : <p className="work-mode-hint actual-calendar-hint">本月按 <b>{rateProfile?.monthlyWorkDays ?? '—'}</b> 个计薪日折算；节假日与调休变化会自动更新。</p>}
 
-        <fieldset className="work-week-options"><legend>工作周安排</legend>{([
-          ['fixed', '固定工作周', '每周按相同天数上班'],
-          ['alternating', '大小周', '大周周六上班，小周周末休息'],
-        ] as [WorkWeekMode, string, string][]).map(([mode, title, description]) => <label key={mode}><input type="radio" name="work-week-mode" checked={profile.workWeekMode === mode} onChange={() => selectWorkWeekMode(mode)}/><span><b>{title}{mode === 'fixed' && <small>默认</small>}</b><em>{description}</em></span></label>)}</fieldset>
-        {profile.workWeekMode === 'alternating' && <div className="alternating-week-settings"><div><b>告诉我们本周是哪一周</b><small>设置一次后，系统会按周自动交替</small></div><fieldset><legend className="sr-only">本周类型</legend>{(['big', 'small'] as AlternatingWeekType[]).map(type => <label key={type}><input type="radio" name="current-week-type" checked={currentWeekType === type} onChange={() => selectCurrentWeekType(type)}/><span>本周是{type === 'big' ? '大周' : '小周'}</span></label>)}</fieldset></div>}
-        <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
+    <ChoiceGroup className="work-week-options" legend="工作周安排" value={profile.workWeekMode} onValueChange={value => selectWorkWeekMode(value as WorkWeekMode)}>{([
+      ['fixed', '固定工作周', '每周按相同天数上班'],
+      ['alternating', '大小周', '大周周六上班，小周周末休息'],
+    ] as [WorkWeekMode, string, string][]).map(([mode, title, description]) => <ChoiceCard key={mode} value={mode} title={title} description={description} badge={mode === 'fixed' ? '默认' : undefined}/>)}</ChoiceGroup>
+    {profile.workWeekMode === 'alternating' && <div className="alternating-week-settings"><div><b>告诉我们本周是哪一周</b><small>设置一次后，系统会按周自动交替</small></div><fieldset><legend className="sr-only">本周类型</legend>{(['big', 'small'] as AlternatingWeekType[]).map(type => <label key={type}><input type="radio" name="current-week-type" checked={currentWeekType === type} onChange={() => selectCurrentWeekType(type)}/><span>本周是{type === 'big' ? '大周' : '小周'}</span></label>)}</fieldset></div>}
+    <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
+  </div>
 
-        <div className="salary-deductions-header"><div><b>每月工资扣除</b><small>社保、公积金、个税或其他扣除，可填写固定金额或工资比例</small></div><button type="button" className="ghost-button" onClick={addDeduction}><Plus size={15}/>添加扣除项</button></div>
-        {profile.salaryDeductions.length === 0
-          ? <div className="salary-deductions-empty">暂未设置，当前时间单价按未扣除金额计算。</div>
-          : <div className="salary-deduction-list">{profile.salaryDeductions.map(item => <div className="salary-deduction-row" key={item.id}>
-            <label className="deduction-enabled"><input type="checkbox" checked={item.enabled} onChange={event => updateDeduction(item.id, { enabled: event.target.checked })}/><span className="sr-only">启用{item.name}</span></label>
-            <label><span>名称</span><input required maxLength={30} value={item.name} onChange={event => updateDeduction(item.id, { name: event.target.value })}/></label>
-            <label><span>方式</span><select value={item.type} onChange={event => updateDeduction(item.id, { type: event.target.value as SalaryDeductionType, value: 0 })}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></select></label>
-            <label><span>{item.type === 'percentage' ? '比例' : '每月金额'}</span><div className="money-input deduction-value"><i>{item.type === 'percentage' ? '%' : '¥'}</i><input required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={item.value} onKeyDown={preventInvalidNumberKey} onChange={event => updateDeduction(item.id, { value: Number(normalizeDecimalInput(event.target.value) || 0) })}/></div></label>
-            <button type="button" className="icon-button danger" onClick={() => removeDeduction(item.id)} aria-label={`删除${item.name}`}><Trash2 size={16}/></button>
-          </div>)}</div>}
-        {monthlyDeductions > 0 && <p className="salary-deduction-total">预计每月扣除 <b>¥{monthlyDeductions.toFixed(2)}</b>，以下时间单价已自动扣除。</p>}
+  const workSection = <div className="settings-section-content" id="work-schedule">
+    <ChoiceGroup className="default-work-mode-options" legend="默认计薪方式" value={profile.defaultWorkMode} onValueChange={value => set('defaultWorkMode', value as WorkMode)}>{([
+      ['scheduled', '固定作息', '按设置的上下班时间自动计薪，适合大多数用户'],
+      ['flexible', '弹性作息', '每天开始工作后计薪，也可以临时切回固定作息'],
+    ] as [WorkMode, string, string][]).map(([mode, title, description]) => <ChoiceCard key={mode} value={mode} title={title} description={description} badge={mode === 'scheduled' ? '推荐' : undefined}/>)}</ChoiceGroup>
+    <p className="work-mode-hint">这只是每天的默认方式，首页可以随时只调整当天。</p>
+    <div className="form-grid work-time-grid">
+      <Input label="上班时间" required type="time" value={profile.workStartTime} onValueChange={value => set('workStartTime', value)}/>
+      <Input label="下班时间" required type="time" value={profile.workEndTime} onValueChange={value => set('workEndTime', value)}/>
+      <Input label="午休开始" required type="time" value={profile.breakStartTime} onValueChange={value => set('breakStartTime', value)}/>
+      <Input label="午休结束" required type="time" value={profile.breakEndTime} onValueChange={value => set('breakEndTime', value)}/>
+    </div>
+    <div className="toggle-row"><Switch checked={profile.paidBreak} onCheckedChange={checked => set('paidBreak', checked)} ariaLabel="午休计薪"/><span><b>午休计薪</b><small>{profile.defaultWorkMode === 'flexible' ? '弹性工作可以使用“暂停”排除实际休息时间；这里仍用于计算每日目标工时' : '关闭后，实时工资和摸鱼收益都会自动排除午休'}</small></span></div>
+  </div>
 
-        <label className="toggle-row"><input type="checkbox" checked={profile.includeLivingCost} onChange={event => set('includeLivingCost', event.target.checked)}/><span><b>计算生活成本</b><small>开启后，可选择从实时工资中扣除，或按自然日自动记入账本</small></span></label>
-        {profile.includeLivingCost && <>
-          <div className="form-grid living-cost-field"><label><span>月生活成本</span><div className="money-input"><i>¥</i><input required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={monthlyLivingCostInput} onKeyDown={preventInvalidNumberKey} onChange={event => { setSaved(false); setMonthlyLivingCostInput(normalizeDecimalInput(event.target.value)) }} placeholder="例如：5000"/></div></label></div>
-          <fieldset className="work-mode-options living-cost-options"><legend>计入方式</legend>{([
-            ['deduct', '从实时工资中扣除', '显示扣除工资项和生活成本后的可支配工资'],
-            ['daily-ledger', '按自然日记入账本', '按当月天数均摊，每天自动生成一笔生活成本支出'],
-          ] as [LivingCostMode, string, string][]).map(([mode, title, description]) => <label key={mode}><input type="radio" name="living-cost-mode" checked={profile.livingCostMode === mode} onChange={() => set('livingCostMode', mode)}/><span><b>{title}{mode === 'deduct' && <small>默认</small>}</b><em>{description}</em></span></label>)}</fieldset>
-          {profile.livingCostMode === 'daily-ledger' && <p className="work-mode-hint living-cost-hint">每日金额按“分”精确分摊，周末和节假日也会计入；调整只影响当天及以后，过去明细会保留。</p>}
-        </>}
-      </div>
+  const deductionsSection = <div className="settings-section-content" id="salary-deductions">
+    <div className="salary-deductions-header"><div><b>每月工资扣除</b><small>管理每月固定扣除项</small></div><Button type="button" variant="secondary" size="sm" onClick={addDeduction}><Plus size={15}/>新增</Button></div>
+    {profile.salaryDeductions.length === 0
+      ? <div className="salary-deductions-empty">暂未设置，当前时间单价按未扣除金额计算。</div>
+      : <div className="salary-deduction-list">{profile.salaryDeductions.map(item => {
+        const deductionValueInput = deductionValueInputs[item.id] ?? (item.value === 0 ? '' : String(item.value))
+        const itemMonthlyDeduction = rateProfile
+          ? calculateMonthlySalaryDeductions({ ...rateProfile, salaryDeductions: [item] })
+          : 0
+        const formattedMonthlyDeduction = deductionValueInput === '' ? '—' : `¥${itemMonthlyDeduction.toFixed(2)}`
+        return <article className="salary-deduction-row" data-enabled={item.enabled} key={item.id}>
+          <header className="salary-deduction-card-header">
+            <Checkbox className="deduction-enabled" checked={item.enabled} onCheckedChange={enabled => updateDeduction(item.id, { enabled })} ariaLabel={`启用${item.name}`}/>
+            <div className="salary-deduction-card-identity">
+              <Input rootClassName="deduction-name-field" label="扣除项名称" required maxLength={30} value={item.name} placeholder="扣除项名称" onValueChange={value => updateDeduction(item.id, { name: value })}/>
+              <small>{item.enabled ? '已启用 · 每月扣除' : '已停用 · 暂不扣除'}</small>
+            </div>
+            <div className="salary-deduction-card-amount"><strong>{formattedMonthlyDeduction}</strong><span>/ 月</span></div>
+            <Button type="button" variant="secondary" size="icon" className="deduction-delete-button" onClick={() => removeDeduction(item.id)} aria-label={`删除${item.name}`} title="删除扣除项"><Trash2 size={16}/></Button>
+          </header>
+          <div className="salary-deduction-fields">
+            <SelectField label="扣除方式" value={item.type} onValueChange={value => selectDeductionType(item.id, value as SalaryDeductionType)}><option value="fixed">固定金额</option><option value="percentage">工资比例</option></SelectField>
+            <Input label={item.type === 'percentage' ? '工资比例' : '每月金额'} required type="number" inputMode="decimal" min="0" max={item.type === 'percentage' ? 100 : MAX_MONEY_AMOUNT} step="0.01" value={deductionValueInput} leftIcon={item.type === 'percentage' ? '%' : '¥'} onKeyDown={preventInvalidNumberKey} onValueChange={value => updateDeductionValue(item.id, value)} placeholder={item.type === 'percentage' ? '例如：10' : '例如：500'}/>
+          </div>
+          <footer className="salary-deduction-card-meta">
+            <span className="salary-deduction-status"><i/>{item.enabled ? '已计入到手工资' : '暂不计入到手工资'}</span>
+            <span className="salary-deduction-estimate"><small>本月预计扣除</small><strong>{formattedMonthlyDeduction}</strong></span>
+          </footer>
+        </article>
+      })}</div>}
+    {monthlyDeductions > 0 && <p className="salary-deduction-total">预计每月扣除 <b>¥{monthlyDeductions.toFixed(2)}</b>，时间单价已自动按到手金额计算。</p>}
 
-      <div className="settings-section salary-history-section"><h3>历史账本</h3><label className="toggle-row salary-history-toggle"><input type="checkbox" checked={profile.salaryHistoryMode !== 'none'} onChange={event => set('salaryHistoryMode', event.target.checked ? 'custom' : 'none')}/><span><b>将这份薪资应用至历史</b><small>开启后，可选择从哪一天开始按这份薪资重新计算历史工作收入</small></span></label>{profile.salaryHistoryMode === 'custom' && <label className="history-date-field"><span>历史开始日期</span><input required type="date" max={toLocalDateValue()} value={salaryEffectiveDateInput} onChange={event => { setSaved(false); setSalaryEffectiveDateInput(event.target.value) }}/><small>从这一天开始重新计算工作收入，更早的日期不受影响。</small></label>}</div>
+    <div className="living-cost-block">
+      <div className="toggle-row"><Switch checked={profile.includeLivingCost} onCheckedChange={checked => set('includeLivingCost', checked)} ariaLabel="计算生活成本"/><span><b>计算生活成本</b><small>开启后，可选择从实时工资中扣除，或按自然日自动记入账本</small></span></div>
+      {profile.includeLivingCost && <>
+        <div className="form-grid living-cost-field"><Input label="月生活成本" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={monthlyLivingCostInput} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setMonthlyLivingCostInput(normalizeDecimalInput(value)) }} placeholder="例如：5000"/></div>
+        <ChoiceGroup className="living-cost-options" legend="计入方式" value={profile.livingCostMode} onValueChange={value => set('livingCostMode', value as LivingCostMode)}>{([
+          ['deduct', '从实时工资中扣除', '显示扣除工资项和生活成本后的可支配工资'],
+          ['daily-ledger', '按自然日记入账本', '按当月天数均摊，每天自动生成一笔生活成本支出'],
+        ] as [LivingCostMode, string, string][]).map(([mode, title, description]) => <ChoiceCard key={mode} value={mode} title={title} description={description} badge={mode === 'deduct' ? '默认' : undefined}/>)}</ChoiceGroup>
+        {profile.livingCostMode === 'daily-ledger' && <p className="work-mode-hint living-cost-hint">每日金额按“分”精确分摊，周末和节假日也会计入；调整只影响当天及以后，过去明细会保留。</p>}
+      </>}
+    </div>
+  </div>
 
-      <div className="settings-section"><h3>工作时间</h3><fieldset className="work-mode-options"><legend>默认计薪方式</legend>{([
-        ['scheduled', '固定作息', '按设置的上下班时间自动计薪，适合大多数用户'],
-        ['flexible', '弹性作息', '每天开始工作后计薪，也可以临时切回固定作息'],
-      ] as [WorkMode, string, string][]).map(([mode, title, description]) => <label key={mode}><input type="radio" name="default-work-mode" checked={profile.defaultWorkMode === mode} onChange={() => set('defaultWorkMode', mode)}/><span><b>{title}{mode === 'scheduled' && <small>推荐</small>}</b><em>{description}</em></span></label>)}</fieldset><p className="work-mode-hint">这只是每天的默认方式，首页可以随时只调整当天。</p><div className="form-grid"><label><span>上班时间</span><input required type="time" value={profile.workStartTime} onChange={event => set('workStartTime', event.target.value)}/></label><label><span>下班时间</span><input required type="time" value={profile.workEndTime} onChange={event => set('workEndTime', event.target.value)}/></label><label><span>午休开始</span><input required type="time" value={profile.breakStartTime} onChange={event => set('breakStartTime', event.target.value)}/></label><label><span>午休结束</span><input required type="time" value={profile.breakEndTime} onChange={event => set('breakEndTime', event.target.value)}/></label></div><label className="toggle-row"><input type="checkbox" checked={profile.paidBreak} onChange={event => set('paidBreak', event.target.checked)}/><span><b>午休计薪</b><small>{profile.defaultWorkMode === 'flexible' ? '弹性工作可以使用“暂停”排除实际休息时间；这里仍用于计算每日目标工时' : '关闭后，实时工资和摸鱼收益都会自动排除午休'}</small></span></label></div>
+  const historySection = <div className="settings-section-content salary-history-section" id="salary-history">
+    <div className="toggle-row salary-history-toggle"><Switch checked={profile.salaryHistoryMode !== 'none'} onCheckedChange={checked => set('salaryHistoryMode', checked ? 'custom' : 'none')} ariaLabel="将这份薪资应用至历史"/><span><b>将这份薪资应用至历史</b><small>开启后，可选择从哪一天开始按这份薪资重新计算历史工作收入</small></span></div>
+    {profile.salaryHistoryMode === 'custom' && <Input rootClassName="history-date-field" label="历史开始日期" required type="date" max={toLocalDateValue()} value={salaryEffectiveDateInput} onValueChange={value => { setSaved(false); setSalaryEffectiveDateInput(value) }} hint="从这一天开始重新计算工作收入，更早的日期不受影响。"/>}
+  </div>
 
-      {rates && <div className="rate-preview"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>{rateLabelPrefix}时薪</small><b>¥{rates.hourly.toFixed(2)}</b></div><div><small>{rateLabelPrefix}分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>{rateLabelPrefix}每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>}
+  const appearanceSection = <div className="settings-section-content" id="appearance-theme">
+    <ThemePaletteGrid className="settings-theme-picker"/>
+  </div>
+
+  return <section className="page settings-page">
+    <header className="page-header"><div><p className="eyebrow">PROFILE & APPEARANCE</p><h1>先定义，你的一小时值多少钱。</h1><p>选择喜欢的整体配色，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
+    <form className="settings-card" noValidate onSubmit={submit}>
+      {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
+        <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
+        <div className="settings-rate-details"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
+      </section>}
+      <BouncyAccordion
+        className="settings-accordion"
+        value={openSection}
+        onValueChange={setOpenSection}
+        items={[
+          { id: 'appearance', icon: <Palette size={18}/>, title: <><b>外观与配色</b><small>经典主题与 11 组双配色</small></>, description: appearanceSection },
+          { id: 'salary', icon: <CircleDollarSign size={18}/>, title: <><b>工资与发薪</b><small>工资周期、发薪日和折算方式</small></>, description: salarySection },
+          { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>默认作息、上下班与午休时间</small></>, description: workSection },
+          { id: 'deductions', icon: <ReceiptText size={18}/>, title: <><b>扣除与生活成本</b><small>工资扣除项和每月生活支出</small></>, description: deductionsSection },
+          { id: 'history', icon: <History size={18}/>, title: <><b>历史账本</b><small>设置薪资生效的历史日期</small></>, description: historySection },
+        ]}
+      />
       {calculationError && <p className="settings-warning" role="alert">{calculationError}</p>}
       {draftProfile && draftProfile.includeLivingCost && draftProfile.livingCostMode === 'deduct' && draftProfile.monthlyLivingCost > draftProfile.salary && draftProfile.salaryType === 'monthly' && <p className="settings-warning">生活成本高于月薪，当前可支配薪资会按 0 计算。</p>}
       {saveError && <p className="settings-warning" role="alert">{saveError}</p>}
-      <button className="primary-button" type="submit">{saved ? <><CheckCircle2 size={17}/>已保存</> : '保存薪资设置'}</button>
+      <Button className="settings-save-button" type="submit" size="lg" ripple>{saved ? <><CheckCircle2 size={17}/>已保存</> : '保存薪资设置'}</Button>
     </form>
-    <AppUpdateCard/>
+    <div className="settings-update-card"><AppUpdateCard/></div>
   </section>
 }

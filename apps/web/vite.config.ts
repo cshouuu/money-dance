@@ -22,6 +22,7 @@ function serviceWorkerPlugin(): Plugin {
       const cacheVersion = createHash('sha256')
         .update(template)
         .update(precacheUrls.join('\n'))
+        .update(readFileSync(fileURLToPath(new URL('./public/money-dance-icon.svg', import.meta.url))))
         .digest('hex')
         .slice(0, 12)
       const source = template

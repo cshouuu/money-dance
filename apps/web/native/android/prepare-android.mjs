@@ -23,6 +23,7 @@ if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
 }
 
 const nativeJavaFiles = [
+  'AppearancePlugin.java',
   'AppUpdaterPlugin.java',
   'WidgetActionReceiver.java',
   'WidgetBridgePlugin.java',
@@ -42,6 +43,24 @@ const nativeResourceFiles = [
   'drawable/money_dance_widget_notification.xml',
   'layout/money_dance_widget.xml',
   'layout/money_dance_widget_square.xml',
+  'mipmap-anydpi-v26/ic_launcher.xml',
+  'mipmap-anydpi-v26/ic_launcher_round.xml',
+  'mipmap-mdpi/ic_launcher.png',
+  'mipmap-mdpi/ic_launcher_foreground.png',
+  'mipmap-mdpi/ic_launcher_round.png',
+  'mipmap-hdpi/ic_launcher.png',
+  'mipmap-hdpi/ic_launcher_foreground.png',
+  'mipmap-hdpi/ic_launcher_round.png',
+  'mipmap-xhdpi/ic_launcher.png',
+  'mipmap-xhdpi/ic_launcher_foreground.png',
+  'mipmap-xhdpi/ic_launcher_round.png',
+  'mipmap-xxhdpi/ic_launcher.png',
+  'mipmap-xxhdpi/ic_launcher_foreground.png',
+  'mipmap-xxhdpi/ic_launcher_round.png',
+  'mipmap-xxxhdpi/ic_launcher.png',
+  'mipmap-xxxhdpi/ic_launcher_foreground.png',
+  'mipmap-xxxhdpi/ic_launcher_round.png',
+  'values/ic_launcher_background.xml',
   'xml/money_dance_widget_info.xml',
   'xml/money_dance_widget_square_info.xml',
 ]
@@ -124,8 +143,10 @@ public class MainActivity extends BridgeActivity {
         // must be registered first or they will not exist at runtime.
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(WidgetBridgePlugin.class);
+        registerPlugin(AppearancePlugin.class);
         captureWidgetLaunchTarget(getIntent());
         super.onCreate(savedInstanceState);
+        AppearancePlugin.applySaved(this, getBridge().getWebView());
     }
 
     @Override
@@ -138,6 +159,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        AppearancePlugin.applySaved(this, getBridge().getWebView());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && WidgetRenderer.hasWidgets(this)
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
