@@ -49,8 +49,8 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
   useEffect(() => {
     if (!open) return
     setStartTime(recordTime(record, 'start') || (purpose === 'adjust' ? plannedStart : toLocalTimeValue()))
-    setEndTime(recordTime(record, 'end'))
-    const recordEndTime = record?.sessions.at(-1)?.endTime
+    const recordEndTime = record?.sessions.at(-1)?.endTime ?? record?.plannedEndTime
+    setEndTime(recordEndTime ? toLocalTimeValue(new Date(recordEndTime)) : '')
     setEndDate(recordEndTime ? toLocalDateValue(new Date(recordEndTime)) : date)
     setPlannedEndDate(date)
     setPlannedEndTime('')
@@ -77,8 +77,8 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!event.currentTarget.reportValidity()) return
-    if (!isFlexibleStartTimeAllowed(date, startTime) || (endTime && localDateWithTime(endDate, endTime) > new Date())) {
-      setError('实际工作时间不能晚于当前时间。')
+    if (!isFlexibleStartTimeAllowed(date, startTime)) {
+      setError('开始时间不能晚于当前时间。')
       return
     }
     if (endTime && localDateWithTime(endDate, endTime) <= localDateWithTime(date, startTime)) {
@@ -94,7 +94,7 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
     <form ref={dialogRef} className="work-time-dialog" role="dialog" aria-modal="true" aria-labelledby="work-time-dialog-title" onSubmit={submit}>
       <div className="work-dialog-header"><div><p className="eyebrow">TODAY ONLY</p><h2 id="work-time-dialog-title">{purpose === 'start' ? '今天几点开工？' : '修正今天的工作时间'}</h2></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
       {purpose === 'start' && <><p className="work-dialog-copy">只调整今天，明天仍会使用你的默认计薪方式。</p><div className="work-quick-actions"><button type="button" className="work-now-button" onClick={()=>startWithTime(nowTime)}><Clock3 size={16}/><span><b>从现在开始</b><small>{nowTime}</small></span></button><button type="button" disabled={!canUsePlannedStart} onClick={()=>startWithTime(plannedStart)}><span><b>按计划时间</b><small>{plannedStart}{canUsePlannedStart ? '' : ' · 尚未到点'}</small></span></button></div><div className="work-dialog-divider"><span>或补记实际开始时间</span></div></>}
-      <div className="work-time-fields"><Input label="开始时间" required type="time" max={date === toLocalDateValue() ? nowTime : undefined} value={startTime} onValueChange={value=>{setStartTime(value);setError('')}}/>{purpose === 'adjust' && <><Input label="结束日期" type="date" min={date} max={toLocalDateValue()} disabled={!endTime} value={endDate} onValueChange={value=>{setEndDate(value);setError('')}}/><Input label="结束时间" hint="留空则继续计薪" type="time" max={endDate === toLocalDateValue() ? nowTime : undefined} value={endTime} onValueChange={value=>{setEndTime(value);if(!value)setEndDate(date);setError('')}}/></>}
+      <div className="work-time-fields"><Input label="开始时间" required type="time" max={date === toLocalDateValue() ? nowTime : undefined} value={startTime} onValueChange={value=>{setStartTime(value);setError('')}}/>{purpose === 'adjust' && <><Input label="结束日期" type="date" min={date} max={nextDateValue(date)} disabled={!endTime} value={endDate} onValueChange={value=>{setEndDate(value);setError('')}}/><Input label="结束时间" hint="过去时间为实际下班；未来时间到点停止计薪；留空则手动结束" type="time" value={endTime} onValueChange={value=>{setEndTime(value);if(!value)setEndDate(date);setError('')}}/></>}
       </div>
       {purpose === 'start' && <div className="work-planned-end"><div className="work-dialog-divider"><span>可选：到点自动停止计薪</span></div><div className="work-planned-end-fields"><Input label="预计结束日期" type="date" min={date} max={nextDateValue(date)} disabled={!plannedEndTime} value={plannedEndDate} onValueChange={value=>{setPlannedEndDate(value);setError('')}}/><Input label="预计结束时间" hint="留空则手动结束" type="time" value={plannedEndTime} onValueChange={value=>{setPlannedEndTime(value);if(!value)setPlannedEndDate(date);setError('')}}/></div><small className="work-planned-end-note">跨午夜时请选择次日日期。到点后会冻结工时，下次打开应用继续选择结算方式。</small></div>}
       {(error || storageError) && <p className="work-dialog-error" role="alert">{error || storageError}</p>}

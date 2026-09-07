@@ -111,7 +111,7 @@ function flexiblePaidIntervals(
 ): PaidTimeInterval[] {
   return record.sessions.flatMap(session => {
     const start = new Date(session.startTime)
-    const end = session.endTime ? new Date(session.endTime) : rangeEnd
+    const end = session.endTime ? new Date(session.endTime) : record.plannedEndTime ? new Date(Math.min(rangeEnd.getTime(), new Date(record.plannedEndTime).getTime())) : rangeEnd
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return []
     return [{ start, end, businessDate: record.date }]
   })
@@ -153,7 +153,7 @@ export function actualPaidIntervalsForDate(
     : sliceIntervalsByPaidOffset(intervals, 0, half)
   if (record?.sessions.length) {
     return mergeIntervals(intervals.flatMap(interval => record.sessions.map(session =>
-      clippedInterval(interval, new Date(session.startTime), session.endTime ? new Date(session.endTime) : rangeEnd),
+      clippedInterval(interval, new Date(session.startTime), session.endTime ? new Date(session.endTime) : record.plannedEndTime ? new Date(Math.min(rangeEnd.getTime(), new Date(record.plannedEndTime).getTime())) : rangeEnd),
     ).filter((item): item is PaidTimeInterval => item !== null)))
   }
   return intervals

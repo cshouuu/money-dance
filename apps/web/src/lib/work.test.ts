@@ -18,6 +18,7 @@ import {
   isFlexibleStartTimeAllowed,
   resumeFlexibleWork,
   replaceFlexibleWorkTime,
+  replaceScheduledWorkTime,
   resolveFlexiblePlannedEndTime,
   settleFlexibleWorkRecord,
   startFlexibleWork,
@@ -639,5 +640,62 @@ describe('flexible work settlement', () => {
     expect(sessions.size).toBe(1)
     expect(ledger.size).toBe(1)
     expect(workSettled).toBe(true)
+  })
+})
+
+
+describe('correcting actual and planned work end times', () => {
+  const date = '2026-08-28'
+  const at = (hour: number) => new Date(2026, 7, 28, hour)
+
+  it('ends past and current work immediately without retaining an old planned stop', () => {
+    const current = startFlexibleWork(date, '09:00', undefined, at(18).toISOString())
+    for (const hour of [12, 15]) {
+      const record = replaceFlexibleWorkTime(date, '09:00', `${hour}:00`, date, current, at(15))
+      expect(record.status).toBe('ended')
+      expect(record.sessions[0].endTime).toBe(at(hour).toISOString())
+      expect(record.plannedEndTime).toBeUndefined()
+      expect(getFlexibleWorkedSeconds(record, at(20))).toBe((hour - 9) * 3600)
+    }
+  })
+
+  it('counts only elapsed work until a future stop and freezes exactly at that stop', () => {
+    const record = replaceFlexibleWorkTime(date, '09:00', '17:00', date, undefined, at(15))
+    expect(record.status).toBe('working')
+    expect(record.sessions[0].endTime).toBeUndefined()
+    expect(record.plannedEndTime).toBe(at(17).toISOString())
+    expect(getFlexibleWorkedSeconds(record, at(15))).toBe(6 * 3600)
+    expect(hasFlexiblePlannedEndReached(record, at(15))).toBe(false)
+    expect(hasFlexiblePlannedEndReached(record, at(17))).toBe(true)
+    expect(getFlexibleWorkedSeconds(record, at(20))).toBe(8 * 3600)
+    const frozen = freezeFlexibleWorkForSettlement(record, at(20))
+    expect(frozen.sessions[0].endTime).toBe(at(17).toISOString())
+    expect(frozen.settlementPending).toBe(true)
+  })
+
+  it('clears the planned stop when blank and resumes an ended record', () => {
+    const current = replaceFlexibleWorkTime(date, '09:00', '12:00', date, undefined, at(15))
+    current.plannedEndTime = at(17).toISOString()
+    const record = replaceFlexibleWorkTime(date, '09:00', undefined, date, current, at(15))
+    expect(record.status).toBe('working')
+    expect(record.plannedEndTime).toBeUndefined()
+    expect(record.sessions[0].endTime).toBeUndefined()
+    expect(getFlexibleWorkedSeconds(record, at(20))).toBe(11 * 3600)
+  })
+
+  it('supports a planned stop after midnight', () => {
+    const record = replaceFlexibleWorkTime(date, '09:00', '01:00', '2026-08-29', undefined, at(15))
+    const stop = new Date(2026, 7, 29, 1)
+    expect(record.plannedEndTime).toBe(stop.toISOString())
+    expect(freezeFlexibleWorkForSettlement(record, new Date(2026, 7, 29, 8)).sessions[0].endTime).toBe(stop.toISOString())
+  })
+
+  it('keeps fixed work counting until the planned end, respecting unpaid lunch', () => {
+    const record = replaceScheduledWorkTime(date, '09:00', '16:00', date, at(15))
+    const fixed = { ...profile, paidBreak: false }
+    expect(summarizeTodayWork(fixed, [record], at(15)).status).toBe('working')
+    expect(summarizeTodayWork(fixed, [record], at(15)).workedSeconds).toBe(5 * 3600)
+    expect(summarizeTodayWork(fixed, [record], at(16)).status).toBe('ended')
+    expect(summarizeTodayWork(fixed, [record], at(20)).workedSeconds).toBe(6 * 3600)
   })
 })

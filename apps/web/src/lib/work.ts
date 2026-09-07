@@ -348,7 +348,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     mode,
     status: mode === 'flexible'
       ? record && hasFlexiblePlannedEndReached(record, now) ? 'ended' : record?.status ?? 'ready'
-      : record?.sessions.length && record.status === 'ended' ? 'ended' : 'working',
+      : record?.sessions.length && (record.status === 'ended' || hasFlexiblePlannedEndReached(record, now)) ? 'ended' : 'working',
     dayType: 'work',
     workedSeconds,
     businessDate,
@@ -453,16 +453,19 @@ export function resumeFlexibleWork(record: DailyWorkRecord, now = new Date()): D
   }
 }
 
-export function replaceFlexibleWorkTime(date: string, startTime: string, endTime?: string, endDate = date, current?: DailyWorkRecord): DailyWorkRecord {
+export function replaceFlexibleWorkTime(date: string, startTime: string, endTime?: string, endDate = date, current?: DailyWorkRecord, now = new Date()): DailyWorkRecord {
   const start = localDateWithTime(date, startTime)
-  const end = endTime ? localDateWithTime(endDate, endTime) : undefined
+  const selectedEnd = endTime ? localDateWithTime(endDate, endTime) : undefined
+  const plannedEnd = selectedEnd && selectedEnd > now ? selectedEnd : undefined
+  const end = plannedEnd ? undefined : selectedEnd
   return {
     date,
     mode: 'flexible',
     status: end ? 'ended' : 'working',
     sessions: [{ id: createId(), startTime: start.toISOString(), endTime: end?.toISOString() }],
+    ...(plannedEnd ? { plannedEndTime: plannedEnd.toISOString() } : {}),
     ...(current?.overtimeSessionId ? { overtimeSessionId: current.overtimeSessionId } : {}),
-    updatedAt: new Date().toISOString(),
+    updatedAt: now.toISOString(),
   }
 }
 
@@ -476,6 +479,6 @@ export function getScheduledWorkedSeconds(profile: SalaryProfile, record: DailyW
     .reduce((total, interval) => total + Math.max(0, Math.min(now.getTime(), interval.end.getTime()) - interval.start.getTime()) / 1000, 0)
 }
 
-export function replaceScheduledWorkTime(date: string, startTime: string, endTime?: string, endDate = date): DailyWorkRecord {
-  return { ...replaceFlexibleWorkTime(date, startTime, endTime, endDate), mode: 'scheduled' }
+export function replaceScheduledWorkTime(date: string, startTime: string, endTime?: string, endDate = date, now = new Date()): DailyWorkRecord {
+  return { ...replaceFlexibleWorkTime(date, startTime, endTime, endDate, undefined, now), mode: 'scheduled' }
 }
