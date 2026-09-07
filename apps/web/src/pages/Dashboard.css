@@ -44,3 +44,5 @@
 .dashboard-insight-grid-compact{grid-template-rows:auto auto;flex:initial}.dashboard-insight-grid-compact>.dashboard-insight-card{min-height:100px}.dashboard-insight-grid-compact>.dashboard-insight-card:first-child{grid-column:1/-1;display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;min-height:76px}.dashboard-insight-grid-compact>.dashboard-insight-card:first-child>strong{margin:0;padding-right:15px}.dashboard-insight-grid-compact>.dashboard-insight-card:first-child>small{grid-column:1/-1;max-width:none}.dashboard-insight-grid-compact>.dashboard-insight-card>strong{margin:12px 0 5px}
 
 .dashboard-overview-grid>.hero-card{align-self:start}
+
+.dashboard-page .hero-meta .hero-mode-switch{padding-inline:0}
