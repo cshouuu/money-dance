@@ -37,3 +37,30 @@ describe('getWishProgress', () => {
     expect(result.estimatedAt).toEqual(new Date(2026, 7, 3, 9))
   })
 })
+
+
+describe('future wish start', () => {
+  const profile = { ...DEFAULT_PROFILE, salary: 800, monthlyWorkDays: 10, monthlyRateBasis: 'average' as const }
+  const futureWish = { ...wish, startedAt: new Date(2026, 7, 4).toISOString() }
+  it('keeps progress at zero and estimates completion from the selected start', () => {
+    const result = getWishProgress(futureWish, profile, new Date(2026, 7, 3, 14))
+    expect(result.upcomingStart).toEqual(new Date(2026, 7, 4))
+    expect(result.earnedAmount).toBe(0)
+    expect(result.progress).toBe(0)
+    expect(result.remainingAmount).toBe(100)
+    expect(result.estimatedAt).toEqual(new Date(2026, 7, 5, 11))
+  })
+  it('starts automatically on the selected date and excludes earlier income', () => {
+    const midnight = getWishProgress(futureWish, profile, new Date(2026, 7, 4))
+    expect(midnight.upcomingStart).toBeNull()
+    expect(midnight.progress).toBe(0)
+    const working = getWishProgress(futureWish, profile, new Date(2026, 7, 4, 14))
+    expect(working.earnedAmount).toBeCloseTo(40)
+    expect(working.progress).toBeCloseTo(0.4)
+  })
+  it('does not mark a free future wish complete before it starts', () => {
+    const result = getWishProgress({ ...futureWish, price: 0 }, profile, new Date(2026, 7, 3, 14))
+    expect(result.progress).toBe(0)
+    expect(result.estimatedAt).toEqual(new Date(2026, 7, 4))
+  })
+})

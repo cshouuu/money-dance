@@ -422,7 +422,7 @@ export function Dashboard() {
       </div>}
 
       {work.dayType === 'work' ? <>
-        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{firstStart ? toLocalTimeValue(new Date(firstStart)) : work.mode === 'flexible' ? '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? plannedEndLabel ? `预计 ${plannedEndLabel}` : `目标 ${formatDuration(targetSeconds)}` : work.record?.sessions.at(-1)?.endTime ? toLocalTimeValue(new Date(work.record.sessions.at(-1)!.endTime!)) : profile.workEndTime}</span></div>
+        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{firstStart ? toLocalTimeValue(new Date(firstStart)) : work.mode === 'flexible' ? '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? plannedEndLabel ? `预计 ${plannedEndLabel}` : `目标 ${formatDuration(targetSeconds)}` : work.record?.sessions.at(-1)?.endTime ? toLocalTimeValue(new Date(work.record.sessions.at(-1)!.endTime!)) : plannedEndLabel ? `预计 ${plannedEndLabel}` : work.record?.sessions.length ? '手动结束' : profile.workEndTime}</span></div>
         <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>{work.mode === 'flexible' || isSettledDailyAmount ? '实际记录' : '已计薪'} <b>{formatDuration(worked)}</b></span><span>{isSettledDailyAmount ? '今日结算' : work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(isSettledDailyAmount ? earned : workRates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
       </> : <>
         <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : work.officialHolidayName ? `已自动识别为${work.officialHolidayName}假期；你仍可在薪苦日历中手工覆盖。` : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
@@ -480,7 +480,7 @@ export function Dashboard() {
         const percent = (wishProgress?.progress ?? 0) * 100
         return <article className="dashboard-wish-card" key={item.id}>
           <span className="dashboard-wish-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</span>
-          <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · 已完成 {percent.toFixed(0)}%</small></div>
+          <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · {wishProgress?.upcomingStart ? `尚未开始 · ${toLocalDateValue(wishProgress.upcomingStart)}` : `已完成 ${percent.toFixed(0)}%`}</small></div>
           <div className="dashboard-wish-time"><small>还差纯工时</small><strong>{formatDuration(wishProgress?.remainingSeconds ?? 0)}</strong></div>
           <div className="dashboard-wish-progress" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
         </article>

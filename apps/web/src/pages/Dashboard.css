@@ -46,3 +46,18 @@
 .dashboard-overview-grid>.hero-card{align-self:start}
 
 .dashboard-page .hero-meta .hero-mode-switch{padding-inline:0}
+
+/* Overview occupies its own full-width row instead of extending the sidebar. */
+@media (min-width:1121px) {
+  .dashboard-overview-grid { grid-template-columns:minmax(0,1fr) minmax(360px,.65fr); }
+  .dashboard-countdown-overview { display:contents; }
+  .dashboard-overview-grid .rest-countdown-feature strong { font-size:26px; white-space:nowrap; }
+  .dashboard-overview-grid > .hero-card { align-self:stretch; }
+  .dashboard-overview-grid .dashboard-insights { grid-column:1/-1; }
+  .dashboard-insight-grid-compact { grid-template-columns:repeat(3,minmax(0,1fr)); grid-template-rows:auto; }
+  .dashboard-insight-grid-compact > .dashboard-insight-card:first-child { grid-column:auto; display:flex; align-items:stretch; gap:0; min-height:100px; }
+  .dashboard-insight-grid-compact > .dashboard-insight-card:first-child > strong { margin:12px 0 5px; padding-right:0; }
+  .dashboard-insight-grid-compact > .dashboard-insight-card:first-child > small { max-width:calc(100% - 22px); }
+  .dashboard-overview-grid .rest-countdown-tile { padding:12px; }
+  .dashboard-overview-grid .rest-countdown-tile > strong { font-size:clamp(15px,1.3vw,20px); }
+}

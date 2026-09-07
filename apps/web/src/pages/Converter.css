@@ -231,3 +231,15 @@
   .purchase-toast{animation:none}
   .wish-progress-track>i{transition:none}
 }
+
+/* Keep helper text below a shared control baseline. */
+@media (min-width:621px) {
+  .converter-page #wish-form { align-items:start; }
+  .converter-page #wish-form > .beui-button { margin-top:25px; }
+  .converter-page #wish-form > .live-result { align-self:start; margin-top:25px; }
+}
+
+@media (min-width:621px) {
+  .converter-page #wish-form > .beui-field { gap:7px; }
+  .converter-page #wish-form > .beui-field > .beui-field-label { font-size:11px; line-height:18px; }
+}

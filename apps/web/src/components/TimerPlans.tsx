@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CalendarClock, Plus } from 'lucide-react'
-import { Input, Button } from '../ui/BeuiControls'
+import { Input, Button, SelectField } from '../ui/BeuiControls'
 import { createId } from '../lib/id'
 import { cancelTimerPlan, loadTimerPlans, saveTimerPlan, TIMER_PLANS_KEY, TIMER_PLANS_UPDATED, type TimerPlan, type TimerPlanKind } from '../lib/timerPlans'
 import { STORAGE_CHANGED_EVENT } from '../lib/storage'
@@ -56,7 +56,7 @@ export function TimerPlans({ kind }: { kind: TimerPlanKind }) {
       <h3>{plans.some(plan => plan.id === editing.id) ? '修改预约' : `预约${label}`}</h3>
       <Input label="预约开始时间" required type="datetime-local" value={start} onValueChange={setStart}/>
       <Input label="预约结束时间" type="datetime-local" hint="选填；留空则手动结束，到点若同类计时冲突，后续预约暂停执行。" value={end} onValueChange={setEnd}/>
-      {kind === 'overtime' && <><label className="timer-plan-pay-label">加班费类型<select aria-label="加班费类型" value={editing.payMode} onChange={event => { setEditing({ ...editing, payMode: event.target.value as TimerPlan['payMode'] }); setAmount('') }}><option value="unpaid">无偿加班，只记时间</option><option value="multiplier">按工资倍率</option><option value="fixed">固定加班费</option></select></label>{editing.payMode !== 'unpaid' && <Input label={editing.payMode === 'fixed' ? '本次固定加班费' : '工资倍率'} required type="number" min="0.01" step="0.01" value={amount} onValueChange={setAmount}/>}</>}
+      {kind === 'overtime' && <><SelectField label="加班费类型" value={editing.payMode} onValueChange={value => { setEditing({ ...editing, payMode: value as TimerPlan['payMode'] }); setAmount('') }}><option value="unpaid">无偿加班，只记时间</option><option value="multiplier">按工资倍率</option><option value="fixed">固定加班费</option></SelectField>{editing.payMode !== 'unpaid' && <Input label={editing.payMode === 'fixed' ? '本次固定加班费' : '工资倍率'} required type="number" min="0.01" step="0.01" value={amount} onValueChange={setAmount}/>}</>}
       <div className="timer-plan-actions"><Button type="button" variant="secondary" onClick={() => { setEditing(null); setError('') }}>取消编辑</Button><Button type="submit">保存预约</Button></div>
     </form>}
     {error && <p role="alert" className="timer-plan-error">{error}</p>}

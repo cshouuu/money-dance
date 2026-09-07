@@ -66,7 +66,7 @@ export function Converter() {
     const parsedPrice = parseNumberInput(price)
     if (!event.currentTarget.reportValidity() || !name.trim() || parsedPrice === null || parsedPrice < 0 || parsedPrice > MAX_MONEY_AMOUNT) return
     const start = new Date(startedDate + 'T00:00:00')
-    if (!Number.isFinite(start.getTime()) || start > new Date()) return
+    if (!Number.isFinite(start.getTime())) return
     const startedAt = editing && startedDate === toLocalDateValue(new Date(editing.startedAt ?? editing.createdAt))
       ? editing.startedAt : start.toISOString()
     const next = editing
@@ -127,7 +127,7 @@ export function Converter() {
       <div className="form-card-heading"><span>{editing ? 'EDIT WISH' : 'NEW WISH'}</span><div><b>{editing ? '编辑心愿' : '添加一个心愿'}</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
       <Input label="想买什么" required maxLength={60} autoComplete="off" value={name} onValueChange={setName} placeholder="例如：AirPods Pro" />
       <Input label="价格" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => setPrice(normalizeDecimalInput(value))} placeholder="1899" />
-      <Input label="心愿起始日期" required type="date" max={toLocalDateValue()} value={startedDate} onValueChange={setStartedDate} hint="从这一天起，按工作记录和作息累计进度" />
+      <Input label="心愿起始日期" required type="date" value={startedDate} onValueChange={setStartedDate} hint="从这一天起，按工作收入折算进度；未来日期到日后开始累计" />
       {formError && <p role="alert">{formError}</p>}
       {previewWorkSeconds !== null ? <div className="live-result converter-live-result"><small>连续纯工时（24小时制）</small><strong>{formatDuration(previewWorkSeconds)}</strong><span>按你的工作日程 ≈ {formatWorkDays(previewWorkSeconds, rates.paidSecondsPerDay)} 个工作日</span></div> : null}
       <Button type="submit" size="lg" ripple><Plus size={17} /> {editing ? '保存修改' : '保存换算'}</Button>
@@ -144,7 +144,7 @@ export function Converter() {
             const remainingSeconds = progress?.remainingSeconds ?? workSeconds
             const earnedAmount = progress?.earnedAmount ?? 0
             const remainingAmount = progress?.remainingAmount ?? Math.max(0, item.price - earnedAmount)
-            const complete = (progress?.progress ?? (item.price <= 0 ? 1 : 0)) >= 1 || remainingAmount <= 0
+            const complete = !progress?.upcomingStart && ((progress?.progress ?? (item.price <= 0 ? 1 : 0)) >= 1 || remainingAmount <= 0)
             const percent = Math.min(100, Math.max(0, (progress?.progress ?? 0) * 100))
             const estimate = formatWishEstimate(progress?.estimatedAt ?? null, now, complete)
             return <article className="list-card converter-card" key={item.id}>
@@ -154,7 +154,7 @@ export function Converter() {
                 <strong className="converter-wish-price">{formatMoney(item.price)}</strong>
               </header>
               <div className="wish-progress">
-                <div className="wish-progress-heading"><span>心愿进度</span><strong>{percent.toFixed(0)}%</strong></div>
+                <div className="wish-progress-heading"><span>{progress?.upcomingStart ? `尚未开始 · ${toLocalDateValue(progress.upcomingStart)} 开始` : '心愿进度'}</span><strong>{percent.toFixed(0)}%</strong></div>
                 <div className="wish-progress-track" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
                 <div className="wish-progress-money"><span>已积累 <b>{formatMoney(earnedAmount)}</b></span><span>还差 <b>{formatMoney(remainingAmount)}</b></span></div>
               </div>

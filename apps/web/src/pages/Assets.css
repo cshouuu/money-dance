@@ -6,3 +6,13 @@
   .assets-list-section{margin-top:34px}
   .assets-list-section>.section-title{margin-bottom:14px}
 }
+
+@media (min-width:621px) {
+  .assets-page .asset-form { align-items:start; }
+  .assets-page .asset-form > .beui-button { margin-top:25px; }
+}
+
+@media (min-width:621px) {
+  .assets-page .asset-form > .beui-field { gap:7px; }
+  .assets-page .asset-form > .beui-field > .beui-field-label { font-size:11px; line-height:18px; }
+}
