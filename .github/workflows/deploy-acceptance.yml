@@ -1,0 +1,377 @@
+name: Deploy Acceptance Web and APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/adjust-work-end-time]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: acceptance-preview
+  cancel-in-progress: true
+
+jobs:
+  android-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Resolve Android version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+            if [[ ! "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Tag must use vMAJOR.MINOR.PATCH, for example v0.2.0" >&2
+              exit 1
+            fi
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+            VERSION_CODE=$((10#$MAJOR * 1000000 + 10#$MINOR * 1000 + 10#$PATCH))
+            if (( VERSION_CODE < 1 || VERSION_CODE > 2100000000 )); then
+              echo "Calculated Android versionCode is invalid: $VERSION_CODE" >&2
+              exit 1
+            fi
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          else
+            VERSION_NAME="0.1.0-dev.${GITHUB_RUN_NUMBER}"
+            VERSION_CODE="$GITHUB_RUN_NUMBER"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+      - name: Install web dependencies
+        run: npm ci
+      - name: Build web bundle
+        env:
+          VITE_API_BASE_URL: https://salary-flow-api.vercel.app
+        run: |
+          npm run build -w @salary-flow/core
+          npm run build -w @salary-flow/web
+      - name: Install pinned Capacitor toolchain
+        run: npm install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
+      - name: Generate Android project
+        working-directory: apps/web
+        run: |
+          npx cap add android
+          npx cap sync android
+      - name: Validate release signing secrets
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+      - name: Configure fixed release signing
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > apps/web/android/app/money-dance-release.jks
+          cat > apps/web/android/keystore.properties <<EOF
+          storeFile=money-dance-release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          chmod 600 apps/web/android/app/money-dance-release.jks apps/web/android/keystore.properties
+      - name: Configure CI signing smoke test
+        if: steps.version.outputs.is_release != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          keytool -genkeypair -noprompt \
+            -keystore apps/web/android/app/money-dance-ci.jks \
+            -alias money-dance-ci \
+            -keyalg RSA -keysize 2048 -validity 365 \
+            -storepass ci-only-password -keypass ci-only-password \
+            -dname "CN=Money Dance CI,O=Money Dance,C=US"
+          cat > apps/web/android/keystore.properties <<'EOF'
+          storeFile=money-dance-ci.jks
+          storePassword=ci-only-password
+          keyAlias=money-dance-ci
+          keyPassword=ci-only-password
+          EOF
+      - name: Validate Pgyer updater configuration
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$PGYER_APP_SHORTCUT" =~ ^[A-Za-z0-9_-]{4,64}$ ]]; then
+            echo "Repository variable PGYER_APP_SHORTCUT is missing or invalid" >&2
+            exit 1
+          fi
+      - name: Apply Android native updater and version
+        env:
+          ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          ANDROID_RELEASE_SIGNING: 'true'
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/web/native/android/prepare-android.mjs
+          first_digest="$(find apps/web/android/app/src/main apps/web/android/app/build.gradle -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          node apps/web/native/android/prepare-android.mjs
+          second_digest="$(find apps/web/android/app/src/main apps/web/android/app/build.gradle -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          test "$first_digest" = "$second_digest"
+      - name: Verify Android native injection
+        env:
+          PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          NATIVE_ROOT="apps/web/native/android"
+          JAVA_ROOT="apps/web/android/app/src/main/java/com/cshouuu/moneydance"
+          RES_ROOT="apps/web/android/app/src/main/res"
+          MAIN_ACTIVITY="apps/web/android/app/src/main/java/com/cshouuu/moneydance/MainActivity.java"
+          MANIFEST="apps/web/android/app/src/main/AndroidManifest.xml"
+          STYLES="apps/web/android/app/src/main/res/values/styles.xml"
+          API26_STYLES="apps/web/android/app/src/main/res/values-v26/styles.xml"
+          API27_STYLES="apps/web/android/app/src/main/res/values-v27/styles.xml"
+          PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_info.xml"
+          PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_info.xml"
+          SQUARE_PROVIDER_TEMPLATE="$NATIVE_ROOT/res/xml/money_dance_widget_square_info.xml"
+          SQUARE_PROVIDER_XML="$RES_ROOT/xml/money_dance_widget_square_info.xml"
+          WIDGET_LAYOUT="$RES_ROOT/layout/money_dance_widget.xml"
+          SQUARE_WIDGET_LAYOUT="$RES_ROOT/layout/money_dance_widget_square.xml"
+
+          test -f "$MAIN_ACTIVITY"
+          test -f "$MANIFEST"
+          test -f "$STYLES"
+          test -f "$API26_STYLES"
+          test -f "$API27_STYLES"
+          test -f "$WIDGET_LAYOUT"
+          test -f "$SQUARE_WIDGET_LAYOUT"
+
+          test -f "$NATIVE_ROOT/AppUpdaterPlugin.java"
+          test -f "$JAVA_ROOT/AppUpdaterPlugin.java"
+          for source in AppearancePlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider MoneyDanceWishWidgetProvider; do
+            test -f "$NATIVE_ROOT/${source}.java"
+            test -f "$JAVA_ROOT/${source}.java"
+            cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
+          done
+
+          EXPECTED_PGYER_SHORTCUT="${PGYER_APP_SHORTCUT:-moneydance}"
+          grep -Fq 'private static final String PGYER_APP_SHORTCUT = "__PGYER_APP_SHORTCUT__";' "$NATIVE_ROOT/AppUpdaterPlugin.java"
+          grep -Fq "private static final String PGYER_APP_SHORTCUT = \"${EXPECTED_PGYER_SHORTCUT}\";" "$JAVA_ROOT/AppUpdaterPlugin.java"
+          ! grep -Fq '__PGYER_APP_SHORTCUT__' "$JAVA_ROOT/AppUpdaterPlugin.java"
+
+          test -f "$PROVIDER_TEMPLATE"
+          test -f "$PROVIDER_XML"
+          cmp "$PROVIDER_TEMPLATE" "$PROVIDER_XML"
+          test -f "$SQUARE_PROVIDER_TEMPLATE"
+          test -f "$SQUARE_PROVIDER_XML"
+          cmp "$SQUARE_PROVIDER_TEMPLATE" "$SQUARE_PROVIDER_XML"
+          cmp "$NATIVE_ROOT/res/xml/money_dance_wish_widget_info.xml" "$RES_ROOT/xml/money_dance_wish_widget_info.xml"
+          cmp "$NATIVE_ROOT/res/layout/money_dance_wish_widget.xml" "$RES_ROOT/layout/money_dance_wish_widget.xml"
+          grep -Fq 'android:name=".MoneyDanceWishWidgetProvider"' "$MANIFEST"
+          grep -Fq 'android:updatePeriodMillis="3600000"' "$RES_ROOT/xml/money_dance_wish_widget_info.xml"
+
+          grep -Fq '@CapacitorPlugin(name = "AppUpdater")' "$JAVA_ROOT/AppUpdaterPlugin.java"
+          grep -Fq '@CapacitorPlugin(name = "WidgetBridge")' "$JAVA_ROOT/WidgetBridgePlugin.java"
+          grep -Fq 'class MoneyDanceWidgetProvider' "$JAVA_ROOT/MoneyDanceWidgetProvider.java"
+          grep -Fq 'class MoneyDanceSquareWidgetProvider' "$JAVA_ROOT/MoneyDanceSquareWidgetProvider.java"
+          grep -Fq 'class WidgetActionReceiver' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq 'class WidgetTickerService' "$JAVA_ROOT/WidgetTickerService.java"
+          grep -Fq 'android:name=".MoneyDanceWidgetProvider"' "$MANIFEST"
+          grep -Fq 'android:name=".MoneyDanceSquareWidgetProvider"' "$MANIFEST"
+          grep -Fq 'android:name=".WidgetTickerService"' "$MANIFEST"
+          grep -Fq 'android:name=".WidgetActionReceiver"' "$MANIFEST"
+          grep -Fq 'android.appwidget.action.APPWIDGET_UPDATE' "$MANIFEST"
+          grep -Fq 'android:name="android.appwidget.provider"' "$MANIFEST"
+          grep -Fq 'android:resource="@xml/money_dance_widget_info"' "$MANIFEST"
+          grep -Fq 'android:resource="@xml/money_dance_widget_square_info"' "$MANIFEST"
+          grep -Fq 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' "$MANIFEST"
+          ! grep -Fq 'android.permission.REQUEST_INSTALL_PACKAGES' "$MANIFEST"
+          grep -Fq 'android:foregroundServiceType="specialUse"' "$MANIFEST"
+          grep -Fq 'android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$MANIFEST"
+          grep -Fq '<!-- moneyDanceSystemBars -->' "$STYLES"
+          grep -Fq '<!-- moneyDanceLaunchSystemBars -->' "$STYLES"
+          grep -Fq '<item name="android:windowLightStatusBar">true</item>' "$STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#211A31</item>' "$STYLES"
+          ! grep -Fq 'android:windowLightNavigationBar' "$STYLES"
+          grep -Fq '<!-- moneyDanceApi26SystemBars -->' "$API26_STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#F5F2EA</item>' "$API26_STYLES"
+          ! grep -Fq 'android:windowLightNavigationBar' "$API26_STYLES"
+          test "$(grep -Fc '<style name="AppTheme.NoActionBar"' "$API26_STYLES")" -eq 1
+          ! grep -Fq '<style name="AppTheme.NoActionBarLaunch"' "$API26_STYLES"
+          grep -Fq '<!-- moneyDanceApi27SystemBars -->' "$API27_STYLES"
+          grep -Fq '<!-- moneyDanceApi27LaunchSystemBars -->' "$API27_STYLES"
+          grep -Fq '<item name="android:navigationBarColor">#F5F2EA</item>' "$API27_STYLES"
+          test "$(grep -Fc '<item name="android:windowLightNavigationBar">true</item>' "$API27_STYLES")" -eq 2
+          test "$(grep -Fc '<style name="AppTheme.NoActionBar"' "$API27_STYLES")" -eq 1
+          test "$(grep -Fc '<style name="AppTheme.NoActionBarLaunch"' "$API27_STYLES")" -eq 1
+          grep -Fq '"insetsHandling": "css"' apps/web/capacitor.config.json
+          grep -Fq '"style": "LIGHT"' apps/web/capacitor.config.json
+          grep -Fq 'android:initialLayout="@layout/money_dance_widget"' "$PROVIDER_XML"
+          grep -Fq 'android:minWidth="250dp"' "$PROVIDER_XML"
+          grep -Fq 'android:minHeight="50dp"' "$PROVIDER_XML"
+          grep -Fq 'android:targetCellWidth="4"' "$PROVIDER_XML"
+          grep -Fq 'android:targetCellHeight="1"' "$PROVIDER_XML"
+          grep -Fq 'android:updatePeriodMillis="1800000"' "$PROVIDER_XML"
+          grep -Fq 'android:initialLayout="@layout/money_dance_widget_square"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:minWidth="110dp"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:minHeight="110dp"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:targetCellWidth="2"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:targetCellHeight="2"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'android:updatePeriodMillis="1800000"' "$SQUARE_PROVIDER_XML"
+          grep -Fq 'R.layout.money_dance_widget_square' "$JAVA_ROOT/WidgetRenderer.java"
+          grep -Fq 'paidDurationSeconds' "$JAVA_ROOT/WidgetStateStore.java"
+          test "$(grep -Fc 'android:layout_height="44dp"' "$WIDGET_LAYOUT")" -ge 2
+          grep -Fq 'ACTION_SLACKING_START' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq 'ACTION_SLACKING_STOP' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq 'EXTRA_EXPECTED_START_AT' "$JAVA_ROOT/WidgetActionReceiver.java"
+          grep -Fq '.appendPath(Long.toString(expectedStartAt))' "$JAVA_ROOT/WidgetRenderer.java"
+          grep -Fq ': openTargetIntent(context, WidgetContract.OVERTIME_LAUNCH_TARGET, 7102)' "$JAVA_ROOT/WidgetRenderer.java"
+
+          node - "$MAIN_ACTIVITY" "$MANIFEST" <<'NODE'
+          const fs = require('fs')
+          const source = fs.readFileSync(process.argv[2], 'utf8')
+          const manifest = fs.readFileSync(process.argv[3], 'utf8')
+          const superAt = source.indexOf('super.onCreate(savedInstanceState)')
+          for (const plugin of ['AppUpdaterPlugin', 'WidgetBridgePlugin', 'AppearancePlugin']) {
+            const registerAt = source.indexOf(`registerPlugin(${plugin}.class)`)
+            if (registerAt < 0 || superAt < 0 || registerAt > superAt) {
+              console.error(`${plugin} must be registered before BridgeActivity creates the Capacitor Bridge`)
+              process.exit(1)
+            }
+          }
+          if (!/<receiver\s+[^>]*android:name="\.MoneyDanceWidgetProvider"[^>]*android:exported="false">/.test(manifest)) {
+            console.error('MoneyDanceWidgetProvider must not be exported')
+            process.exit(1)
+          }
+          if (!/<receiver\s+[^>]*android:name="\.MoneyDanceSquareWidgetProvider"[^>]*android:exported="false">/.test(manifest)) {
+            console.error('MoneyDanceSquareWidgetProvider must not be exported')
+            process.exit(1)
+          }
+          console.log('Native plugin registration order verified')
+          NODE
+          node --check apps/web/scripts/publish-pgyer.mjs
+      - name: Isolate acceptance app from production
+        shell: bash
+        run: |
+          cat >> apps/web/android/app/build.gradle <<'EOF'
+          android {
+              buildTypes {
+                  debug {
+                      applicationIdSuffix ".test"
+                  }
+              }
+          }
+          EOF
+          mkdir -p apps/web/android/app/src/debug/res/values
+          cat > apps/web/android/app/src/debug/res/values/strings.xml <<'EOF'
+          <resources><string name="app_name">Money Dance 测试版</string><string name="title_activity_main">Money Dance 测试版</string></resources>
+          EOF
+      - name: Run Android checks and build APKs
+        working-directory: apps/web/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease --no-daemon
+      - name: Prepare APK files
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.version.outputs.is_release }}" == "true" ]]; then
+            APK_SOURCE="apps/web/android/app/build/outputs/apk/release/app-release.apk"
+            APK_BASENAME="money-dance-${GITHUB_REF_NAME}"
+          else
+            APK_SOURCE="apps/web/android/app/build/outputs/apk/debug/app-debug.apk"
+            APK_BASENAME="money-dance-android"
+          fi
+          test -f "$APK_SOURCE"
+          mkdir -p artifacts
+          cp "$APK_SOURCE" "artifacts/${APK_BASENAME}.apk"
+          sha256sum "artifacts/${APK_BASENAME}.apk" > "artifacts/${APK_BASENAME}.apk.sha256"
+          echo "apk_name=${APK_BASENAME}.apk" >> "$GITHUB_OUTPUT"
+      - name: Verify debug and release APK signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -x "$APKSIGNER"
+          DEBUG_APK="apps/web/android/app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_APK="apps/web/android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$DEBUG_APK"
+          test -f "$RELEASE_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$DEBUG_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$RELEASE_APK"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: money-dance-android-apk
+          path: |
+            artifacts/*.apk
+            artifacts/*.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  preview:
+    needs: android-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      - name: Include acceptance APK in preview downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p apps/web/dist/downloads
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name money-dance-android-apk --dir acceptance-apk
+          cp acceptance-apk/money-dance-android.apk apps/web/dist/downloads/money-dance-test.apk
+          sha256sum apps/web/dist/downloads/money-dance-test.apk > apps/web/dist/downloads/money-dance-test.apk.sha256
+          printf '{"commit":"%s","run":"%s","channel":"acceptance"}\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > apps/web/dist/acceptance-build.json
+      - name: Deploy acceptance branch only
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --no-install wrangler pages deploy --project-name=money-dance --branch=acceptance
