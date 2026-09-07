@@ -1,5 +1,5 @@
 import { calculateRates, formatDuration } from '@salary-flow/core'
-import { ArrowUpRight, BriefcaseBusiness, CalendarDays, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
@@ -22,6 +22,8 @@ import { useNow } from '../lib/useNow'
 import { getWishProgress } from '../lib/wishProgress'
 import { closeActiveWorkSession, commitFlexibleOvertimeSettlement, commitFlexibleWorkCorrection, commitFlexibleWorkStart, freezeFlexibleWorkForSettlement, getAutomaticFlexibleSettlementMode, getCurrentWorkRecord, getFlexibleBaseSettlementAmount, getFlexibleEarnedAmount, getFlexibleOvertimeWindow, getFlexibleSettlementRequirement, getFlexibleWorkedSeconds, hasFlexiblePlannedEndReached, isFlexibleFullDaySettlement, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, settleFlexibleWorkRecord, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
 import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession, WishItem } from '../types'
+import { RestCountdown } from '../components/RestCountdown'
+import { getRestCountdown } from '../lib/restCountdown'
 import './Dashboard.css'
 
 const money = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -75,6 +77,7 @@ export function Dashboard() {
     isWorkday: date => isConfiguredWorkday(date, profile, holidaySettings),
   })
   const work = summarizeTodayWork(profile, workRecords, now, undefined, attendanceRecords)
+  const restCountdown = useMemo(() => getRestCountdown(profile, work, new Date(currentMinute * 60_000), attendanceRecords, workRecords, holidaySettings), [profile, work.businessDate, work.dayType, work.status, work.record, currentMinute, attendanceRecords, workRecords, holidaySettings])
   const workRates = useMemo(() => calculateRates(
     salaryProfileForBusinessDate(profile, work.businessDate, attendanceRecords, holidaySettings),
   ), [attendanceRecords, holidaySettings, profile, work.businessDate])
@@ -425,15 +428,11 @@ export function Dashboard() {
       </>}
     </div>
 
+    <div className="dashboard-countdown-overview">
+    <RestCountdown value={restCountdown} payday={paydayCountdown} now={now}/>
     <aside className="dashboard-insights" aria-label="今日概览">
       <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.dayType === 'work' ? work.status === 'ended' ? '已下班' : '计薪中' : '今日休息'}</span></div>
-      <div className="dashboard-insight-grid">
-        <Link className={`dashboard-insight-card${paydayCountdown ? '' : ' unset'}`} to="/settings" aria-label={paydayCountdown ? (paydayCountdown.daysRemaining === 0 ? '今天发工资' : `距离发工资还有 ${paydayCountdown.daysRemaining} 天`) : '发薪日未设置，前往薪资设置'}>
-          <span className="dashboard-insight-card-heading"><i><CalendarDays size={16}/></i><b>发薪日</b></span>
-          <strong>{paydayCountdown ? paydayCountdown.daysRemaining === 0 ? '今天发工资' : `还有 ${paydayCountdown.daysRemaining} 天` : '去设置'}</strong>
-          <small>{paydayCountdown ? paydayCountdown.adjusted ? `本次调整至 ${paydayCountdown.nextPayday.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })}` : `每月 ${profile.payday} 日发薪` : '发薪日未设置'}</small>
-          <ArrowUpRight className="dashboard-insight-arrow" size={15}/>
-        </Link>
+      <div className="dashboard-insight-grid dashboard-insight-grid-compact">
         <Link className="dashboard-insight-card" to="/settings">
           <span className="dashboard-insight-card-heading"><i><Clock3 size={16}/></i><b>时间单价</b></span>
           <strong>{money(workRates.hourly)}<em>/ 小时</em></strong>
@@ -454,6 +453,7 @@ export function Dashboard() {
         </Link>
       </div>
     </aside>
+    </div>
     </div>
 
     <div className="section-title dashboard-performance-title"><div><p className="eyebrow">MONTHLY SCORE</p><h2>本月战绩</h2></div><span>{now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}</span></div>
