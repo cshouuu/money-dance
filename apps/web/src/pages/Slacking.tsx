@@ -1,3 +1,5 @@
+import { TimerPlans } from '../components/TimerPlans'
+import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { History, Play, Square, Trash2, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -85,6 +87,8 @@ export function Slacking() {
   const [stopError, setStopError] = useState('')
   const [pendingRepairStart, setPendingRepairStart] = useState<string | null>(null)
   const stoppingRef = useRef(false)
+
+  useTimerPlanSync(() => { setActive(loadActiveSlacking()); setSessions(loadSlackingSessions()); setAchievementState(loadAchievementState('slacking')) })
 
   const currentPage = Math.min(page, getPageCount(sessions.length))
   const visibleSessions = getPageItems(sessions, currentPage)
@@ -425,6 +429,8 @@ export function Slacking() {
       </section>
     </div>
     </div>
+    <TimerPlans kind="slacking"/>
+
     <AchievementPanel kind="slacking" state={achievementState} activeSeconds={livePaidSeconds} saveFailed={achievementSaveFailed}/>
     <div className="list-section"><div className="section-title"><h2>摸鱼记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有摸鱼记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const paidSeconds = slackingPaidDurationSeconds(session); const visual = slackingSessionVisual(paidSeconds); const excludedSeconds = Math.max(0, session.durationSeconds - paidSeconds); return <article className="list-card slacking-record" key={session.id}><div className="item-avatar fish slacking-record-visual" role="img" aria-label={visual.label} title={visual.label}>{visual.emoji}</div><div className="item-main"><b>{formatSessionTime(session.startTime)}</b><span>至 {formatSessionTime(session.endTime)} · 计薪 {formatDuration(paidSeconds)}{excludedSeconds > 0 ? ` · 已排除 ${formatDuration(excludedSeconds)}` : ''}</span></div><div className="item-result"><small>本次摸鱼</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button slacking-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次摸鱼记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
     <SlackingTimeDialog open={timeDialogPurpose !== null} purpose={timeDialogPurpose ?? 'start'} onStart={start} onBackfill={saveBackfill} onCancel={closeTimeDialog}/>

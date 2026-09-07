@@ -1,3 +1,4 @@
+import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -56,9 +57,9 @@ export function Dashboard() {
   const [attendanceRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
   const [holidaySettings] = useState(() => loadChinaHolidaySettings())
   const [ledger, setLedger] = useState(() => loadLedger())
-  const [slackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
+  const [slackingSessions, setSlackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
-  const [activeOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
+  const [activeOvertime, setActiveOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
   const [wishes] = useState<WishItem[]>(() => loadJSON<WishItem[]>(keys.wishes, []))
   const [dialogPurpose, setDialogPurpose] = useState<'start' | 'adjust' | null>(null)
   const [pendingEndRecord, setPendingEndRecord] = useState<DailyWorkRecord | null>(() => {
@@ -67,6 +68,7 @@ export function Dashboard() {
   })
   const [settlementError, setSettlementError] = useState('')
   const settlingRef = useRef(false)
+  useTimerPlanSync(() => { setLedger(loadLedger()); setSlackingSessions(loadSlackingSessions()); setOvertimeSessions(loadOvertimeSessions()); setActiveOvertime(loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)) })
   const today = toLocalDateValue(now)
   const currentMinute = Math.floor(now.getTime() / 60_000)
   const currentRates = useMemo(() => calculateRates(

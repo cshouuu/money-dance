@@ -1,3 +1,4 @@
+import { useTimerPlanSync } from '../components/TimerPlanController'
 import { CalendarCheck2, Pencil, Plus, Settings2, Trash2, TrendingDown, TrendingUp, WalletCards } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -34,6 +35,7 @@ function initialDateForSelection(dimension: SummaryDimension, anchor: string): s
 export function Summary() {
   const [profile] = useState(() => loadProfile())
   const [ledger, setLedger] = useState<LedgerEntry[]>(() => loadLedger())
+  useTimerPlanSync(() => setLedger(loadLedger()))
   const [workRecords] = useState<DailyWorkRecord[]>(() => loadWorkRecords())
   const [attendanceRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
   const [dimension, setDimension] = useState<SummaryDimension>('month')

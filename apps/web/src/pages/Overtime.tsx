@@ -1,3 +1,5 @@
+import { TimerPlans } from '../components/TimerPlans'
+import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { BriefcaseBusiness, Coffee, Crown, Flame, History, MoonStar, Play, Square, Trash2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -98,6 +100,8 @@ export function Overtime() {
   const [pendingRepairStart, setPendingRepairStart] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const stoppingRef = useRef(false)
+
+  useTimerPlanSync(() => { setActive(loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)); setSessions(loadOvertimeSessions()); setAchievementState(loadAchievementState('overtime')) })
 
   const liveSeconds = active ? elapsedSecondsSince(active.startTime, now) : 0
   const liveMoney = active ? calculateOvertimeEarnings(active, liveSeconds, rates.second) : 0
@@ -441,6 +445,8 @@ export function Overtime() {
       <section className="timer-guide"><p className="eyebrow">HOW IT WORKS</p><h2>每次开始前，再决定怎么算。</h2><div><span><b>01</b><small>确认实际开始时间</small></span><span><b>02</b><small>选择无加班费、倍率或固定金额</small></span><span><b>03</b><small>结束后自动写入账本</small></span></div></section>
     </div>
     </div>
+
+    <TimerPlans kind="overtime"/>
 
     <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds} saveFailed={achievementSaveFailed}/>
 
