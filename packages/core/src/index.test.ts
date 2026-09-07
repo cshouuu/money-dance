@@ -75,3 +75,29 @@ describe('salary calculations', () => {
     expect(assetCostPerHour(240, new Date('2026-08-24T00:00:00Z'), new Date('2026-08-25T00:00:00Z'))).toBe(10)
   })
 })
+
+
+describe('multiple scheduled breaks', () => {
+  const period = (name: string, startTime: string, endTime: string) => ({ id: name, name, startTime, endTime })
+  const profile = { ...DEFAULT_PROFILE, workEndTime: '20:00', breakPeriods: [period('午休', '12:00', '13:00'), period('晚休', '18:00', '18:30')] }
+  it('deducts lunch and dinner both from the target and elapsed work', () => {
+    expect(calculateRates(profile).paidSecondsPerDay).toBe(9.5 * 3600)
+    expect(getWorkedPaidSeconds(profile, new Date(2026, 8, 7, 18, 15))).toBe(8 * 3600)
+    expect(getWorkedPaidSeconds(profile, new Date(2026, 8, 7, 19))).toBe(8.5 * 3600)
+  })
+  it('deducts overlapping periods once and clips out-of-shift portions', () => {
+    const overlapping = { ...profile, breakPeriods: [period('午休', '12:00', '13:00'), period('重叠', '12:30', '13:30'), period('班前', '08:30', '09:30'), period('班后', '21:00', '22:00')] }
+    expect(calculateRates(overlapping).paidSecondsPerDay).toBe(9 * 3600)
+    expect(getWorkedPaidSeconds(overlapping, new Date(2026, 8, 7, 13))).toBe(2.5 * 3600)
+  })
+  it('supports midnight breaks and breaks starting before an overnight shift', () => {
+    const night = { ...profile, workStartTime: '22:00', workEndTime: '07:00', breakPeriods: [period('夜休', '23:30', '00:30'), period('晨休', '03:00', '03:30'), period('班前', '21:30', '22:30')] }
+    expect(calculateRates(night).paidSecondsPerDay).toBe(7 * 3600)
+    expect(getWorkedPaidSeconds(night, new Date(2026, 8, 8, 4))).toBe(4 * 3600)
+  })
+  it('preserves legacy lunch and supports paid or no scheduled breaks', () => {
+    expect(calculateRates(DEFAULT_PROFILE).paidSecondsPerDay).toBe(8 * 3600)
+    expect(calculateRates({ ...profile, breakPeriods: [] }).paidSecondsPerDay).toBe(11 * 3600)
+    expect(calculateRates({ ...profile, paidBreak: true }).paidSecondsPerDay).toBe(11 * 3600)
+  })
+})

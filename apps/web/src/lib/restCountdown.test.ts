@@ -43,3 +43,15 @@ describe('rest countdowns', () => {
     expect(value.featured.target).toEqual(new Date('2026-09-11T02:00:00'))
   })
 })
+
+
+it('uses one card to move from lunch to dinner and active dinner break', () => {
+  const multi = { ...profile, workEndTime: '20:00', breakPeriods: [{ id: 'lunch', name: '午休', startTime: '12:00', endTime: '13:00' }, { id: 'dinner', name: '晚休', startTime: '18:00', endTime: '18:30' }] }
+  const value = (time: string) => getRestCountdown(multi, work, at(time), [], [], settings)
+  expect(value('11:00').nextBreak.label).toBe('离午休')
+  expect(value('13:00').nextBreak.label).toBe('离晚休')
+  expect(value('18:00').nextBreak.label).toBe('晚休中')
+  expect(value('18:00').nextBreak.target).toEqual(at('18:30'))
+  expect(value('19:00').nextBreak.target).toBeNull()
+  expect(value('19:00').featured.label).toBe('距离下班')
+})

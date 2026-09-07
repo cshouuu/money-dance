@@ -214,3 +214,17 @@ describe('normalizeLivingCostMode', () => {
     expect(saveProfile(DEFAULT_PROFILE)).toBeNull()
   })
 })
+
+
+describe('break period migration', () => {
+  it('preserves legacy lunch and persists additions and explicit removal', () => {
+    let stored = JSON.stringify({ ...DEFAULT_PROFILE, breakStartTime: '12:30', breakEndTime: '14:00' })
+    vi.stubGlobal('localStorage', { getItem: () => stored, setItem: (_key: string, value: string) => { stored = value } })
+    const migrated = loadProfile()
+    expect(migrated.breakPeriods).toEqual([{ id: 'legacy-lunch', name: '午休', startTime: '12:30', endTime: '14:00' }])
+    const saved = saveProfile({ ...migrated, breakPeriods: [...migrated.breakPeriods!, { id: 'dinner', name: '晚休', startTime: '18:00', endTime: '18:30' }] })!
+    expect(loadProfile().breakPeriods).toHaveLength(2)
+    expect(saveProfile({ ...saved, breakPeriods: [] })?.breakPeriods).toEqual([])
+    expect(loadProfile().breakPeriods).toEqual([])
+  })
+})

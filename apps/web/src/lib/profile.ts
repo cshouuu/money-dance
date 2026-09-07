@@ -1,7 +1,16 @@
-import { DEFAULT_PROFILE, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
+import { DEFAULT_PROFILE, getBreakPeriods, parseClock, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
 import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
+
+export function normalizeBreakPeriods(profile: SalaryProfile): BreakPeriod[] {
+  if (!Array.isArray(profile.breakPeriods)) return getBreakPeriods({ ...profile, breakPeriods: undefined })
+  return profile.breakPeriods.flatMap((period, index) => {
+    if (!period || typeof period !== 'object') return []
+    try { parseClock(period.startTime); parseClock(period.endTime) } catch { return [] }
+    return [{ id: `break-${index + 1}`, name: typeof period.name === 'string' && period.name.trim() ? period.name.trim().slice(0, 30) : '休息', startTime: period.startTime, endTime: period.endTime }]
+  })
+}
 
 export function normalizeLivingCostMode(value: unknown): SalaryProfile['livingCostMode'] {
   return value === 'daily-ledger' ? 'daily-ledger' : 'deduct'
@@ -205,6 +214,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
   const normalizedSalaryDeductions = normalizeSalaryDeductions(storedSalaryDeductions)
   const migratedBase: SalaryProfile = {
     ...profile,
+    breakPeriods: normalizeBreakPeriods(profile),
     payday: normalizePayday(storedPayday),
     paydayAdjustment: normalizePaydayAdjustment(storedPaydayAdjustment, hasStoredProfile ? 'none' : DEFAULT_PROFILE.paydayAdjustment),
     livingCostMode: normalizeLivingCostMode(storedLivingCostMode),
@@ -224,6 +234,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
     ? withLivingCostHistoryEvent(migratedBase, now)
     : migratedBase
   if (
+    JSON.stringify(stored.breakPeriods) !== JSON.stringify(migrated.breakPeriods) ||
     storedHistoryMode !== migrated.salaryHistoryMode || storedPayday !== migrated.payday ||
     storedPaydayAdjustment !== migrated.paydayAdjustment || storedMonthlyRateBasis !== migrated.monthlyRateBasis ||
     JSON.stringify(storedSalaryDeductions) !== JSON.stringify(migrated.salaryDeductions) ||
@@ -247,6 +258,7 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
   }
   const next = withLivingCostHistoryEvent({
     ...profile,
+    breakPeriods: normalizeBreakPeriods(profile),
     payday: normalizePayday(profile.payday),
     paydayAdjustment: normalizePaydayAdjustment(profile.paydayAdjustment, DEFAULT_PROFILE.paydayAdjustment),
     monthlyRateBasis: normalizeMonthlyRateBasis(profile.monthlyRateBasis, DEFAULT_PROFILE.monthlyRateBasis),

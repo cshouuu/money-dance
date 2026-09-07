@@ -103,3 +103,13 @@ describe('paid time intervals', () => {
     expect(completion).toEqual(new Date(2026, 7, 10, 11))
   })
 })
+
+
+it('shares both unpaid breaks with paid-time consumers without double deduction', () => {
+  const multi = { ...DEFAULT_PROFILE, workEndTime: '20:00', breakPeriods: [{ id: 'lunch', name: '午休', startTime: '12:00', endTime: '13:00' }, { id: 'dinner', name: '晚休', startTime: '18:00', endTime: '18:30' }, { id: 'overlap', name: '重叠', startTime: '18:15', endTime: '18:30' }] }
+  const slices = scheduledPaidIntervalsForDate(multi, '2026-09-07')
+  expect(slices).toHaveLength(3)
+  expect(slices.reduce((sum, slice) => sum + (slice.end.getTime() - slice.start.getTime()) / 1000, 0)).toBe(9.5 * 3600)
+  const earnings = calculatePaidTimeEarnings(multi, new Date('2026-09-07T17:30:00'), new Date('2026-09-07T19:00:00'), [], [], noHolidays)
+  expect(earnings.paidSeconds).toBe(3600)
+})

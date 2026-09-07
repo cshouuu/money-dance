@@ -25,6 +25,13 @@ export interface LivingCostHistoryEvent {
   monthlyAmount: number
 }
 
+export interface BreakPeriod {
+  id: string
+  name: string
+  startTime: string
+  endTime: string
+}
+
 export interface SalaryProfile {
   salary: number
   salaryType: SalaryType
@@ -37,6 +44,8 @@ export interface SalaryProfile {
   breakStartTime: string
   breakEndTime: string
   paidBreak: boolean
+  /** Undefined uses legacy lunch fields; an empty list means no scheduled breaks. */
+  breakPeriods?: BreakPeriod[]
   includeLivingCost: boolean
   monthlyLivingCost: number
   livingCostMode: LivingCostMode
@@ -109,20 +118,41 @@ function positionFromShiftStart(clock: number, shiftStart: number): number {
   return clock >= shiftStart ? clock - shiftStart : DAY - shiftStart + clock
 }
 
-export function getPaidSecondsPerDay(profile: SalaryProfile): number {
-  const start = parseClock(profile.workStartTime)
-  const end = parseClock(profile.workEndTime)
-  const shift = duration(start, end)
-  if (shift <= 0) return 0
-  if (profile.paidBreak) return shift
+export function getBreakPeriods(profile: SalaryProfile): BreakPeriod[] {
+  return profile.breakPeriods ?? [{ id: 'legacy-lunch', name: '午休', startTime: profile.breakStartTime, endTime: profile.breakEndTime }]
+}
 
-  const breakStartClock = parseClock(profile.breakStartTime)
-  const breakEndClock = parseClock(profile.breakEndTime)
-  const breakStart = positionFromShiftStart(breakStartClock, start)
-  const breakDuration = duration(breakStartClock, breakEndClock)
-  const breakEnd = breakStart + breakDuration
-  const overlap = Math.max(0, Math.min(shift, breakEnd) - Math.max(0, breakStart))
-  return Math.max(0, shift - overlap)
+/** Named breaks clipped to the shift, including breaks spanning midnight or shift start. */
+export function getShiftBreaks(profile: SalaryProfile): Array<BreakPeriod & { start: number; end: number }> {
+  const shiftStart = parseClock(profile.workStartTime)
+  const shift = duration(shiftStart, parseClock(profile.workEndTime))
+  return getBreakPeriods(profile).flatMap(period => {
+    const clock = parseClock(period.startTime)
+    const length = duration(clock, parseClock(period.endTime))
+    const offset = positionFromShiftStart(clock, shiftStart)
+    return [offset - DAY, offset].flatMap(position => {
+      const start = Math.max(0, position)
+      const end = Math.min(shift, position + length)
+      return end > start ? [{ ...period, start, end }] : []
+    })
+  }).sort((a, b) => a.start - b.start || a.end - b.end)
+}
+
+/** Union of unpaid breaks so overlapping periods are deducted once. */
+export function getUnpaidBreakOffsets(profile: SalaryProfile): Array<{ start: number; end: number }> {
+  if (profile.paidBreak) return []
+  const merged: Array<{ start: number; end: number }> = []
+  for (const period of getShiftBreaks(profile)) {
+    const previous = merged.at(-1)
+    if (previous && period.start <= previous.end) previous.end = Math.max(previous.end, period.end)
+    else merged.push({ start: period.start, end: period.end })
+  }
+  return merged
+}
+
+export function getPaidSecondsPerDay(profile: SalaryProfile): number {
+  const shift = duration(parseClock(profile.workStartTime), parseClock(profile.workEndTime))
+  return Math.max(0, shift - getUnpaidBreakOffsets(profile).reduce((total, period) => total + period.end - period.start, 0))
 }
 
 /** Gross monthly equivalent for every supported salary input mode. */
@@ -199,12 +229,7 @@ export function getWorkedPaidSeconds(profile: SalaryProfile, now = new Date()): 
   const elapsed = Math.min(nowPos, shiftDuration)
   if (profile.paidBreak) return elapsed
 
-  const breakStartClock = parseClock(profile.breakStartTime)
-  const breakEndClock = parseClock(profile.breakEndTime)
-  const breakStart = positionFromShiftStart(breakStartClock, shiftStartClock)
-  const breakDuration = duration(breakStartClock, breakEndClock)
-  const breakEnd = breakStart + breakDuration
-  const unpaidElapsed = Math.max(0, Math.min(elapsed, breakEnd) - Math.max(0, breakStart))
+  const unpaidElapsed = getUnpaidBreakOffsets(profile).reduce((total, period) => total + Math.max(0, Math.min(elapsed, period.end) - period.start), 0)
   return Math.max(0, Math.min(getPaidSecondsPerDay(profile), elapsed - unpaidElapsed))
 }
 

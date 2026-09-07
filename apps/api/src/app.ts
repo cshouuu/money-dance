@@ -7,6 +7,7 @@ const profileSchema = z.object({
   salary: z.number().nonnegative(),
   salaryType: z.enum(['monthly','annual','daily','hourly']),
   workStartTime: z.string(), workEndTime: z.string(), breakStartTime: z.string(), breakEndTime: z.string(),
+  breakPeriods: z.array(z.object({ id: z.string(), name: z.string(), startTime: z.string(), endTime: z.string() })).optional(),
   paidBreak: z.boolean(), monthlyWorkDays: z.number().positive(), workDaysPerWeek: z.number().min(1).max(7), currency: z.string().default('CNY')
 })
 

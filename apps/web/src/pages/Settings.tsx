@@ -1,6 +1,7 @@
 import {
   calculateMonthlySalaryDeductions,
   calculateRates,
+  getBreakPeriods,
   type AlternatingWeekType,
   type LivingCostMode,
   type MonthlyRateBasis,
@@ -91,7 +92,7 @@ export function Settings() {
       rates = calculateRates(rateProfile)
       monthlyDeductions = calculateMonthlySalaryDeductions(rateProfile)
     } catch {
-      calculationError = '有效计薪时长必须大于 0，请检查上下班时间和午休设置。'
+      calculationError = '有效计薪时长必须大于 0，请检查上下班时间和休息设置。'
     }
   }
 
@@ -202,6 +203,12 @@ export function Settings() {
       }, 0)
       return
     }
+    if (getBreakPeriods(profile).some(period => !period.name.trim() || period.startTime === period.endTime)) {
+      setSaved(false)
+      setOpenSection('work')
+      setSaveError('请填写休息名称，且休息开始与结束时间不能相同。')
+      return
+    }
     if (!draftProfile || !rates) {
       setOpenSection(calculationError ? 'work' : 'salary')
       return
@@ -264,10 +271,18 @@ export function Settings() {
     <div className="form-grid work-time-grid">
       <Input label="上班时间" required type="time" value={profile.workStartTime} onValueChange={value => set('workStartTime', value)}/>
       <Input label="下班时间" required type="time" value={profile.workEndTime} onValueChange={value => set('workEndTime', value)}/>
-      <Input label="午休开始" required type="time" value={profile.breakStartTime} onValueChange={value => set('breakStartTime', value)}/>
-      <Input label="午休结束" required type="time" value={profile.breakEndTime} onValueChange={value => set('breakEndTime', value)}/>
     </div>
-    <div className="toggle-row"><Switch checked={profile.paidBreak} onCheckedChange={checked => set('paidBreak', checked)} ariaLabel="午休计薪"/><span><b>午休计薪</b><small>{profile.defaultWorkMode === 'flexible' ? '弹性工作可以使用“暂停”排除实际休息时间；这里仍用于计算每日目标工时' : '关闭后，实时工资和摸鱼收益都会自动排除午休'}</small></span></div>
+    <div className="settings-breaks">
+      <div className="salary-deductions-header"><div><b>休息时段</b><small>可添加午休、晚休等多段休息</small></div><Button type="button" variant="secondary" size="sm" onClick={() => set('breakPeriods', [...getBreakPeriods(profile), { id: createId(), name: '休息', startTime: '18:00', endTime: '18:30' }])}><Plus size={15}/>添加休息</Button></div>
+      {getBreakPeriods(profile).map((period, index) => <div className="settings-break-row" key={period.id}>
+        <Input label={`休息名称 ${index + 1}`} required maxLength={30} value={period.name} onValueChange={value => set('breakPeriods', getBreakPeriods(profile).map((item, i) => i === index ? { ...item, name: value } : item))}/>
+        <div className="form-grid"><Input label="开始时间" required type="time" value={period.startTime} onValueChange={value => set('breakPeriods', getBreakPeriods(profile).map((item, i) => i === index ? { ...item, startTime: value } : item))}/><Input label="结束时间" required type="time" value={period.endTime} onValueChange={value => set('breakPeriods', getBreakPeriods(profile).map((item, i) => i === index ? { ...item, endTime: value } : item))}/></div>
+        <Button type="button" variant="secondary" size="sm" aria-label={`删除${period.name}`} onClick={() => set('breakPeriods', getBreakPeriods(profile).filter((_, i) => i !== index))}><Trash2 size={14}/>删除</Button>
+      </div>)}
+      {!getBreakPeriods(profile).length && <p className="work-mode-hint">未设置固定休息时段。</p>}
+      <p className="work-mode-hint">结束早于开始表示跨午夜；仅计算与工作时间重合的部分，重叠休息不重复扣除。</p>
+    </div>
+    <div className="toggle-row"><Switch checked={profile.paidBreak} onCheckedChange={checked => set('paidBreak', checked)} ariaLabel="休息计薪"/><span><b>休息计薪</b><small>{profile.defaultWorkMode === 'flexible' ? '弹性工作使用“暂停”排除实际休息；休息时段用于计算每日目标工时' : '关闭后，实时工资和摸鱼收益自动排除全部休息时段'}</small></span></div>
   </div>
 
   const deductionsSection = <div className="settings-section-content" id="salary-deductions">
@@ -338,7 +353,7 @@ export function Settings() {
         items={[
           { id: 'appearance', icon: <Palette size={18}/>, title: <><b>外观与配色</b><small>经典主题与 11 组双配色</small></>, description: appearanceSection },
           { id: 'salary', icon: <CircleDollarSign size={18}/>, title: <><b>工资与发薪</b><small>工资周期、发薪日和折算方式</small></>, description: salarySection },
-          { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>默认作息、上下班与午休时间</small></>, description: workSection },
+          { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>默认作息、上下班与多段休息</small></>, description: workSection },
           { id: 'deductions', icon: <ReceiptText size={18}/>, title: <><b>扣除与生活成本</b><small>工资扣除项和每月生活支出</small></>, description: deductionsSection },
           { id: 'history', icon: <History size={18}/>, title: <><b>历史账本</b><small>设置薪资生效的历史日期</small></>, description: historySection },
         ]}

@@ -1,4 +1,4 @@
-import { calculateRates, parseClock, type SalaryProfile } from '@salary-flow/core'
+import { calculateRates, getUnpaidBreakOffsets, parseClock, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
 import { attendanceLeavePeriod, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
@@ -23,10 +23,6 @@ function clockDuration(start: number, end: number): number {
   return end >= start ? end - start : DAY_SECONDS - start + end
 }
 
-function clockPosition(clock: number, shiftStart: number): number {
-  return clock >= shiftStart ? clock - shiftStart : DAY_SECONDS - shiftStart + clock
-}
-
 function datePlusDays(value: string, days: number): Date {
   const date = toLocalDateTime(value)
   date.setDate(date.getDate() + days)
@@ -40,42 +36,24 @@ function intervalAtOffset(shiftStart: Date, startSeconds: number, endSeconds: nu
   return end > start ? { start, end, businessDate } : null
 }
 
-/** Paid slices for one configured shift, with an unpaid break removed. */
+/** Paid slices for one configured shift, with the union of unpaid breaks removed. */
 export function scheduledPaidIntervalsForDate(profile: SalaryProfile, businessDate: string): PaidTimeInterval[] {
-  let shiftStartClock: number
-  let shiftEndClock: number
-  let breakStartClock: number
-  let breakEndClock: number
   try {
-    shiftStartClock = parseClock(profile.workStartTime)
-    shiftEndClock = parseClock(profile.workEndTime)
-    breakStartClock = parseClock(profile.breakStartTime)
-    breakEndClock = parseClock(profile.breakEndTime)
+    const shiftDuration = clockDuration(parseClock(profile.workStartTime), parseClock(profile.workEndTime))
+    const shiftStart = localDateWithTime(businessDate, profile.workStartTime)
+    const intervals: PaidTimeInterval[] = []
+    let cursor = 0
+    for (const period of getUnpaidBreakOffsets(profile)) {
+      const interval = intervalAtOffset(shiftStart, cursor, period.start, businessDate)
+      if (interval) intervals.push(interval)
+      cursor = period.end
+    }
+    const final = intervalAtOffset(shiftStart, cursor, shiftDuration, businessDate)
+    if (final) intervals.push(final)
+    return intervals
   } catch {
     return []
   }
-
-  const shiftDuration = clockDuration(shiftStartClock, shiftEndClock)
-  if (shiftDuration <= 0) return []
-  const shiftStart = localDateWithTime(businessDate, profile.workStartTime)
-  if (profile.paidBreak) {
-    const interval = intervalAtOffset(shiftStart, 0, shiftDuration, businessDate)
-    return interval ? [interval] : []
-  }
-
-  const breakStart = clockPosition(breakStartClock, shiftStartClock)
-  const breakEnd = breakStart + clockDuration(breakStartClock, breakEndClock)
-  const clippedBreakStart = Math.max(0, Math.min(shiftDuration, breakStart))
-  const clippedBreakEnd = Math.max(clippedBreakStart, Math.min(shiftDuration, breakEnd))
-  if (clippedBreakEnd <= clippedBreakStart) {
-    const interval = intervalAtOffset(shiftStart, 0, shiftDuration, businessDate)
-    return interval ? [interval] : []
-  }
-
-  return [
-    intervalAtOffset(shiftStart, 0, clippedBreakStart, businessDate),
-    intervalAtOffset(shiftStart, clippedBreakEnd, shiftDuration, businessDate),
-  ].filter((interval): interval is PaidTimeInterval => interval !== null)
 }
 
 function intervalDurationSeconds(interval: PaidTimeInterval): number {
