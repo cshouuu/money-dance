@@ -192,6 +192,7 @@ export const DateTimeField = forwardRef<HTMLInputElement, DateTimeFieldProps>(fu
   const reduce = useReducedMotion()
   const value = typeof rawValue === 'string' ? rawValue : ''
   const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const [draft, setDraft] = useState<PickerParts>(() => toParts(value, type))
 
   useEffect(() => {
@@ -241,6 +242,7 @@ export const DateTimeField = forwardRef<HTMLInputElement, DateTimeFieldProps>(fu
     <div className={classes('beui-field', rootClassName)}>
       <label id={`${id}-label`} className="beui-field-label" htmlFor={`${id}-trigger`}>{label}</label>
       <button
+        ref={triggerRef}
         id={`${id}-trigger`}
         type="button"
         className={classes('beui-input-shell', 'beui-date-time-trigger', error && 'error', disabled && 'disabled')}
@@ -296,6 +298,6 @@ export const DateTimeField = forwardRef<HTMLInputElement, DateTimeFieldProps>(fu
           <button type="button" className="beui-picker-confirm" onClick={confirm}><Check size={16}/>完成</button>
         </footer>
       </m.section>
-    </m.div>}</AnimatePresence>, document.body)}
+    </m.div>}</AnimatePresence>, triggerRef.current?.closest('dialog') ?? document.body)}
   </>
 })
