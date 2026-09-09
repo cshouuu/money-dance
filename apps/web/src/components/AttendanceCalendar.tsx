@@ -1,4 +1,4 @@
-import type { SalaryProfile } from '@salary-flow/core'
+import { isEmployedOn, workProfileForDate, type SalaryProfile } from '@salary-flow/core'
 import { CalendarCheck2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { alternatingWeekTypeForDate, attendanceStatusLabel, isHalfDayLeave, resolveAttendanceDay, type ChinaHolidaySettings } from '../lib/attendance'
 import { hasChinaHolidayYear } from '../lib/chinaHolidays'
@@ -57,6 +57,8 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
   const workedDates = new Set(workRecords.filter(record => record.sessions.length > 0 || record.mode === 'scheduled').map(record => record.date))
 
   const stateForDate = (date: string): DayState => {
+    if (!isEmployedOn(profile, date)) return { label: '未任职', tone: 'rest', explicit: false }
+    const datedProfile = workProfileForDate(profile, date)
     const record = recordByDate.get(date)
     if (record?.status === 'normal') {
       const label = record.payMode === 'multiplier' ? `正常·${record.multiplier ?? 0}倍` : record.payMode === 'fixed' ? '正常·固定' : '正常'
@@ -78,8 +80,8 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
         : { label: `${resolution.holiday.name}·休`, tone: 'holiday', explicit: false, official: true }
     }
     if (date > today) return { label: '未到', tone: 'future', explicit: false }
-    if (profile.workWeekMode === 'alternating' && day.getDay() === 6) {
-      const weekType = alternatingWeekTypeForDate(day, profile)
+    if (datedProfile.workWeekMode === 'alternating' && day.getDay() === 6) {
+      const weekType = alternatingWeekTypeForDate(day, datedProfile)
       return weekType === 'big'
         ? { label: '大周', tone: 'normal', explicit: false }
         : { label: '小周', tone: 'rest', explicit: false }

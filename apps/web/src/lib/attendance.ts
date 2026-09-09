@@ -1,4 +1,4 @@
-import type { AlternatingWeekType, SalaryProfile } from '@salary-flow/core'
+import { isEmployedOn, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
@@ -87,6 +87,8 @@ export function getOfficialHolidayPayAmount(
   dailyAmount: number,
   settings = loadChinaHolidaySettings(),
 ): number | null {
+  if (!isEmployedOn(profile, date)) return 0
+  profile = workProfileForDate(profile, date)
   const holiday = chinaHolidayForDate(date, settings)
   if (holiday?.kind !== 'holiday') return null
   return holiday.statutory && (profile.salaryType === 'monthly' || profile.salaryType === 'annual')
@@ -195,6 +197,8 @@ export function resolveAttendanceDay(
   record?: AttendanceRecord,
   settings = loadChinaHolidaySettings(),
 ): AttendanceDayResolution {
+  if (!isEmployedOn(profile, toLocalDateValue(date))) return { isWorkday: false, source: 'profile' }
+  profile = workProfileForDate(profile, toLocalDateValue(date))
   if (record) {
     return {
       isWorkday: record.status === 'normal' || isHalfDayLeave(record),
@@ -276,6 +280,7 @@ export function getMonthlyScheduledWorkDayCount(
   let workDays = 0
   for (let day = 1; day <= daysInMonth; day += 1) {
     const current = new Date(year, month, day, 12)
+    if (!isEmployedOn(profile, toLocalDateValue(current))) continue
     const record = recordsByDate.get(toLocalDateValue(current))
     if (record) {
       workDays += attendanceWorkedFraction(record)

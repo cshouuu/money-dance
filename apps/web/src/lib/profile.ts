@@ -1,14 +1,14 @@
-import { DEFAULT_PROFILE, getBreakPeriods, parseClock, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
+import { DEFAULT_PROFILE, getBreakPeriods, parseClock, workProfileForDate, workStageForDate, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
 import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 
 export function normalizeBreakPeriods(profile: SalaryProfile): BreakPeriod[] {
-  if (!Array.isArray(profile.breakPeriods)) return getBreakPeriods({ ...profile, breakPeriods: undefined })
-  return profile.breakPeriods.flatMap((period, index) => {
+  const periods = Array.isArray(profile.breakPeriods) ? profile.breakPeriods : getBreakPeriods({ ...profile, breakPeriods: undefined })
+  return periods.flatMap((period, index) => {
     if (!period || typeof period !== 'object') return []
     try { parseClock(period.startTime); parseClock(period.endTime) } catch { return [] }
-    return [{ id: `break-${index + 1}`, name: typeof period.name === 'string' && period.name.trim() ? period.name.trim().slice(0, 30) : '休息', startTime: period.startTime, endTime: period.endTime }]
+    return [{ id: typeof period.id === 'string' && period.id.trim() ? period.id : `break-${index + 1}`, name: typeof period.name === 'string' && period.name.trim() ? period.name.trim().slice(0, 30) : '休息', startTime: period.startTime, endTime: period.endTime }]
   })
 }
 
@@ -121,6 +121,9 @@ export function salaryProfileForBusinessDate(
   attendanceRecords = loadAttendanceRecords(),
   holidaySettings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(date)),
 ): SalaryProfile {
+  const stage = workStageForDate(profile, date)
+  if (stage) attendanceRecords = attendanceRecords.filter(record => record.date >= stage.startDate && (!stage.endDate || record.date <= stage.endDate))
+  profile = workProfileForDate(profile, date)
   const configuration = livingCostConfigurationForDate(profile, date)
   const datedProfile: SalaryProfile = {
     ...profile,
@@ -129,7 +132,7 @@ export function salaryProfileForBusinessDate(
     monthlyLivingCost: configuration.monthlyAmount,
   }
   if (datedProfile.monthlyRateBasis !== 'actual-calendar') return datedProfile
-  const paidDays = getMonthlyPaidDayCount(datedProfile, toLocalDateTime(date), attendanceRecords, holidaySettings)
+  const paidDays = getMonthlyPaidDayCount({ ...datedProfile, workJourney: undefined }, toLocalDateTime(date), attendanceRecords, holidaySettings)
   return paidDays > 0 ? { ...datedProfile, monthlyWorkDays: paidDays } : datedProfile
 }
 
@@ -248,6 +251,8 @@ export function loadProfile(now = new Date()): SalaryProfile {
 
 export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryProfile | null {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
+  // A stale settings tab may not overwrite a journey edited in another tab.
+  if (profileFingerprint(stored.workJourney) !== profileFingerprint(profile.workJourney)) return null
   const previousConfiguration: LivingCostConfiguration = {
     mode: (stored.includeLivingCost ?? DEFAULT_PROFILE.includeLivingCost)
       ? normalizeLivingCostMode(stored.livingCostMode)
@@ -264,7 +269,19 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
     monthlyRateBasis: normalizeMonthlyRateBasis(profile.monthlyRateBasis, DEFAULT_PROFILE.monthlyRateBasis),
     salaryDeductions: normalizeSalaryDeductions(profile.salaryDeductions),
   }, now, previousConfiguration)
+  if (next.workJourney) {
+    const { workJourney, ...snapshot } = next
+    next.workJourney = { ...workJourney, revision: workJourney.revision + 1,
+      stages: workJourney.stages.map(stage => stage.endDate === null ? { ...stage, profile: snapshot } : stage) }
+  }
   return saveJSON(keys.profile, next) ? next : null
+}
+
+/** Object key order is not a data change (normalization can reorder fields). */
+export function profileFingerprint(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, entry: unknown) => entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? Object.fromEntries(Object.entries(entry).sort(([left], [right]) => left.localeCompare(right)))
+    : entry)
 }
 
 export function recommendedMonthlyWorkDays(workDaysPerWeek: number): number {

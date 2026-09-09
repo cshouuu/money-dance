@@ -1,3 +1,4 @@
+import { WorkJourney } from './pages/WorkJourney'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { TimerPlanController } from './components/TimerPlanController'
 import { AppUpdatePrompt } from './components/AppUpdatePrompt'
@@ -13,4 +14,4 @@ import { Summary } from './pages/Summary'
 import { Overtime } from './pages/Overtime'
 import { Attendance } from './pages/Attendance'
 
-export default function App(){return <BrowserRouter><AppUpdatePrompt/><WidgetSyncController/><TimerPlanController/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/overtime" element={<Overtime/>}/><Route path="/attendance" element={<Attendance/>}/><Route path="/assets" element={<Assets/>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}
+export default function App(){return <BrowserRouter><AppUpdatePrompt/><WidgetSyncController/><TimerPlanController/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/overtime" element={<Overtime/>}/><Route path="/attendance" element={<Attendance/>}/><Route path="/assets" element={<Assets/>}/><Route path="/journey" element={<WorkJourney/>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}

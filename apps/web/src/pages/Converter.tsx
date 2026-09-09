@@ -1,3 +1,4 @@
+import { useProfile } from '../lib/useProfile'
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
 import { CheckCircle2, Clock3, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
@@ -33,7 +34,7 @@ type PendingAction = { type: 'delete' | 'purchase'; item: WishItem } | null
 export function Converter() {
   const [search] = useSearchParams()
   const now = useNow(60_000)
-  const [profile] = useState(() => loadProfile())
+  const profile = useProfile()
   const [attendanceRecords] = useState(() => loadAttendanceRecords())
   const [workRecords] = useState(() => loadWorkRecords())
   const [items, setItems] = useState<WishItem[]>(() => loadJSON(keys.wishes, []))

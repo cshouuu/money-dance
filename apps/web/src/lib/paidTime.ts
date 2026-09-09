@@ -1,4 +1,4 @@
-import { calculateRates, getUnpaidBreakOffsets, parseClock, type SalaryProfile } from '@salary-flow/core'
+import { calculateRates, isEmployedOn, workProfileForDate, workStageForDate, getUnpaidBreakOffsets, parseClock, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
 import { attendanceLeavePeriod, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
@@ -38,6 +38,8 @@ function intervalAtOffset(shiftStart: Date, startSeconds: number, endSeconds: nu
 
 /** Paid slices for one configured shift, with the union of unpaid breaks removed. */
 export function scheduledPaidIntervalsForDate(profile: SalaryProfile, businessDate: string): PaidTimeInterval[] {
+  if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
+  profile = workProfileForDate(profile, businessDate)
   try {
     const shiftDuration = clockDuration(parseClock(profile.workStartTime), parseClock(profile.workEndTime))
     const shiftStart = localDateWithTime(businessDate, profile.workStartTime)
@@ -112,6 +114,8 @@ export function actualPaidIntervalsForDate(
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(businessDate)),
 ): PaidTimeInterval[] {
+  if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
+  profile = workProfileForDate(profile, businessDate)
   const attendance = attendanceForDate(attendanceRecords, businessDate)
   const record = workRecordForDate(workRecords, businessDate)
   if (record?.mode === 'flexible') return flexiblePaidIntervals(record, rangeEnd)
@@ -144,6 +148,8 @@ export function plannedPaidIntervalsForDate(
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(businessDate)),
 ): PaidTimeInterval[] {
+  if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
+  profile = workProfileForDate(profile, businessDate)
   const attendance = attendanceForDate(attendanceRecords, businessDate)
   if (attendance?.status === 'holiday' || (attendance?.status === 'leave' && !isHalfDayLeave(attendance))) return []
   if (!(attendance?.status === 'normal' || isHalfDayLeave(attendance) || isConfiguredWorkday(toLocalDateTime(businessDate), profile, settings))) return []

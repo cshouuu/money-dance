@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>工作旅程 · 双端界面设计 / MoneyDance</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#e9e8e2;color:#252c30;font:14px Inter,"Microsoft YaHei",sans-serif}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible{outline:2px solid #526b49;outline-offset:3px}.review-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 30px;background:#fcfaf5;border-bottom:1px solid #d6d7d0}.identity{display:flex;align-items:center;gap:12px}.identity img{width:36px;border-radius:10px}.identity strong{display:block;font-size:15px}.identity small{display:block;margin-top:5px;color:#73796f;font-size:10px;letter-spacing:.05em}.tools{display:flex;gap:12px;align-items:center}.pill{background:#efeee7;border-radius:9px;padding:4px;display:flex;gap:3px}.pill button{border:0;background:transparent;border-radius:6px;padding:7px 12px;color:#697065;font-size:12px}.pill button.active{background:#fcfaf5;color:#253a29;box-shadow:0 1px 4px #00000012}.text-link{color:#526b49;text-decoration:none;font-size:12px}.context{padding:22px 30px 18px;display:flex;align-items:center;justify-content:space-between;gap:20px}.context p{margin:0;color:#657060;font-size:12px}.scenarios{display:flex;gap:7px;flex-wrap:wrap}.scenarios button{border:1px solid #cbd0c6;border-radius:20px;background:transparent;color:#657060;font-size:12px;padding:8px 14px}.scenarios button.active{background:#253a29;color:#fff;border-color:#253a29}.stage{display:grid;grid-template-columns:minmax(0,1fr) 387px;align-items:start;gap:28px;padding:0 30px 35px;max-width:1920px;margin:auto}.frame-label{display:flex;justify-content:space-between;align-items:center;font:10px ui-monospace,monospace;letter-spacing:.1em;color:#657060;margin-bottom:12px}.desktop-wrap{min-width:0}.desktop-frame{position:relative;border:1px solid #c4c9be;border-radius:12px;overflow:hidden;background:#f5f2ea;box-shadow:0 16px 38px #2336200a}.desktop-frame iframe{border:0;width:1440px;height:1110px;display:block;transform-origin:top left}.phone{border:6px solid #30382f;border-radius:34px;overflow:hidden;background:#f5f2ea;box-shadow:0 20px 35px #23362015}.phone iframe{display:block;border:0;width:100%;height:812px}.note{font-size:11px;color:#697265;margin:15px 2px;line-height:1.8}.stage.desktop{grid-template-columns:minmax(0,1fr);max-width:1600px}.stage.desktop .mobile-wrap{display:none}.stage.mobile{grid-template-columns:387px;justify-content:center}.stage.mobile .desktop-wrap{display:none}.stage.mobile .phone iframe{height:844px}.design-note{margin:0 30px 32px;border-top:1px solid #ccd0c7;padding-top:18px;color:#657060;font-size:12px;line-height:1.9}.design-note b{color:#33432f}.design-note span{margin-right:24px}@media(max-width:850px){.review-bar{padding:14px 16px;flex-wrap:wrap}.context{padding:16px;align-items:flex-start;flex-direction:column;gap:12px}.stage{padding:0 16px 24px;grid-template-columns:minmax(0,1fr)}.stage.both .desktop-wrap{display:none}.mobile-wrap{max-width:390px;width:100%;margin:auto}.stage.mobile{grid-template-columns:minmax(0,390px)}.tools{flex-wrap:wrap;gap:10px}.design-note{margin:0 16px 20px}.phone iframe{height:780px}.context p{line-height:1.6}}
+  </style>
+</head>
+<body>
+  <header class="review-bar">
+    <div class="identity"><img src="money-dance-icon.svg" alt=""><div><strong>工作旅程 <span style="font-weight:400;color:#92978b">/ 界面设计</span></strong><small>MONEYDANCE · DESIGN 01 · 交互原型 / 示例数据</small></div></div>
+    <div class="tools"><div class="pill" aria-label="预览设备"><button data-mode="both" class="active">双端对照</button><button data-mode="desktop">Web 端</button><button data-mode="mobile">移动端</button></div><a class="text-link" href="app.html" target="_blank">独立打开 ↗</a></div>
+  </header>
+  <div class="context"><div class="scenarios" aria-label="场景选择"><button data-scene="working" class="active">01 在职 · 工作旅程</button><button data-scene="rest">02 暂时休息</button><button data-scene="history">03 历史阶段</button><button data-scene="empty">04 首次使用</button><button data-scene="today-rest">05 今日 · 休息态</button></div><p>点击阶段和按钮，体验完整流程。</p></div>
+  <main id="stage" class="stage both">
+    <section class="desktop-wrap"><div class="frame-label"><span>WEB / 1440 PX</span><span>时间线与详情并排浏览</span></div><div id="desktopFrame" class="desktop-frame"><iframe id="desktop" src="app.html" title="Web 端工作旅程设计"></iframe></div><p class="note">结束工作采用居中对话框；日期确认后展示阶段总结。左侧时间线始终保留上下文。</p></section>
+    <section class="mobile-wrap"><div class="frame-label"><span>MOBILE / 375 PX</span><span>列表 → 详情 → 操作</span></div><div class="phone"><iframe id="mobile" src="app.html" title="移动端工作旅程设计"></iframe></div><p class="note">沿用现有底部导航。工作旅程从「全部」进入；表单采用底部面板，详情支持返回。</p></section>
+  </main>
+  <footer class="design-note"><span><b>设计重点</b> 每段工作都有归属，休息也有位置。</span><span>米白 × 森林绿 · 延续现有 MoneyDance 视觉</span><span>所有操作仅改变当前原型；刷新即可恢复。</span></footer>
+  <script>
+    const stage=document.querySelector('#stage'), desktop=document.querySelector('#desktop'), mobile=document.querySelector('#mobile');
+    function resize(){const frame=document.querySelector('#desktopFrame');const scale=frame.clientWidth/1440;desktop.style.transform=`scale(${scale})`;frame.style.height=`${1110*scale}px`}
+    new ResizeObserver(resize).observe(document.querySelector('#desktopFrame'));
+    document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{stage.className='stage '+b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));resize()});
+    document.querySelectorAll('[data-scene]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-scene]').forEach(x=>x.classList.toggle('active',x===b));[desktop,mobile].forEach(f=>f.contentWindow.postMessage({type:'journey-scene',scene:b.dataset.scene},location.origin))});
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+import { DEFAULT_PROFILE, calculateRates, getBreakPeriods, type SalaryProfile, type WorkStage } from '@salary-flow/core'
+import { ArrowLeft, ArrowUpRight, BriefcaseBusiness, Check, ChevronRight, Coffee, Flag, Plus, Route, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
+import { toLocalDateValue } from '../lib/form'
+import { useProfile } from '../lib/useProfile'
+import { useNow } from '../lib/useNow'
+import { commitJourney, journeyDateCount, newWorkStage, plansOutsideJourney, profileSnapshot, stageDays, stageDateImpact, stageSupplementalIncome, validateWorkStage } from '../lib/workJourney'
+import { useModalViewport } from '../components/useModalViewport'
+import { shiftSessionLocalDate } from '../lib/sessionBusinessDate'
+import { salaryProfileForBusinessDate } from '../lib/profile'
+import './WorkJourney.css'
+
+const money = (value: number) => `¥${value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+const dates = (stage: WorkStage) => `${stage.startDate.replaceAll('-', '.')} — ${stage.endDate?.replaceAll('-', '.') ?? '至今'}`
+const salaryLabels = { monthly: '月薪', annual: '年薪', daily: '日薪', hourly: '时薪' }
+type Editor = { kind: 'create' | 'history' | 'edit' | 'end'; stage?: WorkStage }
+
+export function JourneyDialog({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useModalViewport(true)
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    ref.current?.showModal()
+    return () => { previous?.focus() }
+  }, [])
+  return <dialog ref={ref} className="journey-dialog" aria-labelledby="journey-dialog-title" onCancel={event => { event.preventDefault(); close() }}>
+    <header><div><small>工作旅程</small><h2 id="journey-dialog-title">{title}</h2></div><button className="journey-icon-button" onClick={close} aria-label="关闭"><X size={20}/></button></header>
+    {children}
+  </dialog>
+}
+
+export function WorkWorthNote({ close }: { close: () => void }) {
+  return <JourneyDialog title="给下一步，留一点余地" close={close}>
+    <div className="journey-dialog-body"><div className="journey-note-icon"><Coffee size={30}/></div><p>MoneyDance 记录工作时间与收入；WorkWorth 的提议是帮助你规划一段休息需要的生活缓冲金。</p><p>累计工资不等于手头存款。规划休息时，需要由你确认可动用余额、每月支出与计划休息时长。</p><div className="journey-callout">联动尚未接入。这里不会发送你的工资、账本或工作经历。</div></div>
+    <footer><button className="journey-button primary" onClick={close}>知道了</button></footer>
+  </JourneyDialog>
+}
+
+function StageEditor({ editor, profile, close, saved }: { editor: Editor; profile: SalaryProfile; close: () => void; saved: (id: string, ended: boolean) => void }) {
+  const today = toLocalDateValue(new Date())
+  const initial = editor.stage
+  const [newId] = useState(() => crypto.randomUUID())
+  const [legacyStage] = useState<WorkStage | null>(() => !profile.workJourney && editor.kind === 'history' ? newWorkStage({ name: '我的当前工作', company: '', role: '', startDate: profile.salaryEffectiveDate, endDate: null, profile: profileSnapshot(profile) }) : null)
+  const attaching = editor.kind === 'create' && !profile.workJourney
+  const latestEnd = profile.workJourney?.stages.filter(stage => stage.endDate).map(stage => stage.endDate!).sort().at(-1)
+  const nextStart = editor.kind === 'create' && latestEnd && latestEnd >= today ? shiftSessionLocalDate(latestEnd, 1) : today
+  const [name, setName] = useState(initial?.name ?? (attaching ? '我的当前工作' : ''))
+  const [company, setCompany] = useState(initial?.company ?? '')
+  const [role, setRole] = useState(initial?.role ?? '')
+  const [startDate, setStartDate] = useState(initial?.startDate ?? (attaching ? profile.salaryEffectiveDate : nextStart))
+  const [endDate, setEndDate] = useState(initial?.endDate ?? today)
+  const [unknown, setUnknown] = useState(initial ? !initial.profile : editor.kind === 'history')
+  const [config, setConfig] = useState<SalaryProfile>(() => ({ ...(initial?.profile ?? (attaching ? profileSnapshot(profile) : {
+    ...DEFAULT_PROFILE, currency: profile.currency, includeLivingCost: profile.includeLivingCost,
+    monthlyLivingCost: profile.monthlyLivingCost, livingCostMode: profile.livingCostMode, livingCostHistory: profile.livingCostHistory,
+  })) }))
+  const [salary, setSalary] = useState(initial?.profile || attaching ? String(config.salary) : '')
+  const [cancelPlans, setCancelPlans] = useState(false)
+  const [error, setError] = useState('')
+  const [preview, setPreview] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const endOnly = editor.kind === 'end'
+  const closed = endOnly || editor.kind === 'history' || !!initial?.endDate
+  const patch = <K extends keyof SalaryProfile>(key: K, value: SalaryProfile[K]) => setConfig(previous => ({ ...previous, [key]: value }))
+  const candidate: WorkStage = initial ? { ...initial, name: name.trim(), company: company.trim(), role: role.trim(), startDate, endDate: closed ? endDate : null } : newWorkStage({ name: name.trim(), company: company.trim(), role: role.trim(), startDate, endDate: closed ? endDate : null, profile: null })
+  if (!initial) candidate.id = newId
+  candidate.profile = endOnly ? profileSnapshot(profile) : unknown && closed ? null : profileSnapshot({
+    ...config, salary: salary.trim() ? Number(salary) : Number.NaN,
+    salaryEffectiveDate: initial?.profile && initial.profile.salaryEffectiveDate === initial.startDate ? startDate : attaching || initial?.profile ? config.salaryEffectiveDate : startDate,
+    salaryHistoryMode: attaching || initial?.profile ? config.salaryHistoryMode : 'custom',
+  })
+  const stages = [...(profile.workJourney?.stages ?? (legacyStage ? [legacyStage] : [])).filter(stage => stage.id !== initial?.id), candidate]
+  const affected = plansOutsideJourney(stages)
+  const submit = async () => {
+    const validation = validateWorkStage(candidate, stages)
+    if (validation) { setError(validation); return }
+    if ((endOnly || editor.kind === 'edit') && !preview) { setPreview(true); setError(''); return }
+    setBusy(true)
+    const result = await commitJourney(profile, stages, cancelPlans)
+    setBusy(false)
+    if (result) { setError(result); return }
+    saved(candidate.id, endOnly)
+  }
+  const title = endOnly ? '为这段工作，画一个句号' : editor.kind === 'edit' ? '修改工作阶段' : editor.kind === 'history' ? '补录过去的工作' : attaching ? '建立当前工作' : '开启一段新工作'
+  return <JourneyDialog title={title} close={() => { if (!busy) close() }}>
+    <form onSubmit={event => { event.preventDefault(); void submit() }}>
+      <div className="journey-dialog-body">
+        {preview ? <div className="journey-preview">
+          <Flag size={28}/><h3>{candidate.name}</h3><p>{dates(candidate)}</p>
+          <dl><div><dt>任职日历天数</dt><dd>{journeyDateCount(startDate, closed ? endDate : today)} 天</dd></div><div><dt>原日期</dt><dd>{initial ? dates(initial) : '—'}</dd></div><div><dt>生效后的计薪范围</dt><dd>{dates(candidate)}</dd></div></dl>
+          <p>按日期归属工作，范围内自动工资会使用该阶段的薪资与排班重新计算。已有出勤、计时和手动收支记录保留；范围外日期停止自动计薪。</p>
+          {initial && <div className="journey-callout">涉及 {stageDateImpact(initial, candidate)} 个已有工作或出勤日期的归属变化。手动收支的发生日期保持原样。</div>}
+          {endOnly && <div className="journey-callout">最后任职日当天仍按原规则计薪，跨夜班保留至该班次结束。次日开始休息。</div>}
+        </div> : <>
+          {attaching && <div className="journey-callout">沿用你已有的薪资设置。请确认入职日期，日期之前的自动工资将不再属于这段工作。</div>}
+          {legacyStage && <div className="journey-callout">已有薪资设置会保留为「我的当前工作」，从 {legacyStage.startDate} 开始。补录的过去经历需在此日期之前结束；你也可以先建立当前工作，确认实际入职日期。</div>}
+          {!endOnly && <><label>阶段名称<input required maxLength={60} value={name} onChange={event => setName(event.target.value)} placeholder="例如：在山海的三年"/></label><div className="journey-form-grid"><label>公司 · 选填<input maxLength={60} value={company} onChange={event => setCompany(event.target.value)}/></label><label>岗位 · 选填<input maxLength={60} value={role} onChange={event => setRole(event.target.value)}/></label></div></>}
+          {endOnly && <p>每一段认真走过的路，都值得被记住。你的工作记录与收入会留在这里。</p>}
+          <div className="journey-form-grid">{!endOnly && <label>开始日期<input type="date" required min="1900-01-01" value={startDate} onInput={event => setStartDate(event.currentTarget.value)} onChange={event => setStartDate(event.target.value)}/></label>}{closed && <label>最后任职日 · 含当天<input type="date" required min={startDate} max={today} value={endDate} onInput={event => setEndDate(event.currentTarget.value)} onChange={event => setEndDate(event.target.value)}/></label>}</div>
+          {!endOnly && <>
+            {closed && <label className="journey-checkbox"><input type="checkbox" checked={unknown} onChange={event => setUnknown(event.target.checked)}/>暂不填写历史薪资与工时</label>}
+            {unknown && closed ? <div className="journey-callout">只保留任职经历，薪资与工时标为「待补充」，不使用当前工资推算。</div> : <>
+              <div className="journey-form-grid"><label>薪资类型<select value={config.salaryType} onChange={event => patch('salaryType', event.target.value as SalaryProfile['salaryType'])}>{Object.entries(salaryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>薪资金额 · 元<input type="number" required min="0" max="999999999" step="0.01" value={salary} onChange={event => setSalary(event.target.value)}/></label></div>
+              <div className="journey-form-grid"><label>工作方式<select value={config.defaultWorkMode} onChange={event => patch('defaultWorkMode', event.target.value as SalaryProfile['defaultWorkMode'])}><option value="scheduled">固定上下班</option><option value="flexible">弹性计时</option></select></label><label>每周工作天数<select value={config.workDaysPerWeek} onChange={event => patch('workDaysPerWeek', Number(event.target.value))}>{[1,2,3,4,5,6,7].map(day => <option key={day} value={day}>{day} 天</option>)}</select></label></div>
+              <div className="journey-form-grid"><label>上班时间<input type="time" required value={config.workStartTime} onInput={event => patch('workStartTime', event.currentTarget.value)} onChange={event => patch('workStartTime', event.target.value)}/></label><label>下班时间<input type="time" required value={config.workEndTime} onInput={event => patch('workEndTime', event.currentTarget.value)} onChange={event => patch('workEndTime', event.target.value)}/></label></div>
+              <details className="journey-advanced"><summary>休息时段与更多计薪规则</summary>
+                {getBreakPeriods(config).map((period, index) => <div className="journey-break-row" key={period.id}><label>休息 {index + 1} 开始<input type="time" required value={period.startTime} onChange={event => patch('breakPeriods', getBreakPeriods(config).map((p, i) => i === index ? { ...p, startTime: event.target.value } : p))}/></label><label>结束<input type="time" required value={period.endTime} onChange={event => patch('breakPeriods', getBreakPeriods(config).map((p, i) => i === index ? { ...p, endTime: event.target.value } : p))}/></label><button type="button" aria-label={`删除休息 ${index + 1}`} className="journey-icon-button" onClick={() => patch('breakPeriods', getBreakPeriods(config).filter((_, i) => i !== index))}><X size={16}/></button></div>)}
+                <button type="button" className="journey-text-button" onClick={() => patch('breakPeriods', [...getBreakPeriods(config), { id: crypto.randomUUID(), name: '休息', startTime: '12:00', endTime: '13:00' }])}>＋ 添加休息时段</button>
+                <label className="journey-checkbox"><input type="checkbox" checked={config.paidBreak} onChange={event => patch('paidBreak', event.target.checked)}/>休息时间带薪</label>
+                <div className="journey-form-grid"><label>月薪换算<select value={config.monthlyRateBasis} onChange={event => patch('monthlyRateBasis', event.target.value as SalaryProfile['monthlyRateBasis'])}><option value="actual-calendar">按实际月历</option><option value="average">按平均计薪天数</option></select></label><label>月计薪天数<input type="number" min="0.01" max="31" step="0.01" required value={config.monthlyWorkDays} onChange={event => patch('monthlyWorkDays', Number(event.target.value))}/></label></div>
+                <label>发薪日 · 选填<select value={config.payday ?? ''} onChange={event => patch('payday', event.target.value ? Number(event.target.value) : null)}><option value="">未设置</option>{Array.from({ length: 31 }, (_, i) => <option key={i} value={i+1}>每月 {i+1} 日</option>)}</select></label>
+                <p className="journey-muted">{attaching || initial ? '保留原有大小周、扣减项和生活费规则。' : '新工作默认固定工作周、无工资扣减项；生活费沿用个人设置。'}当前工作的完整计薪规则可在「我的」中调整。</p>
+              </details>
+            </>}
+          </>}
+        </>}
+        {affected.length > 0 && <label className="journey-checkbox"><input type="checkbox" checked={cancelPlans} onChange={event => setCancelPlans(event.target.checked)}/>取消工作日期之外的 {affected.length} 条未来预约</label>}
+        {error && <p className="journey-error" role="alert">{error}</p>}
+      </div>
+      <footer><button type="button" className="journey-button" disabled={busy} onClick={() => preview ? setPreview(false) : close()}>{preview ? '返回修改' : '取消'}</button><button type="submit" className="journey-button primary" disabled={busy}>{busy ? '正在保存…' : preview ? '确认保存' : endOnly || editor.kind === 'edit' ? '预览影响' : '保存这段工作'}</button></footer>
+    </form>
+  </JourneyDialog>
+}
+
+export function WorkJourney() {
+  const profile = useProfile()
+  const now = useNow(60_000)
+  const today = toLocalDateValue(now)
+  const stages = profile.workJourney?.stages ?? []
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [mobileDetail, setMobileDetail] = useState(false)
+  const [editor, setEditor] = useState<Editor | null>(null)
+  const [editorProfile, setEditorProfile] = useState(profile)
+  const [tab, setTab] = useState('overview')
+  const [page, setPage] = useState(0)
+  const [worth, setWorth] = useState(false)
+  const [celebrate, setCelebrate] = useState<string | null>(null)
+  const selected = stages.find(stage => stage.id === selectedId) ?? stages[0]
+  const open = stages.find(stage => stage.endDate === null)
+  const active = stages.find(stage => stage.startDate <= today && (!stage.endDate || stage.endDate >= today))
+  const rows = useMemo(() => selected ? stageDays(profile, selected, now) : [], [profile, selected, now])
+  const income = rows.reduce((sum, row) => sum + (row.amount ?? 0), 0)
+  const hours = rows.reduce((sum, row) => sum + (row.seconds ?? 0), 0) / 3600
+  const supplemental = selected ? stageSupplementalIncome(selected.id) : []
+  const known = !!selected?.profile
+  const rates = selected?.profile ? calculateRates(salaryProfileForBusinessDate(profile, selected.endDate ?? (selected.startDate > today ? selected.startDate : today))) : null
+  const openEditor = (value: Editor) => { setEditorProfile(profile); setEditor(value) }
+  const startNew = () => openEditor(open ? { kind: 'end', stage: open } : { kind: 'create' })
+  const choose = (id: string) => { setSelectedId(id); setMobileDetail(true); setTab('overview'); setPage(0) }
+  const days = stages.reduce((sum, stage) => sum + journeyDateCount(stage.startDate, stage.endDate && stage.endDate < today ? stage.endDate : today), 0)
+  return <div className={`page journey-page${mobileDetail ? ' journey-show-detail' : ''}`}>
+    <header className="journey-heading"><div><p className="journey-eyebrow">MY WORK JOURNEY</p><h1>工作旅程<span>每一段，都算数。</span></h1><p className="journey-muted">把努力留在时间里，也为下一段生活留出空间。</p></div><div className="journey-actions"><button className="journey-button" onClick={() => openEditor({ kind: 'history' })}>补录过去</button><button className="journey-button primary" onClick={startNew}><Plus size={16}/>{stages.length ? '开启新工作' : '建立当前工作'}</button></div></header>
+    <section className="journey-hero"><div><span className="journey-hero-label"><Route size={17}/>走过的每一步，都有回响</span><h2>{stages.length ? active ? '认真工作的你，正在积累自己的故事。' : '暂时停下来，也是旅程的一部分。' : '从第一段工作，开始记录你的旅程。'}</h2><p>{stages.length ? '新的开始不会覆盖过去。工作、休息，都有属于自己的位置。' : '已有的工资与计时记录，会按你确认的日期归入工作阶段。'}</p></div><div className="journey-hero-stats"><div><strong>{stages.length}<small> 段</small></strong><span>工作经历</span></div><div><strong>{days.toLocaleString()}<small> 天</small></strong><span>累计任职</span></div></div></section>
+    {!stages.length ? <section className="journey-empty"><div className="journey-note-icon"><BriefcaseBusiness size={30}/></div><h2>让这段工作，有一个自己的位置</h2><p>记录从哪天开始、做过什么，以及认真投入的时间。<br/>过去的经历也可以慢慢补齐。</p><button className="journey-button primary" onClick={() => openEditor({ kind: 'create' })}><Plus size={17}/>建立当前工作</button></section> : <div className="journey-layout">
+      <aside className="journey-timeline"><div className="journey-section-title"><h2>我的时间线</h2><span>{stages.length} 段工作</span></div>
+        {!active && <div className="journey-rest"><Coffee size={20}/><div><b>{open ? '等待新的开始' : '暂时休息'}</b><p>{open ? `${open.startDate} 开始新工作` : stages[0]?.endDate ? `休息第 ${Math.max(1, journeyDateCount(shiftSessionLocalDate(stages[0].endDate, 1), today))} 天` : '按自己的节奏向前'}</p><button className="journey-text-button" onClick={() => setWorth(true)}>给下一步留一点余地 <ArrowUpRight size={13}/></button></div></div>}
+        {stages.map((stage, index) => {
+          const older = stages[index + 1]
+          const gap = older?.endDate ? journeyDateCount(shiftSessionLocalDate(older.endDate, 1), shiftSessionLocalDate(stage.startDate, -1)) : 0
+          return <div key={stage.id}><button className={`journey-stage${selected?.id === stage.id ? ' selected' : ''}`} onClick={() => choose(stage.id)} aria-pressed={selected?.id === stage.id}><span className="journey-stage-top"><BriefcaseBusiness size={17}/><small>{stage.startDate > today ? '即将开始' : stage.endDate ? '已结束' : '当前工作'}</small></span><b>{stage.name}</b><span>{stage.company || stage.role || '属于你的一段经历'}</span><time>{dates(stage)}</time><span className="journey-stage-bottom">{journeyDateCount(stage.startDate, stage.endDate ?? today)} 天 <ChevronRight size={15}/></span></button>{gap > 0 && <div className="journey-gap"><Coffee size={14}/><span>休息了 {gap} 天</span></div>}</div>
+        })}
+        <button className="journey-add-history" onClick={() => openEditor({ kind: 'history' })}><Plus size={16}/>补上一段过去的经历</button>
+      </aside>
+      {selected && <section className="journey-detail"><button className="journey-back journey-text-button" onClick={() => setMobileDetail(false)}><ArrowLeft size={17}/>返回时间线</button><header><div><span className="journey-pill">{selected.endDate ? '已归档' : selected.startDate > today ? '即将开始' : '当前工作'}</span><h2>{selected.name}</h2><p>{[selected.company, selected.role].filter(Boolean).join(' · ') || '认真走过的日子，都值得被记住。'}</p><time>{dates(selected)}</time></div><button className="journey-text-button" onClick={() => openEditor({ kind: 'edit', stage: selected })}>修改信息</button></header>
+        <div className="journey-tabs" role="tablist" aria-label="工作详情">{[['overview', '阶段概览'], ['daily', '每日明细']].map(([value, label]) => <button role="tab" id={`journey-tab-${value}`} aria-controls="journey-panel" aria-selected={tab === value} key={value} onClick={() => { setTab(value); setPage(0) }}>{label}</button>)}</div>
+        <div id="journey-panel" role="tabpanel" aria-labelledby={`journey-tab-${tab}`}>
+        {tab === 'overview' ? <>
+          <div className="journey-metrics"><div><span>阶段工作收入</span><strong>{known ? money(income) : '待补充'}</strong><small>自动工资、调整与加班</small></div><div><span>已记录工作时间</span><strong>{known ? `${hours.toLocaleString('zh-CN', { maximumFractionDigits: 1 })} h` : '待补充'}</strong><small>按排班或实际计时</small></div></div>
+          <div className="journey-config"><div className="journey-section-title"><h3>薪资与时间快照</h3><span>{selected.endDate ? '保留这段工作的规则' : '与当前薪资设置同步'}</span></div>{selected.profile ? <dl><div><dt>{salaryLabels[selected.profile.salaryType]}</dt><dd>{money(selected.profile.salary)}</dd></div><div><dt>标准日薪</dt><dd>{money(rates?.daily ?? 0)}</dd></div><div><dt>工作方式</dt><dd>{selected.profile.defaultWorkMode === 'scheduled' ? '固定上下班' : '弹性计时'}</dd></div><div><dt>工作时间</dt><dd>{selected.profile.workStartTime}–{selected.profile.workEndTime}</dd></div><div><dt>工作安排</dt><dd>{selected.profile.workWeekMode === 'alternating' ? '大小周' : `每周 ${selected.profile.workDaysPerWeek} 天`}</dd></div><div><dt>休息时段</dt><dd>{getBreakPeriods(selected.profile).map(period => `${period.startTime}–${period.endTime}`).join('、') || '无'}{selected.profile.paidBreak ? ' · 带薪' : ''}</dd></div></dl> : <p className="journey-muted">历史薪资和工时还没有填写。你可以随时补齐，不会用现在的工资倒推。</p>}</div>
+          {!!supplemental.length && <div className="journey-config"><h3>关联补发与奖金 · {money(supplemental.reduce((sum, entry) => sum + entry.amount, 0))}</h3>{supplemental.map(entry => <p className="journey-muted" key={entry.id}>{entry.localDate ?? toLocalDateValue(new Date(entry.occurredAt))} · {entry.source} · {money(entry.amount)}</p>)}<p className="journey-muted">按实际到账日期保留在账本，单独展示，不混入上述自动工作收入。</p></div>}
+          <div className="journey-reflection"><Flag size={21}/><div><h3>{selected.endDate ? '这一段努力，已经成为你的底气。' : '每一个认真度过的工作日，都算数。'}</h3><p>{selected.endDate ? '工作结束了，经历和记录会一直留在这里。' : '偶尔休息一下，也别忘了肯定自己的付出。'}</p></div></div>
+          <div className="journey-detail-footer"><Link to="/summary">查看完整账本 <ArrowUpRight size={14}/></Link>{!selected.endDate && <button className="journey-text-button" onClick={() => openEditor({ kind: 'end', stage: selected })}>结束这段工作</button>}</div>
+        </> : <><p className="journey-muted journey-table-note">每日工资沿用计薪规则；工时来自排班或已保存的计时。补录未知历史不会生成估算值。</p><div className="journey-table"><table><thead><tr><th>日期</th><th>出勤</th><th>工时</th><th>工作收入</th></tr></thead><tbody>{rows.slice(page * 10, page * 10 + 10).map(row => <tr key={row.date}><td>{row.date}<small className="journey-day-times">{row.times}</small></td><td>{row.label}</td><td>{row.seconds === null ? '待补充' : `${(row.seconds / 3600).toFixed(1)} h`}</td><td>{row.amount === null ? '待补充' : money(row.amount)}</td></tr>)}</tbody></table>{!rows.length && <p className="journey-muted">工作尚未开始，明细将在开始后出现。</p>}</div><div className="journey-pagination"><button className="journey-button" disabled={page === 0} onClick={() => setPage(page - 1)}>上一页</button><span>{page + 1} / {Math.max(1, Math.ceil(rows.length / 10))}</span><button className="journey-button" disabled={(page+1)*10 >= rows.length} onClick={() => setPage(page + 1)}>下一页</button></div></>}
+        </div>
+      </section>}
+    </div>}
+    {editor && <StageEditor editor={editor} profile={editorProfile} close={() => setEditor(null)} saved={(id, ended) => { setEditor(null); setSelectedId(id); setPage(0); if (ended) setCelebrate(id) }}/>}
+    {celebrate && <JourneyDialog title="这一程，辛苦了。" close={() => setCelebrate(null)}><div className="journey-dialog-body journey-celebration"><div className="journey-note-icon"><Check size={32}/></div><h3>{stages.find(stage => stage.id === celebrate)?.name}</h3><p>所有认真走过的日子，都已经成为你的故事。<br/>工作记录已归档，你可以按自己的节奏安排下一步。</p></div><footer><button className="journey-button" onClick={() => setCelebrate(null)}>看看阶段总结</button><button className="journey-button primary" onClick={() => { setCelebrate(null); startNew() }}>开启新工作</button></footer></JourneyDialog>}
+    {worth && <WorkWorthNote close={() => setWorth(false)}/>}
+  </div>
+}

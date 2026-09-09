@@ -1,3 +1,4 @@
+import { useProfile } from '../lib/useProfile'
 import { CalendarClock, CalendarDays, CircleOff, Coffee, Landmark } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -26,7 +27,7 @@ export function Attendance() {
   const searchValue = searchParams.toString()
   const requestedDateValue = searchParams.get('date')
   const requestedDate = validRequestedDate(requestedDateValue)
-  const [profile] = useState(() => loadProfile())
+  const profile = useProfile()
   const [workRecords] = useState(() => loadWorkRecords())
   const [records, setRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
   const [holidaySettings, setHolidaySettings] = useState(() => loadChinaHolidaySettings())

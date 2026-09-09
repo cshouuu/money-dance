@@ -33,6 +33,8 @@ export interface BreakPeriod {
 }
 
 export interface SalaryProfile {
+  /** Opt-in work history; absent preserves the legacy single-job behavior. */
+  workJourney?: WorkJourney
   salary: number
   salaryType: SalaryType
   /** Calendar day of month used for the payday countdown. */
@@ -63,6 +65,42 @@ export interface SalaryProfile {
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
   defaultWorkMode: WorkMode
+}
+
+export interface WorkStage {
+  id: string
+  name: string
+  company: string
+  role: string
+  startDate: string
+  /** Inclusive business date, including the final overnight shift. */
+  endDate: string | null
+  /** Unknown historical salary must never be inferred from the current job. */
+  profile: Omit<SalaryProfile, 'workJourney'> | null
+  createdAt: string
+}
+
+export interface WorkJourney {
+  version: 1
+  revision: number
+  stages: WorkStage[]
+}
+
+export function workStageForDate(profile: SalaryProfile, date: string): WorkStage | undefined {
+  return profile.workJourney?.stages.find(stage => stage.startDate <= date && (!stage.endDate || date <= stage.endDate))
+}
+
+export function isEmployedOn(profile: SalaryProfile, date: string): boolean {
+  return !profile.workJourney || !!workStageForDate(profile, date)
+}
+
+/** Select schedules as well as salaries. Keep the timeline for downstream date guards. */
+export function workProfileForDate(profile: SalaryProfile, date: string): SalaryProfile {
+  if (!profile.workJourney) return profile
+  const stage = workStageForDate(profile, date)
+  if (!stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false }
+  // The open stage uses the current draft so the salary-settings preview stays live.
+  return stage.endDate === null ? profile : { ...stage.profile, workJourney: profile.workJourney }
 }
 
 export interface SalaryRates {

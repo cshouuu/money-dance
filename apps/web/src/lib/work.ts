@@ -1,4 +1,4 @@
-import { calculateRates, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
+import { calculateRates, isEmployedOn, workProfileForDate, workStageForDate, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSettlementMode, WorkSession } from '../types'
 import { attendanceLeavePeriod, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
@@ -119,6 +119,14 @@ export function getWorkRecord(records: DailyWorkRecord[], date: string): DailyWo
  */
 export function getScheduledBusinessDate(profile: SalaryProfile, now = new Date()): string {
   const today = toLocalDateValue(now)
+  if (profile.workJourney) {
+    const previous = toLocalDateValue(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12))
+    const before = workProfileForDate(profile, previous)
+    const clock = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    if (isEmployedOn(profile, previous) && parseClock(before.workEndTime) < parseClock(before.workStartTime) && clock < parseClock(before.workEndTime)) return previous
+    if (workStageForDate(profile, previous)?.id !== workStageForDate(profile, today)?.id) return today
+    profile = workProfileForDate(profile, today)
+  }
   let startClock: number
   let endClock: number
   try {
@@ -277,8 +285,9 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const currentRecord = getCurrentWorkRecord(records, now)
   const record = currentRecord?.mode === 'flexible' ? currentRecord
     : getWorkRecord(records, getScheduledBusinessDate(profile, now)) ?? currentRecord
-  const mode = record?.mode ?? profile.defaultWorkMode
+  const mode = record?.mode ?? workProfileForDate(profile, getScheduledBusinessDate(profile, now)).defaultWorkMode
   const businessDate = record?.date ?? (mode === 'scheduled' ? getScheduledBusinessDate(profile, now) : today)
+  if (!isEmployedOn(profile, businessDate)) return { mode, status: 'ready', dayType: 'rest', workedSeconds: 0, earnedAmount: 0, businessDate }
   const attendance = attendanceRecords.find(item => item.date === businessDate)
   const holidaySettings = loadChinaHolidaySettings(now)
   const datedProfile = salaryProfileForBusinessDate(profile, businessDate, attendanceRecords, holidaySettings)
@@ -330,12 +339,14 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     }
   }
 
-  const automaticScheduledSeconds = getWorkedPaidSeconds(profile, now)
+  const automaticScheduledSeconds = profile.workJourney
+    ? getScheduledWorkedSeconds(datedProfile, { date: businessDate, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now)
+    : getWorkedPaidSeconds(datedProfile, now)
   const halfDayTarget = rates.paidSecondsPerDay * 0.5
   const workedSeconds = mode === 'flexible'
     ? record ? getFlexibleWorkedSeconds(record, now) : 0
     : record?.sessions.length
-      ? getScheduledWorkedSeconds(profile, record, now, attendanceRecords)
+      ? getScheduledWorkedSeconds(datedProfile, record, now, attendanceRecords)
     : isHalfDayLeave(attendance)
       ? attendanceLeavePeriod(attendance) === 'morning'
         ? Math.max(0, Math.min(halfDayTarget, automaticScheduledSeconds - halfDayTarget))

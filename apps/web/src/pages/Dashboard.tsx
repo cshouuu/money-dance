@@ -1,3 +1,6 @@
+import { useProfile } from '../lib/useProfile'
+import { isEmployedOn, type SalaryProfile } from '@salary-flow/core'
+import { JourneyRestDashboard } from '../components/JourneyRestDashboard'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
 import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
@@ -48,9 +51,17 @@ const statusLabels = {
 } as const
 
 export function Dashboard() {
+  const profile = useProfile()
+  const now = useNow(1000)
+  const work = summarizeTodayWork(profile, loadWorkRecords(), now)
+  return !isEmployedOn(profile, work.businessDate)
+    ? <JourneyRestDashboard profile={profile} now={now}/>
+    : <WorkingDashboard profile={profile}/>
+}
+
+function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const navigate = useNavigate()
   const now = useNow(1000)
-  const [profile] = useState(() => loadProfile())
   const [workRecords, setWorkRecords] = useState<DailyWorkRecord[]>(() => loadWorkRecords())
   const workRecordsRef = useRef(workRecords)
   const settledActionRef = useRef<HTMLButtonElement>(null)

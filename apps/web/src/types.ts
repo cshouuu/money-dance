@@ -117,6 +117,8 @@ export type LedgerDirection = 'income' | 'expense'
 export type LedgerKind = 'purchase' | 'accident' | 'manual' | 'salary_override' | 'overtime'
 
 export interface LedgerEntry {
+  /** Optional job attribution for late pay/bonuses; never changes arrival date. */
+  workStageId?: string
   id: string
   kind: LedgerKind
   direction: LedgerDirection

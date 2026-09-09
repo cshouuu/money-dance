@@ -12,6 +12,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Settings2,
+  Route,
 } from 'lucide-react'
 import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
@@ -35,12 +36,13 @@ const items = [
   ['/overtime', BriefcaseBusiness, '加班', true],
   ['/attendance', CalendarCheck2, '薪苦日历', false],
   ['/assets', Boxes, '物品', false],
+  ['/journey', Route, '工作旅程', false],
   ['/settings', Settings2, '我的', true],
 ] as const
 
 const overviewItems = items.slice(0, 4)
-const workItems = items.slice(4, 8)
-const settingsItem = items[8]
+const workItems = items.slice(4, 9)
+const settingsItem = items[9]
 const compactItems = items.filter(([, , , compact]) => compact)
 const drawerItems = items.filter(([, , , compact]) => !compact)
 

@@ -1,3 +1,5 @@
+import { isEmployedOn } from '@salary-flow/core'
+import { useProfile } from '../lib/useProfile'
 import { CalendarCheck2, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -26,6 +28,7 @@ function formatDate(value: string): string {
 }
 
 export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel }: AttendanceDialogProps) {
+  const profile = useProfile()
   const [status, setStatus] = useState<AttendanceSelection>('automatic')
   const [leaveType, setLeaveType] = useState<LeaveType>('personal')
   const [leavePeriod, setLeavePeriod] = useState<AttendanceLeavePeriod>('full-day')
@@ -82,6 +85,7 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (status !== 'automatic' && !isEmployedOn(profile, date)) { setSaveError('该日期不在任职范围内。请先在「工作旅程」补录或调整工作日期，再设置出勤。'); return }
     if (!event.currentTarget.reportValidity()) return
     if (status === 'automatic') {
       await persist(onReset)

@@ -1,3 +1,5 @@
+import { isEmployedOn } from '@salary-flow/core'
+import { useProfile } from '../lib/useProfile'
 import { TimerPlans } from '../components/TimerPlans'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
@@ -72,7 +74,7 @@ function overtimeSessionVisualLevel(durationSeconds: number): number {
 
 export function Overtime() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [profile] = useState(() => loadProfile())
+  const profile = useProfile()
   const now = useNow(1000)
   const currentDate = toLocalDateValue(now)
   const [attendanceRecords] = useState(() => loadAttendanceRecords())
@@ -152,6 +154,7 @@ export function Overtime() {
       option.startTimezoneOffsetMinutes,
     )
     if (!businessDate) return '请选择有效的实际开始时间。'
+    if (!isEmployedOn(loadProfile(), businessDate.startLocalDate) || !isEmployedOn(loadProfile(), toLocalDateValue(new Date()))) return '当前处于休息阶段，请先到「工作旅程」开启新工作。历史记录可以通过补记填写。'
     const next: ActiveOvertime = { ...option, ...businessDate }
     if (!saveJSON(keys.activeOvertime, next)) return '保存失败，请检查浏览器存储空间后重试。'
     setActive(next)
@@ -165,6 +168,7 @@ export function Overtime() {
     if (!Number.isFinite(endAt)) return '请选择有效的结束时间。'
     if (endAt > new Date(nowTime).getTime()) return '补记的结束时间不能晚于现在。'
     const storedSessions = loadOvertimeSessions()
+    if (!storedSessions.some(session => session.id === input.id) && !isEmployedOn(loadProfile(), toLocalDateValue(new Date(input.startTime)))) return '该日期没有任职记录，请先在「工作旅程」补录对应工作。'
     const storedActive = loadJSON<ActiveOvertime | null>(keys.activeOvertime, null)
     const otherSessions = storedSessions.filter(session => session.id !== input.id)
     if (hasOverlappingOvertime(otherSessions, input.startTime, input.endTime)) return '这段时间与已有加班记录重叠，请调整后再保存。'
@@ -425,6 +429,7 @@ export function Overtime() {
   }, [achievementState, pendingDelete, sessions])
 
   return <section className="page overtime-page">
+    {!isEmployedOn(profile, currentDate) && <p className="timer-save-error">当前处于休息阶段，新计时已暂停。历史记录仍可查看与补记。<a href="/journey">前往工作旅程开启新工作 →</a></p>}
     <header className="page-header"><div><p className="eyebrow">OVERTIME TIMER</p><h1>加班，也得算得明白。</h1><p>有钱就算钱，没钱也把时间记下来。刷新、锁屏或切换页面都不会丢失计时。</p></div></header>
 
     <div className="timer-workspace">
