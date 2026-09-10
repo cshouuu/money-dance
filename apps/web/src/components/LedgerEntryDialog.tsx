@@ -8,6 +8,7 @@ import { Input, Tabs, TabsTrigger } from '../ui/BeuiControls'
 import './LedgerEntryDialog.css'
 import { useModalViewport } from './useModalViewport'
 import { useProfile } from '../lib/useProfile'
+import { journeyStageLabel } from '../lib/workJourney'
 import { SelectField } from '../ui/BeuiControls'
 
 export interface LedgerEntryDraft {
@@ -69,7 +70,7 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
       <fieldset className="ledger-direction-field"><legend>收支类型</legend><Tabs className="direction-switch" value={direction} onValueChange={value=>setDirection(value as LedgerDirection)}><TabsTrigger value="expense" tone="expense"><ArrowUpRight size={15}/>支出</TabsTrigger><TabsTrigger value="income" tone="income"><ArrowDownLeft size={15}/>收入</TabsTrigger></Tabs></fieldset>
       <div className="ledger-dialog-fields"><Input label="明细名称" required maxLength={50} value={source} onValueChange={setSource} placeholder="例如：午餐、兼职收入"/><Input label="金额" required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={amount} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value=>setAmount(normalizeDecimalInput(value))} placeholder="0.00"/><Input label="发生日期" required type="date" max={toLocalDateValue()} value={date} disabled={salaryDateLocked} onValueChange={setDate}/></div>
       {salaryDateLocked && <p className="ledger-dialog-note">工资调整会继续对应原工资，所属日期不可修改；保存后以手工金额为准。</p>}
-      {!salaryDateLocked && direction === 'income' && !!profile.workJourney?.stages.length && <><SelectField label="关联工作 · 选填" value={workStageId} onValueChange={setWorkStageId}><option value="">不关联工作</option>{profile.workJourney.stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}{stage.endDate ? ' · 已结束' : ''}</option>)}</SelectField><p className="ledger-dialog-note">可记录未计入账本的补发、奖金等收入，按实际到账日期入账。已自动计算的工资无需重复添加。</p></>}
+      {!salaryDateLocked && direction === 'income' && !!profile.workJourney?.stages.length && <><SelectField label="关联工作 · 选填" value={workStageId} onValueChange={setWorkStageId}><option value="">不关联工作</option>{profile.workJourney.stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}{` · ${journeyStageLabel(stage)}`}</option>)}</SelectField><p className="ledger-dialog-note">可记录未计入账本的补发、奖金等收入，按实际到账日期入账。已自动计算的工资无需重复添加。</p></>}
       <div className="ledger-dialog-actions"><button type="button" className="dialog-cancel" onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm">{entry ? '保存调整' : '添加明细'}</button></div>
     </form>
   </div>, document.body)

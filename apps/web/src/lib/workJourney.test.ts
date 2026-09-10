@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROFILE, calculateRates, isEmployedOn, workProfileForDate, type SalaryProfile, type WorkStage } from '@salary-flow/core'
-import { commitJourney, journeyDateCount, profileSnapshot, stageDays, stageSupplementalIncome, validateWorkStage } from './workJourney'
-import { loadProfile, salaryProfileForBusinessDate, saveProfile } from './profile'
+import { commitJourney, journeyDateCount, journeyElapsedDays, journeyStageLabel, profileSnapshot, stageDays, stageSupplementalIncome, validateWorkStage } from './workJourney'
+import { loadProfile, salaryProfileForBusinessDate, saveProfile, withSettingsStage } from './profile'
 import { keys, loadJSON } from './storage'
 import { saveChinaHolidaySettings } from './attendance'
 import { getSummaryRange, summarizeLedger } from './ledger'
@@ -155,5 +155,84 @@ describe('journey persistence and scheduled timers', () => {
     expect(reconcileTimerPlans(now).error).toBeNull()
     expect(loadTimerPlans()[0].status).toBe('cancelled')
     expect(loadJSON(keys.overtimeSessions, [])).toEqual([])
+  })
+})
+
+
+describe('planned work endings', () => {
+  it('accepts future end dates while rejecting reversed or overlapping dates', () => {
+    const ending = stage('current', '2026-09-01', '2026-09-20')
+    expect(validateWorkStage(ending, [])).toBeNull()
+    expect(validateWorkStage(stage('invalid', '2026-09-21', '2026-09-20'), [])).toContain('不能早于')
+    expect(validateWorkStage(ending, [stage('next', '2026-09-20', null)])).toContain('重叠')
+    expect(validateWorkStage(ending, [stage('next', '2026-09-21', null)])).toBeNull()
+    expect(validateWorkStage({ ...ending, profile: null }, [])).toContain('薪资')
+  })
+
+  it('shows planned endings without counting future days as elapsed tenure', () => {
+    const ending = stage('current', '2026-09-01', '2026-09-20')
+    expect(journeyStageLabel(ending, '2026-09-09')).toBe('将于 2026.09.20 结束')
+    expect(journeyStageLabel(ending, '2026-09-20')).toBe('今日最后任职')
+    expect(journeyStageLabel(ending, '2026-09-21')).toBe('已结束')
+    expect(journeyElapsedDays(ending, '2026-09-09')).toBe(9)
+    expect(journeyElapsedDays(ending, '2026-09-21')).toBe(20)
+    expect(journeyElapsedDays(stage('future', '2026-09-21', '2026-10-01'), '2026-09-09')).toBe(0)
+  })
+
+  it('keeps normal pay through the final day and enters rest on the next day', () => {
+    const profile = withStages(stage('current', '2026-09-01', '2026-09-20'))
+    expect(summary(profile).income).toBe(9 * 80)
+    const finalDay = new Date(2026, 8, 20, 23, 59, 59)
+    const nextDay = new Date(2026, 8, 21, 0, 0, 0)
+    const before = summarizeTodayWork(profile, [], finalDay)
+    const after = summarizeTodayWork(profile, [], nextDay)
+    expect(isEmployedOn(profile, before.businessDate)).toBe(true)
+    expect(before.earnedAmount).toBe(80)
+    expect(isEmployedOn(profile, after.businessDate)).toBe(false)
+    expect(after).toMatchObject({ dayType: 'rest', earnedAmount: 0 })
+    expect(actualPaidIntervalsForDate(profile, '2026-09-21', nextDay)).toEqual([])
+  })
+
+  it('carries a planned final overnight shift exactly to its scheduled end', () => {
+    const ending = stage('night', '2026-09-20', '2026-09-20')
+    ending.profile = { ...ending.profile!, workStartTime: '22:00', workEndTime: '06:00', breakPeriods: [] }
+    const profile = withStages(ending)
+    const before = summarizeTodayWork(profile, [], new Date(2026, 8, 21, 5, 59, 59))
+    const after = summarizeTodayWork(profile, [], new Date(2026, 8, 21, 6, 0, 0))
+    expect(before.businessDate).toBe('2026-09-20')
+    expect(isEmployedOn(profile, before.businessDate)).toBe(true)
+    expect(after.businessDate).toBe('2026-09-21')
+    expect(isEmployedOn(profile, after.businessDate)).toBe(false)
+    const { start, end } = getSummaryRange('month', '2026-09')
+    expect(summarizeLedger(profile, [], start, end, new Date(2026, 8, 21, 6), [], []).income).toBe(80)
+  })
+
+  it('edits the active planned-ending salary without overwriting the next job', async () => {
+    const current = stage('current', '2026-09-01', '2026-09-20', 80)
+    const next = stage('next', '2026-09-22', null, 160)
+    expect(await commitJourney(loadProfile(), [next, current])).toBeNull()
+    expect(loadProfile().salary).toBe(80)
+    const draft = { ...loadProfile(), salary: 120 }
+    expect(calculateRates(salaryProfileForBusinessDate(withSettingsStage(draft), '2026-09-09')).daily).toBe(120)
+    expect(saveProfile(draft)).not.toBeNull()
+    const saved = loadProfile()
+    expect(saved.workJourney?.stages.find(s => s.id === 'current')?.profile?.salary).toBe(120)
+    expect(workProfileForDate(saved, '2026-09-22').salary).toBe(160)
+    // A profile already held by the homepage must also switch to the next job's rules.
+    expect(summarizeTodayWork(saved, [], new Date(2026, 8, 22, 19)).earnedAmount).toBe(160)
+    vi.setSystemTime(new Date(2026, 8, 22, 19))
+    expect(loadProfile().salary).toBe(160)
+    expect(saveProfile({ ...loadProfile(), salary: 200 })).not.toBeNull()
+    expect(workProfileForDate(loadProfile(), '2026-09-20').salary).toBe(120)
+  })
+
+  it('persists an extended end date and retains reservations within the new range', async () => {
+    const current = stage('current', '2026-09-01', '2026-09-20')
+    expect(await commitJourney(loadProfile(), [current])).toBeNull()
+    const plan: TimerPlan = { id: 'within-end', kind: 'overtime', startTime: new Date(2026, 8, 18, 19).toISOString(), status: 'scheduled', payMode: 'unpaid' }
+    data.set(TIMER_PLANS_KEY, JSON.stringify([plan]))
+    expect(await commitJourney(loadProfile(), [{ ...current, endDate: '2026-09-25' }])).toBeNull()
+    expect(loadProfile().workJourney?.stages[0].endDate).toBe('2026-09-25')
+    expect(loadTimerPlans()[0].status).toBe('scheduled')
   })
 })

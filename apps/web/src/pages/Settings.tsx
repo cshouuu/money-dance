@@ -23,7 +23,7 @@ import { Button, Checkbox, ChoiceCard, ChoiceGroup, Input, SelectField, Switch }
 import { alternatingWeekTypeForDate, getWeekStartDateValue } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
-import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile } from '../lib/profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile, settingsWorkStage, withSettingsStage } from '../lib/profile'
 import './Settings.css'
 
 function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
@@ -88,7 +88,7 @@ export function Settings() {
   let calculationError = ''
   if (draftProfile) {
     try {
-      rateProfile = salaryProfileForBusinessDate(draftProfile, toLocalDateValue())
+      rateProfile = salaryProfileForBusinessDate(withSettingsStage(draftProfile), toLocalDateValue())
       rates = calculateRates(rateProfile)
       monthlyDeductions = calculateMonthlySalaryDeductions(rateProfile)
     } catch {
@@ -233,7 +233,7 @@ export function Settings() {
   const currentWeekType = alternatingWeekTypeForDate(new Date(), profile)
 
   const salarySection = <div className="settings-section-content" id="salary-profile">
-    <p className="work-mode-hint">{profile.workJourney?.stages.some(stage => stage.endDate === null) ? '正在调整当前工作的薪资；已结束的工作保留原有配置。' : profile.workJourney ? '当前没有在职工作。要恢复计薪，请先开启新工作。' : '换工作或暂时休息时，可以把每段经历分别保存。'} <a href="/journey">前往工作旅程 →</a></p>
+    <p className="work-mode-hint">{settingsWorkStage(profile) ? '正在调整当前或即将开始工作的薪资；已结束的工作保留原有配置。' : profile.workJourney ? '当前没有在职工作。要恢复计薪，请先开启新工作。' : '换工作或暂时休息时，可以把每段经历分别保存。'} <a href="/journey">前往工作旅程 →</a></p>
     <div className="form-grid">
       <Input label="工资金额" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setSalaryInput(normalizeDecimalInput(value)) }}/>
       <SelectField label="工资周期" required value={profile.salaryType} onValueChange={value => set('salaryType', value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></SelectField>

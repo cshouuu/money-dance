@@ -3,6 +3,31 @@ import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, l
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 
+/** Settings edit the active job, or the nearest upcoming job during a gap. */
+export function settingsWorkStage(profile: SalaryProfile, date = toLocalDateValue()) {
+  const active = workStageForDate(profile, date)
+  return (active?.profile ? active : undefined) ?? profile.workJourney?.stages
+    .filter(stage => stage.startDate > date && stage.profile)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+}
+
+function settingsProfile(profile: SalaryProfile, date: string): SalaryProfile {
+  const stage = settingsWorkStage(profile, date)
+  if (!stage?.profile) return profile
+  return { ...profile, ...stage.profile, workJourney: profile.workJourney,
+    includeLivingCost: profile.includeLivingCost, monthlyLivingCost: profile.monthlyLivingCost,
+    livingCostMode: profile.livingCostMode, livingCostHistory: profile.livingCostHistory }
+}
+
+/** Apply a settings draft to its stage without changing the persisted journey revision. */
+export function withSettingsStage(profile: SalaryProfile, date = toLocalDateValue()): SalaryProfile {
+  if (!profile.workJourney) return profile
+  const stage = settingsWorkStage(profile, date)
+  const { workJourney, ...snapshot } = profile
+  return { ...profile, workJourney: { ...workJourney,
+    stages: workJourney.stages.map(item => item.id === stage?.id ? { ...item, profile: snapshot } : item) } }
+}
+
 export function normalizeBreakPeriods(profile: SalaryProfile): BreakPeriod[] {
   const periods = Array.isArray(profile.breakPeriods) ? profile.breakPeriods : getBreakPeriods({ ...profile, breakPeriods: undefined })
   return periods.flatMap((period, index) => {
@@ -246,7 +271,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
     !stored.salaryEffectiveDate || !stored.defaultWorkMode || !stored.workWeekMode ||
     !stored.alternatingAnchorDate || !stored.alternatingAnchorType
   ) saveJSON(keys.profile, migrated)
-  return migrated
+  return settingsProfile(migrated, toLocalDateValue(now))
 }
 
 export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryProfile | null {
@@ -270,9 +295,8 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
     salaryDeductions: normalizeSalaryDeductions(profile.salaryDeductions),
   }, now, previousConfiguration)
   if (next.workJourney) {
-    const { workJourney, ...snapshot } = next
-    next.workJourney = { ...workJourney, revision: workJourney.revision + 1,
-      stages: workJourney.stages.map(stage => stage.endDate === null ? { ...stage, profile: snapshot } : stage) }
+    const updated = withSettingsStage(next, toLocalDateValue(now)).workJourney!
+    next.workJourney = { ...updated, revision: updated.revision + 1 }
   }
   return saveJSON(keys.profile, next) ? next : null
 }

@@ -99,8 +99,8 @@ export function workProfileForDate(profile: SalaryProfile, date: string): Salary
   if (!profile.workJourney) return profile
   const stage = workStageForDate(profile, date)
   if (!stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false }
-  // The open stage uses the current draft so the salary-settings preview stays live.
-  return stage.endDate === null ? profile : { ...stage.profile, workJourney: profile.workJourney }
+  // Each stage owns its rules, including an active job with a planned end date.
+  return { ...stage.profile, workJourney: profile.workJourney }
 }
 
 export interface SalaryRates {
