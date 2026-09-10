@@ -10,5 +10,6 @@
     "test": "npm run build -w @salary-flow/core && npm run test --workspaces --if-present",
     "typecheck": "npm run build -w @salary-flow/core && npm run typecheck -ws --if-present"
   },
+  "overrides": { "miniflare": { "sharp": "0.35.4" } },
   "engines": { "node": ">=20" }
 }

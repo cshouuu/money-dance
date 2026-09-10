@@ -260,13 +260,22 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
       if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false)
     }
     const reposition = () => updatePosition()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
     document.addEventListener('pointerdown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape, true)
     window.addEventListener('resize', reposition)
     window.addEventListener('scroll', reposition, true)
     window.visualViewport?.addEventListener('resize', reposition)
     window.visualViewport?.addEventListener('scroll', reposition)
     return () => {
       document.removeEventListener('pointerdown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape, true)
       window.removeEventListener('resize', reposition)
       window.removeEventListener('scroll', reposition, true)
       window.visualViewport?.removeEventListener('resize', reposition)
@@ -344,7 +353,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(funct
       data-active={activeIndex === index || undefined}
       onPointerMove={() => setActiveIndex(index)}
       onClick={() => choose(option)}
-    ><span>{option.label}</span>{option.value === selected?.value && <Check size={15}/>}</button>)}</m.div>}</AnimatePresence>, document.body)}
+    ><span>{option.label}</span>{option.value === selected?.value && <Check size={15}/>}</button>)}</m.div>}</AnimatePresence>, triggerRef.current?.closest('dialog') ?? document.body)}
   </div>
 })
 

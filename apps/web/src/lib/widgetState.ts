@@ -1,7 +1,7 @@
 import { calculateRates, type SalaryProfile, type SalaryRates } from '@salary-flow/core'
 import type { ActiveOvertime, ActiveSlacking, AttendanceRecord, DailyWorkRecord, OvertimePayMode } from '../types'
 import { toLocalDateTime, toLocalDateValue } from './form'
-import { calculatePaidTimeEarnings } from './paidTime'
+import { actualPaidIntervalsInRange, calculatePaidTimeEarnings } from './paidTime'
 import { salaryProfileForBusinessDate } from './profile'
 import { resolveSessionStartBusinessDate } from './sessionBusinessDate'
 import { normalizeActiveSlacking } from './slacking'
@@ -44,6 +44,8 @@ export interface WidgetSnapshot {
   validUntil: number
   secondRate: number
   workTimeline: WidgetTimelineSegment[]
+  /** Actual work slices, independent of fixed daily salary or paid holidays. */
+  paidWorkTimeline?: Omit<WidgetTimelineSegment, 'baseAmount'>[]
   slacking?: WidgetActiveSlacking
   overtime?: WidgetActiveOvertime
 }
@@ -181,7 +183,7 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
   // snapshot is refreshed after midnight.
   for (const date of [...relevantDates]) relevantDates.add(getScheduledBusinessDate(profile, toLocalDateTime(date)))
   const workRecords = options.workRecords.filter(record => (
-    relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt)
+    relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt) || record.sessions.some(session=>new Date(session.startTime).getTime()<endAt && new Date(session.endTime ?? record.plannedEndTime ?? new Date(endAt).toISOString()).getTime()>startAt)
   ))
   const relevantAttendanceDates = new Set(relevantDates)
   if (profile.defaultWorkMode === 'scheduled') {
@@ -288,7 +290,7 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
   const validUntil = safeSyncedAt + horizonMs
   const rates = options.rates ?? calculateRates(salaryProfileForBusinessDate(
     options.profile,
-    toLocalDateValue(new Date(safeSyncedAt)),
+    options.activeOvertime ? resolveSessionStartBusinessDate(options.activeOvertime.startTime,options.activeOvertime.startLocalDate,options.activeOvertime.startTimezoneOffsetMinutes)?.startLocalDate ?? toLocalDateValue(new Date(safeSyncedAt)) : toLocalDateValue(new Date(safeSyncedAt)),
     options.attendanceRecords,
   ))
   const activeSlacking = normalizeActiveSlacking(options.activeSlacking)
@@ -316,6 +318,15 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
     syncedAt: safeSyncedAt,
     validUntil,
     secondRate: finiteNonNegative(rates.second),
+    paidWorkTimeline: actualPaidIntervalsInRange(
+      options.profile, new Date(safeSyncedAt), new Date(validUntil), options.workRecords, options.attendanceRecords,
+    ).map(interval => ({
+      startAt: interval.start.getTime(),
+      endAt: interval.end.getTime(),
+      ratePerSecond: finiteNonNegative(calculateRates(salaryProfileForBusinessDate(
+        options.profile, interval.businessDate, options.attendanceRecords,
+      )).second),
+    })),
     workTimeline: buildWorkTimeline({
       profile: options.profile,
       workRecords: options.workRecords,

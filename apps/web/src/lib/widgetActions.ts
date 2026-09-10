@@ -3,6 +3,8 @@ import { createOvertimeLedgerEntries, migrateLegacyOvertimeLedgerDates, migrateL
 import { isSessionLocalDate, isSessionTimezoneOffsetMinutes, resolveSessionStartBusinessDate } from './sessionBusinessDate'
 import { migrateLegacySlackingSessionLocalDates, normalizeActiveSlacking } from './slacking'
 import { keys } from './storage'
+import { DEFAULT_PROFILE, isEmployedOn, type SalaryProfile } from '@salary-flow/core'
+import { toLocalDateValue } from './form'
 
 export interface WidgetActionBase {
   actionId: string
@@ -399,7 +401,9 @@ export function applyWidgetActions(actions: WidgetAction[], providedStorage?: Wi
   const storage = providedStorage ?? globalThis.localStorage
   if (!storage) return { success: false, changed: false, actionIds: [] }
   const initial = loadWidgetActionState(storage)
-  const next = reduceWidgetActions(initial, actions)
+  const profile = readJSON<SalaryProfile>(storage, keys.profile, DEFAULT_PROFILE)
+  const applicable = actions.filter(action => action.type !== 'slacking_start' || isEmployedOn(profile, action.startLocalDate ?? toLocalDateValue(new Date(action.occurredAt))))
+  const next = reduceWidgetActions(initial, applicable)
   let success = true
   let changed = false
 

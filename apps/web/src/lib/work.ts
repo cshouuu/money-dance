@@ -1,6 +1,8 @@
-import { calculateRates, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
+import { attendanceRosterShifts, rosterStandardDayAmount, rosterBusinessDate, rosterActualIntervals, intervalSeconds, rosterPayForDate, shiftDuration } from './roster'
+import { rosterForDate } from '@salary-flow/core'
+import { calculateRates, vacationForDate, isEmployedOn, workProfileForDate, workStageForDate, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSettlementMode, WorkSession } from '../types'
-import { attendanceLeavePeriod, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
+import { attendanceLeavePeriod, getVacationPayAmount, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
 import { createId } from './id'
 import { actualPaidIntervalsForDate } from './paidTime'
@@ -16,6 +18,10 @@ export interface TodayWorkSummary {
   businessDate: string
   record?: DailyWorkRecord
   attendance?: AttendanceRecord
+  rosterName?: string
+  rosterStart?: string
+  rosterEnd?: string
+  vacationName?: string
   officialHolidayName?: string
 }
 
@@ -118,7 +124,16 @@ export function getWorkRecord(records: DailyWorkRecord[], date: string): DailyWo
  * amount during the between-shift interval.
  */
 export function getScheduledBusinessDate(profile: SalaryProfile, now = new Date()): string {
+  if (profile.rosters?.length) { const date = rosterBusinessDate(profile, now); if (date) return date }
   const today = toLocalDateValue(now)
+  if (profile.workJourney) {
+    const previous = toLocalDateValue(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12))
+    const before = workProfileForDate(profile, previous)
+    const clock = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+    if (isEmployedOn(profile, previous) && parseClock(before.workEndTime) < parseClock(before.workStartTime) && clock < parseClock(before.workEndTime)) return previous
+    if (workStageForDate(profile, previous)?.id !== workStageForDate(profile, today)?.id) return today
+    profile = workProfileForDate(profile, today)
+  }
   let startClock: number
   let endClock: number
   try {
@@ -140,7 +155,7 @@ export function getCurrentWorkRecord(records: DailyWorkRecord[], now = new Date(
   const today = toLocalDateValue(now)
   const carried = records
     .filter(record => record.date !== today
-      && record.mode === 'flexible'
+      && (record.mode === 'flexible' || (record.sessions.some(session=>!session.endTime) && (!record.plannedEndTime || new Date(record.plannedEndTime)>now)))
       && (record.status === 'working' || record.status === 'paused' || record.settlementPending))
     .filter(record => {
       const firstStart = record.sessions[0]?.startTime
@@ -244,11 +259,11 @@ export function getFlexibleEarnedAmount(
 /** Base salary shown before excess flexible time is converted to overtime.
  * Full-day unpaid leave/holiday has an explicit zero base; a null custom
  * amount only falls back to daily salary for normal attendance. */
-export function getFlexibleBaseSettlementAmount(attendance: AttendanceRecord | undefined, dailyAmount: number): number {
+export function getFlexibleBaseSettlementAmount(attendance: AttendanceRecord | undefined, dailyAmount: number, vacationAmount: number | null = null): number {
   const customAmount = getCustomAttendanceAmount(attendance, dailyAmount)
   if (customAmount !== null) return customAmount
   if (attendance?.status === 'leave' || attendance?.status === 'holiday') return 0
-  return Math.max(0, dailyAmount)
+  return Math.max(0, vacationAmount ?? dailyAmount)
 }
 
 export function isFlexibleFullDaySettlement(record: DailyWorkRecord | undefined, salaryType: SalaryProfile['salaryType']): boolean {
@@ -275,15 +290,38 @@ export function getAutomaticFlexibleSettlementMode(
 export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRecord[], now = new Date(), _providedRates?: SalaryRates, attendanceRecords: AttendanceRecord[] = []): TodayWorkSummary {
   const today = toLocalDateValue(now)
   const currentRecord = getCurrentWorkRecord(records, now)
-  const record = currentRecord?.mode === 'flexible' ? currentRecord
+  const record = currentRecord && (currentRecord.mode === 'flexible' || currentRecord.sessions.some(session=>!session.endTime)) ? currentRecord
     : getWorkRecord(records, getScheduledBusinessDate(profile, now)) ?? currentRecord
-  const mode = record?.mode ?? profile.defaultWorkMode
+  const mode = record?.mode ?? (rosterForDate(profile,getScheduledBusinessDate(profile,now)) ? 'scheduled' : workProfileForDate(profile, getScheduledBusinessDate(profile, now)).defaultWorkMode)
   const businessDate = record?.date ?? (mode === 'scheduled' ? getScheduledBusinessDate(profile, now) : today)
+  if (!isEmployedOn(profile, businessDate)) return { mode, status: 'ready', dayType: 'rest', workedSeconds: 0, earnedAmount: 0, businessDate }
   const attendance = attendanceRecords.find(item => item.date === businessDate)
   const holidaySettings = loadChinaHolidaySettings(now)
   const datedProfile = salaryProfileForBusinessDate(profile, businessDate, attendanceRecords, holidaySettings)
   const rates = calculateRates(datedProfile)
-  const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
+  const customAttendanceAmount = getCustomAttendanceAmount(attendance, rosterStandardDayAmount(datedProfile, businessDate, rates.daily))
+  const roster = rosterForDate(profile, businessDate)
+  if (roster) {
+    const shifts = attendanceRosterShifts(profile, businessDate, attendanceRecords, holidaySettings)
+    const actual = rosterActualIntervals(profile, businessDate, now, records, attendanceRecords, holidaySettings)
+    const workedSeconds = intervalSeconds(actual, now)
+    const first = shifts[0] && localDateWithTime(businessDate, shifts[0].startTime)
+    const lastShift = shifts.at(-1)
+    const last = lastShift && new Date(+localDateWithTime(businessDate, lastShift.startTime) + shiftDuration(lastShift) * 1000)
+    const vacation = vacationForDate(profile, businessDate)
+    const vacationAmount = getVacationPayAmount(businessDate, datedProfile, holidaySettings)
+    const manualOff = attendance && (attendance.status === 'holiday' || (attendance.status === 'leave' && !isHalfDayLeave(attendance)))
+    const working = !manualOff && (shifts.length > 0 || actual.length > 0)
+    return { mode, businessDate, record, attendance, workedSeconds,
+      status: record?.status ?? ((last && now >= last) ? 'ended' : working && first && now >= first ? 'working' : 'ready'),
+      dayType: manualOff ? attendance.status as 'holiday' | 'leave' : working ? 'work' : vacation ? 'holiday' : 'rest',
+      earnedAmount: roster.overrides.find(item=>item.date===businessDate)?.amount ?? (manualOff ? customAttendanceAmount ?? 0 : customAttendanceAmount ?? vacationAmount ?? rosterPayForDate(datedProfile, businessDate, now, records, attendanceRecords, holidaySettings) ?? 0),
+      rosterName: shifts.map(shift => shift.name).join(' / ') || '排班休息',
+      rosterStart: first?.toISOString(), rosterEnd: last?.toISOString(),
+      ...(!working && vacation ? { vacationName: vacation.name } : {}),
+    }
+  }
+
 
   if ((attendance?.status === 'leave' && !isHalfDayLeave(attendance)) || attendance?.status === 'holiday') {
     return {
@@ -298,8 +336,12 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     }
   }
 
-  const officialHoliday = attendance || record ? undefined : chinaHolidayForDate(businessDate, holidaySettings)
-  const officialHolidayAmount = attendance || record ? null : getOfficialHolidayPayAmount(businessDate, datedProfile, rates.daily, holidaySettings)
+  const vacation = vacationForDate(profile, businessDate)
+  const vacationAmount = getVacationPayAmount(businessDate, datedProfile, holidaySettings)
+  if (vacation && !attendance && !record) return { mode, status: 'ended', dayType: 'holiday', workedSeconds: 0, earnedAmount: vacationAmount ?? 0, businessDate, vacationName: vacation.name }
+
+  const officialHoliday = attendance || record || vacation ? undefined : chinaHolidayForDate(businessDate, holidaySettings)
+  const officialHolidayAmount = attendance || record || vacation ? null : getOfficialHolidayPayAmount(businessDate, datedProfile, rates.daily, holidaySettings)
   if (officialHolidayAmount !== null) {
     return {
       mode,
@@ -330,12 +372,14 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     }
   }
 
-  const automaticScheduledSeconds = getWorkedPaidSeconds(profile, now)
+  const automaticScheduledSeconds = profile.workJourney
+    ? getScheduledWorkedSeconds(datedProfile, { date: businessDate, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now)
+    : getWorkedPaidSeconds(datedProfile, now)
   const halfDayTarget = rates.paidSecondsPerDay * 0.5
   const workedSeconds = mode === 'flexible'
     ? record ? getFlexibleWorkedSeconds(record, now) : 0
     : record?.sessions.length
-      ? getScheduledWorkedSeconds(profile, record, now, attendanceRecords)
+      ? getScheduledWorkedSeconds(datedProfile, record, now, attendanceRecords)
     : isHalfDayLeave(attendance)
       ? attendanceLeavePeriod(attendance) === 'morning'
         ? Math.max(0, Math.min(halfDayTarget, automaticScheduledSeconds - halfDayTarget))
@@ -354,7 +398,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     businessDate,
     earnedAmount: (attendance?.status === 'normal' || isHalfDayLeave(attendance)) && customAttendanceAmount !== null
       ? customAttendanceAmount
-      : automaticEarnedAmount,
+      : vacationAmount ?? automaticEarnedAmount,
     record,
     attendance,
   }
@@ -392,7 +436,7 @@ export function resolveFlexiblePlannedEndTime(
   if (!plannedEndTime) return undefined
   const planned = localDateWithTime(plannedEndDate, plannedEndTime)
   const started = localDateWithTime(date, startTime)
-  if (Number.isNaN(planned.getTime()) || Number.isNaN(started.getTime()) || planned <= started || planned <= now) return null
+  if (Number.isNaN(planned.getTime()) || Number.isNaN(started.getTime()) || planned <= started || planned <= now || +planned - +started > 31*86400000) return null
   return planned.toISOString()
 }
 

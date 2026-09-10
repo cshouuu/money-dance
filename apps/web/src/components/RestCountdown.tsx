@@ -15,7 +15,7 @@ export function RestCountdown({ value, payday, now }: { value: ReturnType<typeof
       <div className="rest-countdown-tile"><BriefcaseBusiness size={22}/><span>离下班</span><strong>{value.end ? countdownClock(value.end, now) : value.endLabel}</strong><small>{value.end ? `${toLocalTimeValue(value.end)} 结束工作` : '以实际工作安排为准'}</small></div>
       <div className="rest-countdown-tile"><Coffee size={22}/><span>{value.nextBreak.label}</span><strong>{value.nextBreak.target ? countdownClock(value.nextBreak.target, now) : value.nextBreak.hint}</strong><small>{value.nextBreak.target ? value.nextBreak.hint : '以实际工作安排为准'}</small></div>
       <div className="rest-countdown-tile"><CalendarDays size={22}/><span>离休息日</span><strong>{value.rest ? value.rest.days === 0 ? '今天休息' : `${value.rest.days} 天` : '暂无安排'}</strong><small>{value.rest?.hint ?? '未来一年暂无休息日'}</small></div>
-      <div className="rest-countdown-tile"><Gift size={22}/><span>离节假日</span><strong>{value.holiday ? value.holiday.days === 0 ? '假期中' : `${value.holiday.days} 天` : '暂无数据'}</strong><small>{value.holiday?.hint ?? '以已启用的节假日日历为准'}</small></div>
+      <div className="rest-countdown-tile"><Gift size={22}/><span>{value.vacation?.label ?? value.nextShift?.label ?? '离节假日'}</span><strong>{value.vacation?.value ?? value.nextShift?.value ?? (value.holiday ? value.holiday.days === 0 ? '假期中' : `${value.holiday.days} 天` : '暂无数据')}</strong><small>{value.vacation?.hint ?? value.nextShift?.hint ?? value.holiday?.hint ?? '以已启用的节假日日历为准'}</small></div>
 
     </div>
   </section>

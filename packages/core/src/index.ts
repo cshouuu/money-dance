@@ -32,7 +32,61 @@ export interface BreakPeriod {
   endTime: string
 }
 
+export interface ShiftTemplate {
+  id: string
+  name: string
+  color: string
+  startTime: string
+  endTime: string
+  endDay: number
+  breaks: { id: string; name: string; startMinute: number; endMinute: number; paid: boolean }[]
+  amount: number
+  allowance: number
+}
+
+export interface RosterPlan {
+  id: string
+  stageId: string | null
+  effectiveFrom: string
+  enabled: boolean
+  mode: 'manual' | 'weekly' | 'cycle'
+  anchorDate: string
+  templates: ShiftTemplate[]
+  cycle: string[][]
+  overrides: { date: string; shifts: ShiftTemplate[]; amount?: number; reason: string; keepVacationPay?: boolean }[]
+  respectVacations: boolean
+  respectHolidays: boolean
+  pay: { mode: 'salary' | 'hourly' | 'shift'; value: number; basis: 'planned' | 'actual'; monthlyHours: number; overtime: 'manual' | 'unpaid' | 'multiplier' | 'fixed'; overtimeValue: number }
+}
+
+export function rosterForDate(profile: SalaryProfile, date: string): RosterPlan | undefined {
+  if (!isEmployedOn(profile, date)) return undefined
+  const stage = workStageForDate(profile, date)
+  if (profile.workJourney && !stage?.profile) return undefined
+  const latest = profile.rosters?.filter(plan => plan.stageId === (stage?.id ?? null) && plan.effectiveFrom <= date)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0]
+  return latest?.enabled ? latest : undefined
+}
+
+export function rosterShiftsForDate(profile: SalaryProfile, date: string): ShiftTemplate[] {
+  const plan = rosterForDate(profile, date)
+  if (!plan) return []
+  const override = plan.overrides.find(item => item.date === date)
+  if (override) return [...override.shifts].sort((a,b)=>parseClock(a.startTime)-parseClock(b.startTime))
+  if (plan.mode === 'manual' || date < plan.anchorDate || !plan.cycle.length) return []
+  const days = Math.round((Date.parse(date) - Date.parse(plan.anchorDate)) / 86400000)
+  const index = plan.mode === 'weekly' ? (new Date(date + 'T12:00:00').getDay() + 6) % 7 : days % plan.cycle.length
+  return (plan.cycle[index] ?? []).flatMap(id => { const shift = plan.templates.find(item => item.id === id); return shift ? [shift] : [] }).sort((a,b)=>parseClock(a.startTime)-parseClock(b.startTime))
+}
+
 export interface SalaryProfile {
+  rosters?: RosterPlan[]
+  /** Derived rate inputs; never persisted as a job configuration. */
+  calculationHours?: { day: number; month: number; hourly?: number; monthlyAmount?: number }
+
+  vacations?: VacationPlan[]
+  /** Opt-in work history; absent preserves the legacy single-job behavior. */
+  workJourney?: WorkJourney
   salary: number
   salaryType: SalaryType
   /** Calendar day of month used for the payday countdown. */
@@ -63,6 +117,64 @@ export interface SalaryProfile {
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
   defaultWorkMode: WorkMode
+}
+
+export interface VacationPlan {
+  id: string
+  stageId: string | null
+  name: string
+  kind: 'winter' | 'summer' | 'custom'
+  startDate: string
+  endDate: string
+  payMode: 'normal' | 'ratio' | 'monthly' | 'unpaid'
+  /** Ratio in [0, 1], or replacement gross monthly salary. */
+  value: number
+}
+
+export function vacationForDate(profile: SalaryProfile, date: string): VacationPlan | undefined {
+  if (!isEmployedOn(profile, date)) return undefined
+  const stage = workStageForDate(profile, date)
+  const roster = rosterForDate(profile, date)
+  const duty = roster?.overrides.find(item => item.date === date)
+  if (roster && (!roster.respectVacations || (duty && !duty.keepVacationPay))) return undefined
+  return profile.vacations?.find(plan => plan.startDate <= date && date <= plan.endDate
+    && (profile.workJourney ? plan.stageId === stage?.id : plan.stageId === null))
+}
+
+export interface WorkStage {
+  id: string
+  name: string
+  company: string
+  role: string
+  startDate: string
+  /** Inclusive business date, including the final overnight shift. */
+  endDate: string | null
+  /** Unknown historical salary must never be inferred from the current job. */
+  profile: Omit<SalaryProfile, 'workJourney'> | null
+  createdAt: string
+}
+
+export interface WorkJourney {
+  version: 1
+  revision: number
+  stages: WorkStage[]
+}
+
+export function workStageForDate(profile: SalaryProfile, date: string): WorkStage | undefined {
+  return profile.workJourney?.stages.find(stage => stage.startDate <= date && (!stage.endDate || date <= stage.endDate))
+}
+
+export function isEmployedOn(profile: SalaryProfile, date: string): boolean {
+  return !profile.workJourney || !!workStageForDate(profile, date)
+}
+
+/** Select schedules as well as salaries. Keep the timeline for downstream date guards. */
+export function workProfileForDate(profile: SalaryProfile, date: string): SalaryProfile {
+  if (!profile.workJourney) return profile
+  const stage = workStageForDate(profile, date)
+  if (!stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false }
+  // Each stage owns its rules, including an active job with a planned end date.
+  return { ...stage.profile, vacations: profile.vacations, rosters: profile.rosters, workJourney: profile.workJourney }
 }
 
 export interface SalaryRates {
@@ -179,6 +291,14 @@ export function calculateMonthlySalaryDeductions(profile: SalaryProfile): number
 }
 
 export function calculateRates(profile: SalaryProfile): SalaryRates {
+  if (profile.calculationHours) {
+    const { day, month, hourly, monthlyAmount } = profile.calculationHours
+    const baseline = { ...profile, calculationHours: undefined }
+    const base = calculateRates(baseline)
+    const netMonthly = monthlyAmount ?? base.daily * profile.monthlyWorkDays
+    const second = hourly !== undefined ? Math.max(0, hourly) / 3600 : month > 0 ? netMonthly / (month * 3600) : 0
+    return { daily: day * 3600 * second, hourly: second * 3600, minute: second * 60, second, paidSecondsPerDay: day * 3600 }
+  }
   if (!Number.isFinite(profile.salary) || profile.salary < 0) throw new Error('Salary must be non-negative')
   if (!Number.isFinite(profile.monthlyWorkDays) || profile.monthlyWorkDays <= 0) throw new Error('Monthly work days must be positive')
   // Legacy profiles do not have livingCostMode. Treating a missing value as

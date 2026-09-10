@@ -1,4 +1,5 @@
-import type { AlternatingWeekType, SalaryProfile } from '@salary-flow/core'
+import { parseClock, rosterForDate, rosterShiftsForDate } from '@salary-flow/core'
+import { calculateRates, isEmployedOn, vacationForDate, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
@@ -16,7 +17,7 @@ export interface ChinaHolidaySettings {
 
 export interface AttendanceDayResolution {
   isWorkday: boolean
-  source: 'manual' | 'china-holiday' | 'profile'
+  source: 'roster' | 'manual' | 'vacation' | 'china-holiday' | 'profile'
   holiday?: ChinaHolidayDay
 }
 
@@ -87,6 +88,8 @@ export function getOfficialHolidayPayAmount(
   dailyAmount: number,
   settings = loadChinaHolidaySettings(),
 ): number | null {
+  if (!isEmployedOn(profile, date)) return 0
+  profile = workProfileForDate(profile, date)
   const holiday = chinaHolidayForDate(date, settings)
   if (holiday?.kind !== 'holiday') return null
   return holiday.statutory && (profile.salaryType === 'monthly' || profile.salaryType === 'annual')
@@ -195,6 +198,8 @@ export function resolveAttendanceDay(
   record?: AttendanceRecord,
   settings = loadChinaHolidaySettings(),
 ): AttendanceDayResolution {
+  if (!isEmployedOn(profile, toLocalDateValue(date))) return { isWorkday: false, source: 'profile' }
+  profile = workProfileForDate(profile, toLocalDateValue(date))
   if (record) {
     return {
       isWorkday: record.status === 'normal' || isHalfDayLeave(record),
@@ -202,8 +207,15 @@ export function resolveAttendanceDay(
     }
   }
 
+  const overridePlan = rosterForDate(profile,toLocalDateValue(date))
+  if(overridePlan?.overrides.some(item=>item.date===toLocalDateValue(date))) return {isWorkday:rosterShiftsForDate(profile,toLocalDateValue(date)).length>0,source:'roster'}
+  if (vacationForDate(profile, toLocalDateValue(date))) return { isWorkday: false, source: 'vacation', holiday: chinaHolidayForDate(toLocalDateValue(date), settings) }
+
+  const roster = rosterForDate(profile, toLocalDateValue(date))
+  if (roster && (roster.overrides.some(item => item.date === toLocalDateValue(date)) || !roster.respectHolidays)) return { isWorkday: rosterShiftsForDate(profile, toLocalDateValue(date)).length > 0, source: 'roster' }
   const holiday = chinaHolidayForDate(toLocalDateValue(date), settings)
   if (holiday) {
+    if(roster) return {isWorkday:holiday.kind!=='holiday'&&rosterShiftsForDate(profile,toLocalDateValue(date)).length>0,source:'roster',holiday}
     return {
       isWorkday: holiday.kind === 'adjusted-workday',
       source: 'china-holiday',
@@ -211,7 +223,33 @@ export function resolveAttendanceDay(
     }
   }
 
+  if (roster) return { isWorkday: rosterShiftsForDate(profile, toLocalDateValue(date)).length > 0, source: 'roster' }
   return { isWorkday: isProfileWorkday(date, profile), source: 'profile' }
+}
+
+/** Use the original salary shares, not the reduced number of attendance days.
+ * Default vacation duty changes attendance only; explicit daily pay overrides
+ * are applied by callers. A weekend does not create a second salary share.
+ */
+export function getVacationPayAmount(date: string, profile: SalaryProfile, settings = loadChinaHolidaySettings()): number | null {
+  const plan = vacationForDate(profile, date)
+  if (!plan) return null
+  const roster = rosterForDate(profile, date)
+  if (roster) {
+    if (plan.payMode === 'unpaid') return 0
+    const [year, month] = date.split('-').map(Number)
+    const baseline = { ...profile, calculationHours: undefined, vacations: undefined }
+    const monthly = plan.payMode === 'monthly' ? { ...baseline, salary: plan.value, salaryType: 'monthly' as const } : baseline
+    const original = roster.pay.mode === 'salary' || plan.payMode === 'monthly' ? calculateRates(monthly).daily * monthly.monthlyWorkDays / new Date(year, month, 0).getDate() : rosterShiftsForDate(profile, date).reduce((sum, shift) => sum + (roster.pay.mode === 'shift' ? shift.amount : (shift.endDay * 86400 + parseClock(shift.endTime) - parseClock(shift.startTime) - shift.breaks.filter(item => !item.paid).reduce((total, rest) => total + (rest.endMinute - rest.startMinute) * 60, 0)) / 3600 * roster.pay.value), 0)
+    return original * (plan.payMode === 'ratio' ? plan.value : 1)
+  }
+  const baseline = { ...profile, vacations: undefined }
+  const day = toLocalDateTime(date)
+  const official = chinaHolidayForDate(date, settings)
+  const paid = official ? official.kind === 'adjusted-workday' || (official.statutory && ['monthly', 'annual'].includes(baseline.salaryType)) : isConfiguredWorkday(day, baseline, settings)
+  if (!paid || plan.payMode === 'unpaid') return 0
+  if (plan.payMode === 'monthly') return calculateRates({ ...baseline, salary: plan.value, salaryType: 'monthly' }).daily
+  return calculateRates(baseline).daily * (plan.payMode === 'ratio' ? plan.value : 1)
 }
 
 export function isConfiguredWorkday(
@@ -276,6 +314,7 @@ export function getMonthlyScheduledWorkDayCount(
   let workDays = 0
   for (let day = 1; day <= daysInMonth; day += 1) {
     const current = new Date(year, month, day, 12)
+    if (!isEmployedOn(profile, toLocalDateValue(current))) continue
     const record = recordsByDate.get(toLocalDateValue(current))
     if (record) {
       workDays += attendanceWorkedFraction(record)

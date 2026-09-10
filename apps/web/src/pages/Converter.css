@@ -27,7 +27,7 @@
   border-radius:14px;
   background:linear-gradient(145deg,var(--surface-soft),var(--surface-muted));
   color:var(--positive);
-  font:500 19px 'DM Mono';
+  font:500 19px var(--font-numeric);font-variant-numeric:tabular-nums;
 }
 
 .converter-wish-title{display:flex;min-width:0;flex-direction:column;gap:4px}
@@ -37,7 +37,7 @@
 .converter-wish-price{
   padding-left:12px;
   color:var(--dark);
-  font:550 21px 'DM Mono';
+  font:550 21px var(--font-numeric);font-variant-numeric:tabular-nums;
   letter-spacing:-.5px;
   white-space:nowrap;
 }
@@ -58,7 +58,7 @@
 }
 
 .wish-progress-heading{color:var(--green);font-size:12px}
-.wish-progress-heading strong{color:var(--dark);font:550 16px 'DM Mono'}
+.wish-progress-heading strong{color:var(--dark);font:550 16px var(--font-numeric);font-variant-numeric:tabular-nums}
 
 .wish-progress-track{
   height:7px;
@@ -78,7 +78,7 @@
 
 .wish-progress-money{color:var(--muted);font-size:10px}
 .wish-progress-money span:last-child{text-align:right}
-.wish-progress-money b{color:var(--positive);font:550 12px 'DM Mono'}
+.wish-progress-money b{color:var(--positive);font:550 12px var(--font-numeric);font-variant-numeric:tabular-nums}
 
 .converter-time-summary{
   display:grid;
@@ -96,7 +96,7 @@
 }
 
 .converter-time-summary>div>span{color:var(--muted);font-size:12px;white-space:nowrap}
-.converter-time-summary>div>strong{color:var(--dark);font:550 20px 'DM Mono';letter-spacing:-.35px;text-align:right}
+.converter-time-summary>div>strong{color:var(--dark);font:550 20px var(--font-numeric);font-variant-numeric:tabular-nums;letter-spacing:-.35px;text-align:right}
 
 .converter-time-summary p{
   display:flex;
@@ -109,7 +109,7 @@
   line-height:1.55;
 }
 
-.converter-time-summary p b{color:var(--muted);font:500 10px 'DM Mono'}
+.converter-time-summary p b{color:var(--muted);font:500 10px var(--font-numeric);font-variant-numeric:tabular-nums}
 .converter-time-summary p i{padding:0 2px;color:var(--muted);font-style:normal}
 
 .converter-card-footer{

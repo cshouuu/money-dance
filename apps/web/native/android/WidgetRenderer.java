@@ -127,11 +127,11 @@ public final class WidgetRenderer {
             detail = "打开 Money Dance 刷新";
         } else {
             Earnings earnings = timelineEarnings(snapshot.optJSONArray("workTimeline"), now);
-            title = "今日实时收益";
+            title = "今日收入";
             amount = earnings.amount;
             detail = earnings.ratePerSecond > 0D
                     ? "+¥" + rate(earnings.ratePerSecond) + "/秒"
-                    : "当前未在计薪时段";
+                    : "当前金额不随工时增长";
         }
 
         views.setTextViewText(R.id.widget_title, title);

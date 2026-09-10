@@ -1,7 +1,8 @@
-import type { SalaryProfile } from '@salary-flow/core'
+import { rosterShiftsForDate } from '@salary-flow/core'
+import { rosterDayLabel } from '../lib/roster'
+import { vacationForDate, isEmployedOn, workProfileForDate, type SalaryProfile } from '@salary-flow/core'
 import { CalendarCheck2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { alternatingWeekTypeForDate, attendanceStatusLabel, isHalfDayLeave, resolveAttendanceDay, type ChinaHolidaySettings } from '../lib/attendance'
-import { hasChinaHolidayYear } from '../lib/chinaHolidays'
 import { toLocalDateTime, toLocalDateValue, toLocalMonthValue } from '../lib/form'
 import type { SummaryDimension } from '../lib/ledger'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
@@ -57,6 +58,8 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
   const workedDates = new Set(workRecords.filter(record => record.sessions.length > 0 || record.mode === 'scheduled').map(record => record.date))
 
   const stateForDate = (date: string): DayState => {
+    if (!isEmployedOn(profile, date)) return { label: '未任职', tone: 'rest', explicit: false }
+    const datedProfile = workProfileForDate(profile, date)
     const record = recordByDate.get(date)
     if (record?.status === 'normal') {
       const label = record.payMode === 'multiplier' ? `正常·${record.multiplier ?? 0}倍` : record.payMode === 'fixed' ? '正常·固定' : '正常'
@@ -70,22 +73,26 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
     }
     if (record?.status === 'holiday') return { label: record.payMode === 'unpaid' ? '无薪假' : '带薪假', tone: 'holiday', explicit: true }
     const day = toLocalDateTime(date)
+    const rosterLabel = rosterDayLabel(profile,date,holidaySettings)
+    if (rosterLabel && (rosterLabel !== '排班休息' || !vacationForDate(profile,date))) return {label:rosterLabel,tone:rosterLabel==='排班休息'?'rest':'normal',explicit:false}
     if (workedDates.has(date)) return { label: '正常', tone: 'normal', explicit: false }
     const resolution = resolveAttendanceDay(day, profile, undefined, holidaySettings)
+    if (resolution.source === 'vacation') return { label: vacationForDate(profile, date)?.name ?? '假期', tone: 'holiday', explicit: false, official: !!resolution.holiday }
     if (resolution.source === 'china-holiday' && resolution.holiday) {
       return resolution.holiday.kind === 'adjusted-workday'
         ? { label: `${resolution.holiday.name}·班`, tone: 'normal', explicit: false, official: true }
         : { label: `${resolution.holiday.name}·休`, tone: 'holiday', explicit: false, official: true }
     }
-    if (date > today) return { label: '未到', tone: 'future', explicit: false }
-    if (profile.workWeekMode === 'alternating' && day.getDay() === 6) {
-      const weekType = alternatingWeekTypeForDate(day, profile)
+    if (datedProfile.workWeekMode === 'alternating' && day.getDay() === 6) {
+      const weekType = alternatingWeekTypeForDate(day, datedProfile)
       return weekType === 'big'
-        ? { label: '大周', tone: 'normal', explicit: false }
-        : { label: '小周', tone: 'rest', explicit: false }
+        ? { label: '大周·班', tone: 'normal', explicit: false }
+        : { label: '小周·休', tone: 'rest', explicit: false }
     }
-    if (resolution.isWorkday) return { label: '正常', tone: 'normal', explicit: false }
-    return { label: '休息', tone: 'rest', explicit: false }
+    // Future dates still have a known workweek schedule; only ordinary workdays remain pending.
+    if (!resolution.isWorkday) return { label: '休息', tone: 'rest', explicit: false }
+    if (date > today) return { label: '未到', tone: 'future', explicit: false }
+    return { label: '正常', tone: 'normal', explicit: false }
   }
 
   const countRange = (start: Date, end: Date) => {
@@ -140,7 +147,6 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
 
   const drillDown = (cellDimension: 'month' | 'year', value: string) => {
     if (cellDimension === 'month') {
-      if (value > toLocalMonthValue(now) && !hasChinaHolidayYear(Number(value.slice(0, 4)))) return
       onChange('day', value === toLocalMonthValue(now) ? today : `${value}-01`)
       return
     }
@@ -152,9 +158,9 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
     <div className="calendar-title-row"><div><p className="eyebrow">ATTENDANCE CALENDAR</p><h2 id="attendance-calendar-title">薪苦日历</h2></div><CalendarCheck2 size={20}/></div>
     <div className="calendar-dimension-tabs" role="group" aria-label="日历粒度">{dimensions.map(item => <button key={item.value} type="button" className={dimension === item.value ? 'active' : ''} aria-pressed={dimension === item.value} onClick={() => onChange(item.value, anchorForDimension(item.value, dimension, anchor, now))}>{item.label}</button>)}</div>
     <div className="calendar-period-nav"><button type="button" aria-label="上一时间段" onClick={() => navigate(-1)}><ChevronLeft size={18}/></button><strong>{dimension === 'day' ? `${selectedYear}年 ${Number(selectedMonth.slice(5))}月` : dimension === 'month' ? `${selectedYear}年` : `${selectedYear - 6} — ${selectedYear}`}</strong><button type="button" aria-label="下一时间段" onClick={() => navigate(1)}><ChevronRight size={18}/></button></div>
-    {dimension === 'day' && <><div className="calendar-weekdays" aria-hidden="true">{['日','一','二','三','四','五','六'].map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid day">{dayCells.map((cell, index) => cell ? <button key={cell.date} type="button" disabled={cell.date > today && !hasChinaHolidayYear(Number(cell.date.slice(0, 4)))} className={`attendance-${cell.state.tone}${cell.date === anchor ? ' selected' : ''}${cell.date === today ? ' current' : ''}${cell.state.explicit ? ' explicit' : ''}${cell.state.official ? ' official' : ''}`} aria-label={`${cell.date}，${cell.state.label}${cell.state.explicit ? '，已调整' : cell.state.official ? '，中国大陆节假日日历' : ''}`} onClick={() => { onChange('day', cell.date); onSelectDate(cell.date) }}><b>{cell.day}</b><span>{cell.state.label}</span></button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>)}</div></>}
-    {dimension === 'month' && <div className="calendar-grid month">{monthCells.map(cell => <button key={cell.anchor} type="button" disabled={cell.anchor > toLocalMonthValue(now) && !hasChinaHolidayYear(Number(cell.anchor.slice(0, 4)))} className={cell.anchor === toLocalMonthValue(now) ? 'current' : ''} onClick={() => drillDown('month', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
+    {dimension === 'day' && <><div className="calendar-weekdays" aria-hidden="true">{['日','一','二','三','四','五','六'].map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid day">{dayCells.map((cell, index) => cell ? <button key={cell.date} type="button" data-roster-color={rosterShiftsForDate(profile,cell.date)[0]?.color} className={`attendance-${cell.state.tone}${cell.date === anchor ? ' selected' : ''}${cell.date === today ? ' current' : ''}${cell.state.explicit ? ' explicit' : ''}${cell.state.official ? ' official' : ''}`} aria-label={`${cell.date}，${cell.state.label}${cell.state.explicit ? '，已调整' : cell.state.official ? '，中国大陆节假日日历' : ''}`} onClick={() => { onChange('day', cell.date); onSelectDate(cell.date) }}><b>{cell.day}</b><span>{cell.state.label}</span>{vacationForDate(profile, cell.date) && resolveAttendanceDay(toLocalDateTime(cell.date), profile, undefined, holidaySettings).holiday && <small>{resolveAttendanceDay(toLocalDateTime(cell.date), profile, undefined, holidaySettings).holiday?.name}</small>}</button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>)}</div></>}
+    {dimension === 'month' && <div className="calendar-grid month">{monthCells.map(cell => <button key={cell.anchor} type="button" className={cell.anchor === toLocalMonthValue(now) ? 'current' : ''} onClick={() => drillDown('month', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
     {dimension === 'year' && <div className="calendar-grid year">{yearCells.map(cell => <button key={cell.anchor} type="button" disabled={Number(cell.anchor) > now.getFullYear()} className={Number(cell.anchor) === now.getFullYear() ? 'current' : ''} onClick={() => drillDown('year', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
-    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span><i className="attendance-holiday-dot"/>放假</span><span><i className="attendance-official-dot"/>国家日历</span><span>点击日期调整出勤</span></div>
+    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span><i className="attendance-holiday-dot"/>放假</span><span><i className="attendance-rest-dot"/>休息日</span><span><i className="attendance-official-dot"/>国家日历</span><span>点击日期调整出勤</span></div>
   </section>
 }

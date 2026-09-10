@@ -1,3 +1,6 @@
+import { rosterForDate } from '@salary-flow/core'
+import { rosterStandardDayAmount } from '../lib/roster'
+import { Link } from 'react-router-dom'
 import {
   calculateMonthlySalaryDeductions,
   calculateRates,
@@ -23,7 +26,8 @@ import { Button, Checkbox, ChoiceCard, ChoiceGroup, Input, SelectField, Switch }
 import { alternatingWeekTypeForDate, getWeekStartDateValue } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
-import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile } from '../lib/profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile, settingsWorkStage, withSettingsStage } from '../lib/profile'
+import { MobileDockSettings } from '../components/MobileDockSettings'
 import './Settings.css'
 
 function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
@@ -66,6 +70,7 @@ function buildProfile(
 }
 
 export function Settings() {
+  const [dockSettingsOpen, setDockSettingsOpen] = useState(false)
   const [initialProfile] = useState(() => loadProfile())
   const [profile, setProfile] = useState<SalaryProfile>(initialProfile)
   const [salaryInput, setSalaryInput] = useState(String(initialProfile.salary))
@@ -82,13 +87,14 @@ export function Settings() {
   const [openSection, setOpenSection] = useState<string | null>('salary')
 
   const draftProfile = buildProfile(profile, salaryInput, paydayInput, monthlyLivingCostInput, monthlyWorkDaysInput, workDaysPerWeekInput)
+  const activeRoster=rosterForDate(withSettingsStage(draftProfile??profile),toLocalDateValue())
   let rates: SalaryRates | null = null
   let rateProfile: SalaryProfile | null = null
   let monthlyDeductions = 0
   let calculationError = ''
   if (draftProfile) {
     try {
-      rateProfile = salaryProfileForBusinessDate(draftProfile, toLocalDateValue())
+      rateProfile = salaryProfileForBusinessDate(withSettingsStage(draftProfile), toLocalDateValue())
       rates = calculateRates(rateProfile)
       monthlyDeductions = calculateMonthlySalaryDeductions(rateProfile)
     } catch {
@@ -219,7 +225,7 @@ export function Settings() {
     const savedProfile = saveProfile({ ...draftProfile, salaryEffectiveDate })
     if (!savedProfile) {
       setSaved(false)
-      setSaveError('薪资设置暂时无法保存，请释放设备存储空间后重试。')
+      setSaveError('薪资设置未保存。若工作阶段已在其他页面更新，请刷新后重试；也请检查设备存储空间。')
       return
     }
     setProfile(savedProfile)
@@ -233,6 +239,7 @@ export function Settings() {
   const currentWeekType = alternatingWeekTypeForDate(new Date(), profile)
 
   const salarySection = <div className="settings-section-content" id="salary-profile">
+    <p className="work-mode-hint">{settingsWorkStage(profile) ? '正在调整当前或即将开始工作的薪资；已结束的工作保留原有配置。' : profile.workJourney ? '当前没有在职工作。要恢复计薪，请先开启新工作。' : '换工作或暂时休息时，可以把每段经历分别保存。'} <a href="/journey">前往工作旅程 →</a></p>
     <div className="form-grid">
       <Input label="工资金额" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setSalaryInput(normalizeDecimalInput(value)) }}/>
       <SelectField label="工资周期" required value={profile.salaryType} onValueChange={value => set('salaryType', value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></SelectField>
@@ -262,7 +269,7 @@ export function Settings() {
     <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
   </div>
 
-  const workSection = <div className="settings-section-content" id="work-schedule">
+  const workSection = <div className="settings-section-content" id="work-schedule"><Link className="text-button" to="/roster">{activeRoster?'当前使用排班 · 调整规则 →':'轮班或长班？设置排班 →'}</Link>{activeRoster&&<p className="work-mode-hint">排班日期使用班次时间、休息和计薪规则；以下作息在未启用排班的日期生效。</p>}
     <ChoiceGroup className="default-work-mode-options" legend="默认计薪方式" value={profile.defaultWorkMode} onValueChange={value => set('defaultWorkMode', value as WorkMode)}>{([
       ['scheduled', '固定作息', '按设置的上下班时间自动计薪，适合大多数用户'],
       ['flexible', '弹性作息', '每天开始工作后计薪，也可以临时切回固定作息'],
@@ -344,7 +351,7 @@ export function Settings() {
     <form className="settings-card" noValidate onSubmit={submit}>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
         <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
-        <div className="settings-rate-details"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
+        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,toLocalDateValue(),rates.daily).toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
       </section>}
       <BouncyAccordion
         className="settings-accordion"
@@ -363,6 +370,8 @@ export function Settings() {
       {saveError && <p className="settings-warning" role="alert">{saveError}</p>}
       <Button className="settings-save-button" type="submit" size="lg" ripple>{saved ? <><CheckCircle2 size={17}/>已保存</> : '保存薪资设置'}</Button>
     </form>
+    <section className="settings-dock-card"><div><h2>移动端底部栏</h2><p>选择并排列四个常用功能，其余功能随时从「全部」进入。</p></div><Button variant="secondary" onClick={() => setDockSettingsOpen(true)}>自定义底部栏</Button></section>
+    <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <div className="settings-update-card"><AppUpdateCard/></div>
   </section>
 }

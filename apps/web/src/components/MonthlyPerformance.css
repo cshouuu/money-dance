@@ -1,0 +1,20 @@
+.monthly-performance-breakdown{grid-column:1/-1;margin-top:-10px;border-top:1px solid var(--line)}
+.monthly-performance-breakdown .beui-accordion-item{border:0;background:transparent;box-shadow:none}
+.monthly-performance-breakdown .beui-accordion-trigger{min-height:36px;padding:4px 0;color:var(--muted)}
+.monthly-performance-breakdown .beui-accordion-title>b{font-size:11px;font-weight:500}
+.monthly-performance-breakdown .beui-accordion-content-inner{padding:12px 0 0}
+.monthly-performance-breakdown .beui-accordion-content-inner::before{display:none}
+.monthly-performance-calculation{display:grid;grid-template-columns:1fr 1fr;gap:18px 28px}
+.monthly-performance-rows{display:grid;gap:12px;margin:0}
+.monthly-performance-rows>div{display:flex;align-items:baseline;justify-content:space-between;gap:14px}
+.monthly-performance-rows dt{color:var(--muted);font-size:12px;line-height:1.6}
+.monthly-performance-rows dt span{display:block;font-size:10px}
+.monthly-performance-rows dd{flex-shrink:0;margin:0;color:var(--ink);font:500 12px var(--font-numeric);font-variant-numeric:tabular-nums}
+.monthly-performance-rate{align-self:start;padding:16px;border-radius:14px;background:var(--accent-faint);color:var(--ink)}
+.monthly-performance-rate>span{display:flex;align-items:center;gap:8px;font-size:12px}
+.monthly-performance-rate>span>small{padding:2px 6px;border:1px solid var(--line);border-radius:5px;color:var(--muted);font-size:9px}
+.monthly-performance-rate>strong{display:block;margin:12px 0;color:var(--green);font:650 23px var(--font-numeric);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.monthly-performance-rate>strong>small{margin-left:6px;color:var(--muted);font:400 10px var(--font-numeric)}
+.monthly-performance-rate p,.monthly-performance-notes p{margin:0;color:var(--muted);font-size:11px;line-height:1.8;overflow-wrap:anywhere}
+.monthly-performance-notes{grid-column:1/-1;display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+@media(max-width:620px){.monthly-performance-calculation{grid-template-columns:1fr;gap:16px}.monthly-performance-breakdown{margin-top:-8px}.monthly-performance-breakdown .beui-accordion-trigger{min-height:40px}}

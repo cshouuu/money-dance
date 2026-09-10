@@ -1,4 +1,5 @@
-import { calculateRates } from '@salary-flow/core'
+import { calculateRates, isEmployedOn } from '@salary-flow/core'
+import { toLocalDateValue } from './form'
 import type { ActiveOvertime, ActiveSlacking, OvertimeStartOption, OvertimeSession, SlackingSession } from '../types'
 import { keys, loadJSON, saveJSON } from './storage'
 import { runReversibleStorageTransaction } from './storageTransaction'
@@ -49,6 +50,7 @@ export function saveTimerPlan(plan: TimerPlan, now = new Date()): string | null 
   if (existing && !['scheduled', 'conflict'].includes(existing.status)) return '此计划已开始或结束，请刷新列表。'
   const error = validateTimerPlan(plan, plans, now)
   if (error) return error
+  if (!isEmployedOn(loadProfile(now), toLocalDateValue(new Date(plan.startTime)))) return '预约日期不属于任何工作阶段，请先在「工作旅程」中安排新工作。'
   return saveJSON(TIMER_PLANS_KEY, [...plans.filter(item => item.id !== plan.id), { ...plan, status: 'scheduled', message: undefined }]) ? null : '预约保存失败，请释放存储空间后重试。'
 }
 
@@ -78,7 +80,9 @@ export function reconcileTimerPlans(now = new Date()): { changed: boolean; error
     let nextActive: ActiveSlacking | ActiveOvertime | null = active
     let nextSessions: (SlackingSession | OvertimeSession)[] | undefined
     let overtimeSession: OvertimeSession | undefined
-    if (completed && plan.status === 'running') {
+    if (plan.status === 'scheduled' && !isEmployedOn(loadProfile(now), toLocalDateValue(new Date(plan.startTime)))) {
+      nextPlans = update('cancelled', '该日期已不属于工作阶段，预约未执行。')
+    } else if (completed && plan.status === 'running') {
       nextPlans = update('completed')
       if (ownsActive) nextActive = null
     } else if (plan.status === 'running' && !ownsActive) {

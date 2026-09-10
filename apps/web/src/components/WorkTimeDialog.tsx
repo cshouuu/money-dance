@@ -23,7 +23,7 @@ interface WorkTimeDialogProps {
 
 function nextDateValue(date: string): string {
   const next = localDateWithTime(date, '12:00')
-  next.setDate(next.getDate() + 1)
+  next.setDate(next.getDate() + 31)
   return toLocalDateValue(next)
 }
 
@@ -81,6 +81,7 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
       setError('开始时间不能晚于当前时间。')
       return
     }
+    if (endTime && +localDateWithTime(endDate,endTime) - +localDateWithTime(date,startTime) > 31*86400000) {setError('单次工作最多 31 天。');return}
     if (endTime && localDateWithTime(endDate, endTime) <= localDateWithTime(date, startTime)) {
       setError('结束时间需要晚于开始时间。')
       return
@@ -96,7 +97,7 @@ export function WorkTimeDialog({ open, purpose, date, plannedStart, record, stor
       {purpose === 'start' && <><p className="work-dialog-copy">只调整今天，明天仍会使用你的默认计薪方式。</p><div className="work-quick-actions"><button type="button" className="work-now-button" onClick={()=>startWithTime(nowTime)}><Clock3 size={16}/><span><b>从现在开始</b><small>{nowTime}</small></span></button><button type="button" disabled={!canUsePlannedStart} onClick={()=>startWithTime(plannedStart)}><span><b>按计划时间</b><small>{plannedStart}{canUsePlannedStart ? '' : ' · 尚未到点'}</small></span></button></div><div className="work-dialog-divider"><span>或补记实际开始时间</span></div></>}
       <div className="work-time-fields"><Input label="开始时间" required type="time" max={date === toLocalDateValue() ? nowTime : undefined} value={startTime} onValueChange={value=>{setStartTime(value);setError('')}}/>{purpose === 'adjust' && <><Input label="结束日期" type="date" min={date} max={nextDateValue(date)} disabled={!endTime} value={endDate} onValueChange={value=>{setEndDate(value);setError('')}}/><Input label="结束时间" hint="过去时间为实际下班；未来时间到点停止计薪；留空则手动结束" type="time" value={endTime} onValueChange={value=>{setEndTime(value);if(!value)setEndDate(date);setError('')}}/></>}
       </div>
-      {purpose === 'start' && <div className="work-planned-end"><div className="work-dialog-divider"><span>可选：到点自动停止计薪</span></div><div className="work-planned-end-fields"><Input label="预计结束日期" type="date" min={date} max={nextDateValue(date)} disabled={!plannedEndTime} value={plannedEndDate} onValueChange={value=>{setPlannedEndDate(value);setError('')}}/><Input label="预计结束时间" hint="留空则手动结束" type="time" value={plannedEndTime} onValueChange={value=>{setPlannedEndTime(value);if(!value)setPlannedEndDate(date);setError('')}}/></div><small className="work-planned-end-note">跨午夜时请选择次日日期。到点后会冻结工时，下次打开应用继续选择结算方式。</small></div>}
+      {purpose === 'start' && <div className="work-planned-end"><div className="work-dialog-divider"><span>可选：到点自动停止计薪</span></div><div className="work-planned-end-fields"><Input label="预计结束日期" type="date" min={date} max={nextDateValue(date)} disabled={!plannedEndTime} value={plannedEndDate} onValueChange={value=>{setPlannedEndDate(value);setError('')}}/><Input label="预计结束时间" hint="留空则手动结束" type="time" value={plannedEndTime} onValueChange={value=>{setPlannedEndTime(value);if(!value)setPlannedEndDate(date);setError('')}}/></div><small className="work-planned-end-note">长班可选择后续日期，单次最多跨 31 个日历日。到点后会冻结工时，下次打开应用继续选择结算方式。</small></div>}
       {(error || storageError) && <p className="work-dialog-error" role="alert">{error || storageError}</p>}
       <div className="work-dialog-actions"><button type="button" className="work-cancel-button" onClick={onCancel}>取消</button><button type="submit" className="work-confirm-button">{purpose === 'start' ? '按这个时间开始' : '保存时间'}</button></div>
     </form>

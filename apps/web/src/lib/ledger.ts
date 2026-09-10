@@ -1,6 +1,9 @@
-import { calculateEarnedToday, calculateRates, type SalaryProfile } from '@salary-flow/core'
+import { rosterStandardDayAmount } from './roster'
+import { rosterPayForDate } from './roster'
+import { rosterForDate } from '@salary-flow/core'
+import { calculateEarnedToday, vacationForDate, calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
-import { attendancePayModeLabel, attendanceStatusLabel, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, loadAttendanceRecords, loadChinaHolidaySettings } from './attendance'
+import { getVacationPayAmount, attendancePayModeLabel, attendanceStatusLabel, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, loadAttendanceRecords, loadChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { loadOvertimeSessions, migrateLegacyOvertimeLedgerDates } from './overtime'
@@ -10,6 +13,7 @@ import { getFlexibleEarnedAmount, getScheduledWorkedSeconds, isFlexibleFullDaySe
 export type SummaryDimension = 'day' | 'month' | 'year'
 
 export interface SummaryEntry {
+  workStageId?: string
   id: string
   direction: LedgerDirection
   amount: number
@@ -198,7 +202,6 @@ function livingCostSummaryEntries(profile: SalaryProfile, start: Date, end: Date
 function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[], attendanceRecords: AttendanceRecord[]): SummaryEntry[] {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
-  const effectiveDate = getSalaryEffectiveDate(profile, now)
   const entries: SummaryEntry[] = []
   const workRecordByDate = new Map(workRecords.map(record => [record.date, record]))
   const attendanceByDate = new Map(attendanceRecords.map(record => [record.date, record]))
@@ -209,24 +212,38 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     day.setHours(0, 0, 0, 0)
     if (day > today) break
     const date = toLocalDateValue(day)
+    if (!isEmployedOn(profile, date)) continue
+    // Missing historical salary is unknown, even with a saved attendance record.
+    if (profile.workJourney && !workStageForDate(profile, date)?.profile) continue
     const datedProfile = salaryProfileForBusinessDate(profile, date, attendanceRecords, holidaySettings)
+    const effectiveDate = getSalaryEffectiveDate(datedProfile, now)
     const rates = calculateRates(datedProfile)
     const workRecord = workRecordByDate.get(date)
     const attendance = attendanceByDate.get(date)
     // The effective date only limits automatically generated history. A saved
     // attendance adjustment is an explicit instruction and must still be
     // reflected in the ledger, even when it predates the salary history range.
-    if (day < effectiveDate && !attendance && !workRecord) continue
+    if (day < effectiveDate && !attendance && !workRecord && !vacationForDate(profile, date) && !rosterForDate(profile, date)) continue
     let amount = 0
     let source = '工资收入'
-    const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
+    const customAttendanceAmount = getCustomAttendanceAmount(attendance, rosterStandardDayAmount(datedProfile, date, rates.daily))
+    const vacationAmount = getVacationPayAmount(date, datedProfile, holidaySettings)
+    const rosterAmount = rosterPayForDate(datedProfile, date, now, workRecords, attendanceRecords, holidaySettings)
     const officialHolidayAmount = attendance || workRecord ? null : getOfficialHolidayPayAmount(date, datedProfile, rates.daily, holidaySettings)
-    if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
+    const rosterFinal=rosterForDate(profile,date)?.overrides.find(item=>item.date===date)?.amount
+    if(rosterFinal!==undefined){amount=rosterFinal;source='工资收入 · 排班工资调整'}
+    else if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
       source = `工资收入 · ${attendanceStatusLabel(attendance)}`
       amount = customAttendanceAmount ?? 0
     } else if (attendance?.status === 'normal' && customAttendanceAmount !== null) {
       amount = customAttendanceAmount
       source = `工资收入 · 正常出勤 · ${attendancePayModeLabel(attendance)}`
+    } else if (vacationAmount !== null) {
+      amount = vacationAmount
+      source = `工资收入 · ${vacationForDate(profile, date)?.name ?? '假期'}${attendance?.status === 'normal' || workRecord ? ' · 值班' : ''}`
+    } else if (rosterAmount !== null) {
+      amount = rosterAmount
+      source = '工资收入 · 排班'
     } else if (officialHolidayAmount !== null) {
       const holiday = chinaHolidayForDate(date, holidaySettings)
       amount = officialHolidayAmount
@@ -241,7 +258,9 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
         else if (attendance?.status === 'normal' && !sameCalendarDay(day, today)) amount = rates.daily
       } else {
         if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, datedProfile, holidaySettings)) continue
-        amount = workRecord?.sessions.length
+        amount = profile.workJourney && !workRecord?.sessions.length
+          ? getScheduledWorkedSeconds(datedProfile, { date, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now, attendanceRecords) * rates.second
+          : workRecord?.sessions.length
           ? getScheduledWorkedSeconds(datedProfile, workRecord, now, attendanceRecords) * rates.second
           : sameCalendarDay(day, today) ? calculateEarnedToday(datedProfile, now) : rates.daily
       }
@@ -308,7 +327,7 @@ function isInRange(entry: LedgerEntry, start: Date, end: Date): boolean {
 }
 
 export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords(), attendanceRecords = loadAttendanceRecords()): SummaryResult {
-  const attendanceSalaryIds = new Set(attendanceRecords.map(record => salaryEntryIdForDate(record.date)))
+  const attendanceSalaryIds = new Set(attendanceRecords.filter(record => isEmployedOn(profile, record.date)).map(record => salaryEntryIdForDate(record.date)))
   const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId && !attendanceSalaryIds.has(entry.replacesId))
   const replacedSalaryIds = new Set(overrides.map(entry => entry.replacesId))
   const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords, attendanceRecords).filter(entry => !replacedSalaryIds.has(entry.id))
@@ -328,6 +347,7 @@ export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], s
         kind: entry.kind,
         ledgerEntryId: entry.id,
         replacesId: entry.replacesId,
+        workStageId: entry.workStageId,
       }
     })
 

@@ -35,6 +35,7 @@ export function removeJSON(key: string): boolean {
 }
 
 export const keys = {
+  mobileDock: 'salary-flow.mobile-dock.v1',
   profile: 'salary-flow.profile.v1',
   wishes: 'salary-flow.wishes.v1',
   widgetWishes: 'salary-flow.widget-wishes.v1',

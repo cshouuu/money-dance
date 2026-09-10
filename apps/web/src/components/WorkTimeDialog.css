@@ -34,7 +34,7 @@
 .work-quick-actions button.work-now-button { border-color: var(--dark); background: var(--dark); color: var(--on-dark); }
 .work-quick-actions span { display: flex; flex-direction: column; gap: 3px; }
 .work-quick-actions b { font-size: 11px; }
-.work-quick-actions small { opacity: .68; font: 10px 'DM Mono'; }
+.work-quick-actions small { opacity: .68; font: 10px var(--font-numeric);font-variant-numeric:tabular-nums; }
 .work-dialog-divider { display: flex; align-items: center; gap: 10px; margin: 18px 0; color: var(--muted); font-size: 9px; }
 .work-dialog-divider::before, .work-dialog-divider::after { flex: 1; height: 1px; background: var(--line); content: ''; }
 .work-time-fields, .work-planned-end-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
