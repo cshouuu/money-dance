@@ -79,15 +79,16 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
         ? { label: `${resolution.holiday.name}·班`, tone: 'normal', explicit: false, official: true }
         : { label: `${resolution.holiday.name}·休`, tone: 'holiday', explicit: false, official: true }
     }
-    if (date > today) return { label: '未到', tone: 'future', explicit: false }
     if (datedProfile.workWeekMode === 'alternating' && day.getDay() === 6) {
       const weekType = alternatingWeekTypeForDate(day, datedProfile)
       return weekType === 'big'
-        ? { label: '大周', tone: 'normal', explicit: false }
-        : { label: '小周', tone: 'rest', explicit: false }
+        ? { label: '大周·班', tone: 'normal', explicit: false }
+        : { label: '小周·休', tone: 'rest', explicit: false }
     }
-    if (resolution.isWorkday) return { label: '正常', tone: 'normal', explicit: false }
-    return { label: '休息', tone: 'rest', explicit: false }
+    // Future dates still have a known workweek schedule; only ordinary workdays remain pending.
+    if (!resolution.isWorkday) return { label: '休息', tone: 'rest', explicit: false }
+    if (date > today) return { label: '未到', tone: 'future', explicit: false }
+    return { label: '正常', tone: 'normal', explicit: false }
   }
 
   const countRange = (start: Date, end: Date) => {
@@ -157,6 +158,6 @@ export function AttendanceCalendar({ profile, records, workRecords, holidaySetti
     {dimension === 'day' && <><div className="calendar-weekdays" aria-hidden="true">{['日','一','二','三','四','五','六'].map(day => <span key={day}>{day}</span>)}</div><div className="calendar-grid day">{dayCells.map((cell, index) => cell ? <button key={cell.date} type="button" disabled={cell.date > today && !hasChinaHolidayYear(Number(cell.date.slice(0, 4)))} className={`attendance-${cell.state.tone}${cell.date === anchor ? ' selected' : ''}${cell.date === today ? ' current' : ''}${cell.state.explicit ? ' explicit' : ''}${cell.state.official ? ' official' : ''}`} aria-label={`${cell.date}，${cell.state.label}${cell.state.explicit ? '，已调整' : cell.state.official ? '，中国大陆节假日日历' : ''}`} onClick={() => { onChange('day', cell.date); onSelectDate(cell.date) }}><b>{cell.day}</b><span>{cell.state.label}</span></button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>)}</div></>}
     {dimension === 'month' && <div className="calendar-grid month">{monthCells.map(cell => <button key={cell.anchor} type="button" disabled={cell.anchor > toLocalMonthValue(now) && !hasChinaHolidayYear(Number(cell.anchor.slice(0, 4)))} className={cell.anchor === toLocalMonthValue(now) ? 'current' : ''} onClick={() => drillDown('month', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
     {dimension === 'year' && <div className="calendar-grid year">{yearCells.map(cell => <button key={cell.anchor} type="button" disabled={Number(cell.anchor) > now.getFullYear()} className={Number(cell.anchor) === now.getFullYear() ? 'current' : ''} onClick={() => drillDown('year', cell.anchor)} aria-label={`${cell.label}，正常${cell.counts.normal}天，请假${cell.counts.leave}天，放假${cell.counts.holiday}天`}><b>{cell.label}</b><span>正常 {cell.counts.normal} · 请假 {cell.counts.leave} · 放假 {cell.counts.holiday}</span></button>)}</div>}
-    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span><i className="attendance-holiday-dot"/>放假</span><span><i className="attendance-official-dot"/>国家日历</span><span>点击日期调整出勤</span></div>
+    <div className="calendar-legend"><span><i className="attendance-normal-dot"/>正常上班</span><span><i className="attendance-leave-dot"/>请假 / 特殊出勤</span><span><i className="attendance-holiday-dot"/>放假</span><span><i className="attendance-rest-dot"/>休息日</span><span><i className="attendance-official-dot"/>国家日历</span><span>点击日期调整出勤</span></div>
   </section>
 }
