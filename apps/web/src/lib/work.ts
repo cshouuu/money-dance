@@ -253,11 +253,11 @@ export function getFlexibleEarnedAmount(
 /** Base salary shown before excess flexible time is converted to overtime.
  * Full-day unpaid leave/holiday has an explicit zero base; a null custom
  * amount only falls back to daily salary for normal attendance. */
-export function getFlexibleBaseSettlementAmount(attendance: AttendanceRecord | undefined, dailyAmount: number): number {
+export function getFlexibleBaseSettlementAmount(attendance: AttendanceRecord | undefined, dailyAmount: number, vacationAmount: number | null = null): number {
   const customAmount = getCustomAttendanceAmount(attendance, dailyAmount)
   if (customAmount !== null) return customAmount
   if (attendance?.status === 'leave' || attendance?.status === 'holiday') return 0
-  return Math.max(0, dailyAmount)
+  return Math.max(0, vacationAmount ?? dailyAmount)
 }
 
 export function isFlexibleFullDaySettlement(record: DailyWorkRecord | undefined, salaryType: SalaryProfile['salaryType']): boolean {

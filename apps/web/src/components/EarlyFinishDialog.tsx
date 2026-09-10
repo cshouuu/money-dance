@@ -16,6 +16,7 @@ interface EarlyFinishDialogProps {
   targetSeconds: number
   actualAmount: number
   fullDayAmount: number
+  basePayLabel?: string
   secondRate: number
   error?: string
   onActual: () => void
@@ -27,7 +28,7 @@ interface EarlyFinishDialogProps {
 
 const money = (value: number) => `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetSeconds, actualAmount, fullDayAmount, secondRate, error, onActual, onFullDay, onAttendance, onOvertime, onCancel }: EarlyFinishDialogProps) {
+export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetSeconds, actualAmount, fullDayAmount, basePayLabel, secondRate, error, onActual, onFullDay, onAttendance, onOvertime, onCancel }: EarlyFinishDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const paidChoiceRef = useRef<HTMLButtonElement>(null)
@@ -111,12 +112,12 @@ export function EarlyFinishDialog({ open, settlementKind, workedSeconds, targetS
       {settlementKind === 'under-target' ? <>
         <p id="early-finish-description">今天实际工作 {formatDuration(workedSeconds)}，目标 {formatDuration(targetSeconds)}。这次如何记入账本？</p>
         <div className="early-finish-options">
-          <button type="button" onClick={() => { restoreFocusRef.current = false; onActual() }}><Clock3 size={19}/><span><b>按实际时长计薪</b><small>按已工作的 {formatDuration(workedSeconds)} 记入 {money(actualAmount)}</small></span></button>
-          <button type="button" onClick={() => { restoreFocusRef.current = false; onFullDay() }}><WalletCards size={19}/><span><b>按正常出勤计全天工资</b><small>按目标工时结算 {money(fullDayAmount)}</small></span></button>
+          <button type="button" onClick={() => { restoreFocusRef.current = false; onActual() }}><Clock3 size={19}/><span><b>{basePayLabel ? '保留实际工时与既定工资' : '按实际时长计薪'}</b><small>{basePayLabel ? `记录 ${formatDuration(workedSeconds)} 工时，工资保持 ${money(fullDayAmount)}` : `按已工作的 ${formatDuration(workedSeconds)} 记入 ${money(actualAmount)}`}</small></span></button>
+          {!basePayLabel && <button type="button" onClick={() => { restoreFocusRef.current = false; onFullDay() }}><WalletCards size={19}/><span><b>按正常出勤计全天工资</b><small>按目标工时结算 {money(fullDayAmount)}</small></span></button>}
           <button type="button" className="attendance-option" onClick={() => { restoreFocusRef.current = false; onAttendance() }}><CalendarCheck2 size={19}/><span><b>调整今天的出勤情况</b><small>设置请假、特殊出勤或固定金额</small></span></button>
         </div>
       </> : <>
-        <p id="early-finish-description">正常工时 {formatDuration(targetSeconds)} 已按 {money(fullDayAmount)} 结算，超出的 {formatDuration(excessSeconds)} 要怎么算？</p>
+        <p id="early-finish-description">{basePayLabel ? `${basePayLabel}为 ${money(fullDayAmount)}，值班不会重复增加基本工资。` : `正常工时 ${formatDuration(targetSeconds)} 按 ${money(fullDayAmount)} 结算。`}超出的 {formatDuration(excessSeconds)} 要怎么算？</p>
         {!showPaidOptions ? <div className="early-finish-options overtime-settlement-options">
           <button type="button" onClick={() => { restoreFocusRef.current = false; onOvertime({ payMode: 'unpaid' }) }}><Ban size={19}/><span><b>超出部分不计薪</b><small>仍记录 {formatDuration(excessSeconds)} 加班时长并累计成就</small></span></button>
           <button ref={paidChoiceRef} type="button" className="paid-overtime-option" onClick={showPaidSettlement}><BadgeDollarSign size={19}/><span><b>超出部分按加班计薪</b><small>输入工资倍率或设置固定金额</small></span></button>

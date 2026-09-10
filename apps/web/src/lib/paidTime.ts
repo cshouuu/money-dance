@@ -191,6 +191,23 @@ function mergeIntervals(intervals: PaidTimeInterval[]): PaidTimeInterval[] {
   return result
 }
 
+/** Shared exact slices for Web calculations and native timer snapshots. */
+export function actualPaidIntervalsInRange(
+  profile: SalaryProfile,
+  start: Date,
+  end: Date,
+  workRecords: readonly DailyWorkRecord[] = [],
+  attendanceRecords: readonly AttendanceRecord[] = [],
+  settings = loadChinaHolidaySettings(start),
+): PaidTimeInterval[] {
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return []
+  return mergeIntervals(candidateBusinessDates(start, end).flatMap(date => (
+    actualPaidIntervalsForDate(profile, date, end, workRecords, attendanceRecords, settings)
+      .map(interval => clippedInterval(interval, start, end))
+      .filter((interval): interval is PaidTimeInterval => interval !== null)
+  )))
+}
+
 export function calculatePaidTimeEarnings(
   profile: SalaryProfile,
   startValue: string | Date,
@@ -205,11 +222,7 @@ export function calculatePaidTimeEarnings(
     return { elapsedSeconds: 0, paidSeconds: 0, earnedAmount: 0 }
   }
 
-  const intervals = mergeIntervals(candidateBusinessDates(start, end).flatMap(date => (
-    actualPaidIntervalsForDate(profile, date, end, workRecords, attendanceRecords, settings)
-      .map(interval => clippedInterval(interval, start, end))
-      .filter((interval): interval is PaidTimeInterval => interval !== null)
-  )))
+  const intervals = actualPaidIntervalsInRange(profile, start, end, workRecords, attendanceRecords, settings)
   let paidSeconds = 0
   let earnedAmount = 0
   for (const interval of intervals) {

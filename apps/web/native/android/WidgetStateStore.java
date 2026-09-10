@@ -218,7 +218,13 @@ public final class WidgetStateStore {
         return 0D;
     }
 
-    /** Integrates only positive-rate timeline slices for an active slacking timer. */
+    /** Older snapshots used salary growth as a proxy for work time. */
+    private static JSONArray paidWorkTimeline(JSONObject snapshot) {
+        JSONArray timeline = snapshot.optJSONArray("paidWorkTimeline");
+        return timeline != null ? timeline : snapshot.optJSONArray("workTimeline");
+    }
+
+    /** Integrates actual work even when daily salary is fixed or zero. */
     static SlackingEarnings slackingEarnings(JSONObject snapshot, JSONObject slacking, long endAt) {
         long startAt = Math.max(0L, slacking.optLong("startAt", endAt));
         long safeEndAt = Math.max(startAt, endAt);
@@ -234,7 +240,7 @@ public final class WidgetStateStore {
                 : Math.max(0L, Math.min(safeEndAt, syncedAt) - startAt) / 1000D;
         double currentRate = 0D;
         long integrationStart = Math.max(startAt, syncedAt);
-        JSONArray timeline = snapshot.optJSONArray("workTimeline");
+        JSONArray timeline = paidWorkTimeline(snapshot);
         if (timeline == null || safeEndAt <= integrationStart) {
             return new SlackingEarnings(amount, paidSeconds, currentRate);
         }
@@ -245,7 +251,8 @@ public final class WidgetStateStore {
             long segmentStart = segment.optLong("startAt", -1L);
             long segmentEnd = segment.optLong("endAt", -1L);
             double rate = finiteNonNegative(segment.optDouble("ratePerSecond", 0D));
-            if (segmentStart < 0L || segmentEnd <= segmentStart || rate <= 0D) continue;
+            if (segmentStart < 0L || segmentEnd <= segmentStart
+                    || (!snapshot.has("paidWorkTimeline") && rate <= 0D)) continue;
             long overlapStart = Math.max(integrationStart, segmentStart);
             long overlapEnd = Math.min(safeEndAt, segmentEnd);
             if (overlapEnd > overlapStart) {
@@ -505,6 +512,18 @@ public final class WidgetStateStore {
             if (startAt < 0L || endAt < startAt
                     || !isFinite(baseAmount) || baseAmount < 0D
                     || !isFinite(rate) || rate < 0D) return false;
+        }
+        if (snapshot.has("paidWorkTimeline")) {
+            JSONArray paidTimeline = snapshot.optJSONArray("paidWorkTimeline");
+            if (paidTimeline == null) return false;
+            for (int index = 0; index < paidTimeline.length(); index += 1) {
+                JSONObject segment = paidTimeline.optJSONObject(index);
+                if (segment == null) return false;
+                long startAt = segment.optLong("startAt", -1L);
+                long endAt = segment.optLong("endAt", -1L);
+                double rate = segment.optDouble("ratePerSecond", Double.NaN);
+                if (startAt < 0L || endAt <= startAt || !isFinite(rate) || rate < 0D) return false;
+            }
         }
         return validActiveTimer(snapshot.optJSONObject("slacking"), false)
                 && validActiveTimer(snapshot.optJSONObject("overtime"), true);

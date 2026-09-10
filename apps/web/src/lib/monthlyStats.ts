@@ -1,4 +1,4 @@
-import { calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
+import { calculateRates, isEmployedOn, vacationForDate, workStageForDate, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerEntry, OvertimeSession, SlackingSession } from '../types'
 import { monthlyWorkBreakdown, type WorkInterval } from './monthlyWorkBreakdown'
 import { getVacationPayAmount, getMonthlyScheduledWorkDayCount, loadChinaHolidaySettings, resolveAttendanceDay, getCustomAttendanceAmount, getOfficialHolidayPayAmount, attendanceWorkedFraction } from './attendance'
@@ -34,7 +34,11 @@ export function getMonthlyWorkStats(
   let plannedSeconds = workdayCount * rates.paidSecondsPerDay
   let plannedSalary = rates.daily * currentRateProfile.monthlyWorkDays
 
-  if (profile.workJourney || profile.vacations?.length) {
+  const hasVacationThisMonth = !!profile.vacations?.length && Array.from(
+    { length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() },
+    (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`,
+  ).some(date => vacationForDate(profile, date))
+  if (profile.workJourney || hasVacationThisMonth) {
     plannedSeconds = 0
     plannedSalary = 0
     for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {

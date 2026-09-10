@@ -19,6 +19,15 @@ export function vacationRange(plan: VacationPlan, stage?: WorkStage) {
   return { start, end, active: start <= end, clipped: start !== plan.startDate || end !== plan.endDate }
 }
 
+export function upcomingVacations(profile: SalaryProfile, today: string) {
+  return (profile.vacations ?? []).flatMap(plan => {
+    const stage = profile.workJourney?.stages.find(item => item.id === plan.stageId)
+    const range = vacationRange(plan, stage)
+    if (!range.active || range.start <= today || vacationForDate(profile, range.start)?.id !== plan.id) return []
+    return [{ plan, ...range }]
+  }).sort((a, b) => a.start.localeCompare(b.start))
+}
+
 export function validateVacation(plan: VacationPlan, profile: SalaryProfile): string | null {
   if (!plan.name.trim() || plan.name.length > 40) return '请填写 1–40 字的假期名称。'
   if (!['winter', 'summer', 'custom'].includes(plan.kind) || !['normal', 'ratio', 'monthly', 'unpaid'].includes(plan.payMode)) return '请选择有效的假期与计薪方式。'
@@ -70,6 +79,6 @@ export function vacationImpact(profile: SalaryProfile, plans: VacationPlan[], ch
 export function stageVacationSummary(profile: SalaryProfile, stage: WorkStage, today: string): string | null {
   const current = vacationForDate(profile, today)
   if (current?.stageId === stage.id) return `${current.name}中 · 在职`
-  const next = profile.vacations?.filter(plan => plan.stageId === stage.id && plan.startDate > today && vacationRange(plan, stage).active).sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
-  return next ? `${next.startDate} 起 ${next.name}` : null
+  const next = upcomingVacations(profile, today).find(item => item.plan.stageId === stage.id)
+  return next ? `${next.start} 起 ${next.plan.name}` : null
 }

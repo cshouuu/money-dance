@@ -1,3 +1,8 @@
+import { buildWidgetSnapshot } from './widgetState'
+import { buildWishWidgetSnapshot } from './wishWidget'
+import { getWishProgress } from './wishProgress'
+import { calculatePaidTimeEarnings } from './paidTime'
+import { saveTimerPlan, reconcileTimerPlans } from './timerPlans'
 import { DEFAULT_PROFILE, vacationForDate, type SalaryProfile, type VacationPlan, type WorkStage } from '@salary-flow/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getVacationPayAmount, resolveAttendanceDay, saveChinaHolidaySettings } from './attendance'
@@ -5,14 +10,14 @@ import { summarizeLedger } from './ledger'
 import { salaryProfileForBusinessDate, loadProfile, saveProfile } from './profile'
 import { getMonthlyWorkStats } from './monthlyStats'
 import { actualPaidIntervalsForDate } from './paidTime'
-import { summarizeTodayWork } from './work'
+import { getAutomaticFlexibleSettlementMode, getFlexibleBaseSettlementAmount, summarizeTodayWork } from './work'
 import { getRestCountdown } from './restCountdown'
 import { getPaydayCountdown } from './payday'
 import { isConfiguredWorkday } from './attendance'
 import { commitJourney, profileSnapshot, stageDays } from './workJourney'
-import { vacationImpact, vacationRange, validateVacation, saveVacations } from './vacations'
-import { keys, saveJSON } from './storage'
-import type { AttendanceRecord, DailyWorkRecord } from '../types'
+import { stageVacationSummary, vacationImpact, vacationRange, validateVacation, saveVacations } from './vacations'
+import { keys, loadJSON, saveJSON } from './storage'
+import type { AttendanceRecord, DailyWorkRecord, SlackingSession, OvertimeSession } from '../types'
 
 const settings = { enabled: false, effectiveFrom: '2026-01-01', dataVersion: '' }
 const plan: VacationPlan = { id: 'summer', stageId: null, name: '暑假', kind: 'summer', startDate: '2026-08-01', endDate: '2026-08-31', payMode: 'normal', value: 1 }
@@ -154,5 +159,84 @@ describe('vacation editing', () => {
     expect(vacationForDate(next, '2026-08-10')?.name).toBe('暑假')
     expect(stageDays(next, stage, new Date(2026, 7, 10, 18))[0]).toMatchObject({ label: '暑假', seconds: 0 })
     expect(stage.profile?.vacations).toBeUndefined()
+  })
+})
+
+
+describe('vacation integration regressions', () => {
+  it('keeps average monthly estimates unchanged outside the effective vacation month', () => {
+    const now = new Date(2026, 8, 30, 23)
+    const ordinary = getMonthlyWorkStats(base, [], [], [], now)
+    expect(getMonthlyWorkStats(withPlan(), [], [], [], now).expectedIncome).toBe(ordinary.expectedIncome)
+    expect(getMonthlyWorkStats(withPlan({ startDate: '2026-10-01', endDate: '2026-10-31' }), [], [], [], now).expectedIncome).toBe(ordinary.expectedIncome)
+    expect(ordinary.expectedIncome).toBeCloseTo(8400)
+  })
+
+  it.each([['normal', 1, 400], ['ratio', 0.5, 200], ['monthly', 2100, 100], ['unpaid', 0, 0]] as const)('settles flexible duty with %s vacation pay', (payMode, value, expected) => {
+    const profile = withPlan({ payMode, value })
+    const record: DailyWorkRecord = { date: '2026-08-03', mode: 'flexible', status: 'ended', sessions: [{ id: 'duty', startTime: new Date(2026, 7, 3, 9).toISOString(), endTime: new Date(2026, 7, 3, 20).toISOString() }], updatedAt: end.toISOString() }
+    const work = summarizeTodayWork(profile, [record], new Date(2026, 7, 3, 21))
+    expect(getFlexibleBaseSettlementAmount(undefined, 400, work.earnedAmount)).toBe(expected)
+    expect(getFlexibleBaseSettlementAmount({ date: record.date, status: 'normal', payMode: 'fixed', fixedAmount: 50, updatedAt: '' }, 400, work.earnedAmount)).toBe(50)
+    expect(getAutomaticFlexibleSettlementMode('monthly', 7200, 28800, true)).toBe('actual')
+    expect(getAutomaticFlexibleSettlementMode('monthly', 36000, 28800, true)).toBeNull()
+  })
+
+  it('uses clipped upcoming dates consistently in the home countdown and journey summary', () => {
+    const stage: WorkStage = { id: 'school', name: '学校', company: '', role: '', startDate: '2026-08-10', endDate: '2026-08-20', profile: base, createdAt: '' }
+    const profile: SalaryProfile = { ...base, vacations: [{ ...plan, stageId: stage.id }], workJourney: { version: 1, revision: 1, stages: [stage] } }
+    const now = new Date(2026, 7, 9, 12)
+    const work = summarizeTodayWork(profile, [], now)
+    expect(getRestCountdown(profile, work, now, [], [], settings).vacation).toEqual({ label: '距离暑假', value: '1 天', hint: '2026-08-10 至 2026-08-20' })
+    expect(stageVacationSummary(profile, stage, '2026-08-09')).toBe('2026-08-10 起 暑假')
+    expect(getRestCountdown(profile, summarizeTodayWork(profile, [], new Date(2026, 7, 20, 12)), new Date(2026, 7, 20, 12), [], [], settings).vacation?.hint).toContain('之后暂无上班安排')
+  })
+
+  it('recognizes recorded weekend duty as the next return, with manual rest taking priority', () => {
+    const profile = withPlan({ endDate: '2026-08-07' })
+    const now = new Date(2026, 7, 7, 10)
+    const record: DailyWorkRecord = { date: '2026-08-08', mode: 'scheduled', status: 'ready', sessions: [], updatedAt: '' }
+    const work = summarizeTodayWork(profile, [], now)
+    expect(getRestCountdown(profile, work, now, [], [record], settings).vacation?.hint).toContain('2026-08-08 恢复上班')
+    expect(getRestCountdown(profile, work, now, [{ date: record.date, status: 'holiday', updatedAt: '' }], [record], settings).vacation?.hint).toContain('2026-08-10 恢复上班')
+  })
+
+  it('keeps paid rest out of wish work progress and its native timeline', () => {
+    const profile = withPlan({ endDate: '2026-08-07' })
+    const now = new Date(2026, 7, 7, 18)
+    const wish = { id: 'wish', name: '耳机', price: 100, createdAt: new Date(2026, 7, 3, 9).toISOString() }
+    const progress = getWishProgress(wish, profile, now)
+    expect(progress.earnedAmount).toBe(0)
+    expect(progress.estimatedAt).toEqual(new Date(2026, 7, 10, 11))
+    const native = buildWishWidgetSnapshot(profile, [wish], [wish.id], [], [], now)
+    expect(native.wishes[0].earnedAmount).toBe(0)
+    expect(native.timeline[0].startAt).toBe(new Date(2026, 7, 10, 9).getTime())
+  })
+
+  it('executes vacation reservations without inventing slacking income or losing independent overtime', () => {
+    saveJSON(keys.profile, withPlan())
+    const startTime = new Date(2026, 7, 3, 9).toISOString()
+    const endTime = new Date(2026, 7, 3, 10).toISOString()
+    for (const kind of ['slacking', 'overtime'] as const) expect(saveTimerPlan({ id: kind, kind, startTime, endTime, status: 'scheduled', payMode: 'fixed', fixedAmount: 80 }, new Date(2026, 7, 3, 8))).toBeNull()
+    expect(reconcileTimerPlans(new Date(2026, 7, 3, 11)).error).toBeNull()
+    expect(loadJSON<SlackingSession[]>(keys.sessions, [])[0]).toMatchObject({ durationSeconds: 3600, paidDurationSeconds: 0, earnedAmount: 0 })
+    expect(loadJSON<OvertimeSession[]>(keys.overtimeSessions, [])[0]).toMatchObject({ durationSeconds: 3600, earnedAmount: 80 })
+    expect(reconcileTimerPlans(new Date(2026, 7, 3, 12)).changed).toBe(false)
+  })
+
+  it.each([false, true])('separates native salary and actual work timelines with duty=%s', duty => {
+    const profile = withPlan({ payMode: 'ratio', value: 0.5 })
+    const now = new Date(2026, 7, 3, 9)
+    const finish = new Date(2026, 7, 3, 14)
+    const attendance: AttendanceRecord[] = duty ? [{ date: '2026-08-03', status: 'normal', updatedAt: '' }] : []
+    const snapshot = buildWidgetSnapshot({ profile, workRecords: [], attendanceRecords: attendance, now, horizonMs: finish.getTime() - now.getTime() })
+    expect(snapshot.workTimeline.every(segment => segment.ratePerSecond === 0 && segment.baseAmount === 200)).toBe(true)
+    const slices = snapshot.paidWorkTimeline ?? []
+    const seconds = slices.reduce((sum, segment) => sum + (segment.endAt - segment.startAt) / 1000, 0)
+    const amount = slices.reduce((sum, segment) => sum + (segment.endAt - segment.startAt) / 1000 * segment.ratePerSecond, 0)
+    const web = calculatePaidTimeEarnings(profile, now, finish, [], attendance, settings)
+    expect(seconds).toBe(web.paidSeconds)
+    expect(amount).toBeCloseTo(web.earnedAmount)
+    expect(seconds).toBe(duty ? 4 * 3600 : 0)
   })
 })

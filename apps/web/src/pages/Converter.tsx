@@ -128,7 +128,7 @@ export function Converter() {
       <div className="form-card-heading"><span>{editing ? 'EDIT WISH' : 'NEW WISH'}</span><div><b>{editing ? '编辑心愿' : '添加一个心愿'}</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
       <Input label="想买什么" required maxLength={60} autoComplete="off" value={name} onValueChange={setName} placeholder="例如：AirPods Pro" />
       <Input label="价格" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={price} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => setPrice(normalizeDecimalInput(value))} placeholder="1899" />
-      <Input label="心愿起始日期" required type="date" value={startedDate} onValueChange={setStartedDate} hint="从这一天起，按工作收入折算进度；未来日期到日后开始累计" />
+      <Input label="心愿起始日期" required type="date" value={startedDate} onValueChange={setStartedDate} hint="从这一天起按工作时段折算进度，寒暑假等休息日暂停；未来日期到日后开始累计" />
       {formError && <p role="alert">{formError}</p>}
       {previewWorkSeconds !== null ? <div className="live-result converter-live-result"><small>连续纯工时（24小时制）</small><strong>{formatDuration(previewWorkSeconds)}</strong><span>按你的工作日程 ≈ {formatWorkDays(previewWorkSeconds, rates.paidSecondsPerDay)} 个工作日</span></div> : null}
       <Button type="submit" size="lg" ripple><Plus size={17} /> {editing ? '保存修改' : '保存换算'}</Button>

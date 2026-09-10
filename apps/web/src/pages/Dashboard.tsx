@@ -137,13 +137,13 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`
     : null
   const vacation = vacationForDate(profile, work.businessDate)
-  const attendanceLabel = work.vacationName ?? (work.attendance ? attendanceStatusLabel(work.attendance) : work.officialHolidayName ?? '')
+  const attendanceLabel = work.vacationName ?? (work.attendance ? attendanceStatusLabel(work.attendance) : vacation ? `${vacation.name} · 值班` : work.officialHolidayName ?? '')
   const customAttendancePayLabel = work.attendance ? attendancePayModeLabel(work.attendance) : null
   const attendancePayLabel = customAttendancePayLabel ?? (vacation ? vacationPayLabel(vacation) : null) ?? (work.attendance ? '不计薪' : work.dayType === 'holiday' ? earned > 0 ? '正常日薪' : '不计薪' : '')
   const isNormalPayOverride = work.attendance?.status === 'normal' && customAttendancePayLabel !== null
-  const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride || isHalfDayLeave(work.attendance)
+  const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride || isHalfDayLeave(work.attendance) || !!vacation
   const isFullDaySettlement = isFlexibleFullDaySettlement(work.record, profile.salaryType)
-  const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride || isHalfDayLeave(work.attendance) || (work.mode === 'scheduled' && work.status === 'ended')
+  const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride || isHalfDayLeave(work.attendance) || !!vacation || (work.mode === 'scheduled' && work.status === 'ended')
   const heroLabel = work.vacationName ? `${work.vacationName}中 · 今日假期工资` : work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
   const modeStatus = work.vacationName && vacation ? `仍在职 · ${vacationPayLabel(vacation)}` : work.dayType === 'rest'
     ? '非工作日 · 不自动计薪'
@@ -391,7 +391,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const pendingWorkedSeconds = pendingEndRecord ? getFlexibleWorkedSeconds(pendingEndRecord, new Date(pendingEndRecord.updatedAt)) : 0
   const pendingRequirement = getFlexibleSettlementRequirement(pendingWorkedSeconds, targetSeconds)
   const pendingActualAmount = pendingEndRecord ? getFlexibleEarnedAmount({ ...pendingEndRecord, settlementMode: 'actual' }, workRates, profile.salaryType, new Date(pendingEndRecord.updatedAt)) : 0
-  const pendingBaseAmount = getFlexibleBaseSettlementAmount(work.attendance, workRates.daily)
+  const pendingBaseAmount = getFlexibleBaseSettlementAmount(work.attendance, workRates.daily, vacation ? work.earnedAmount : null)
 
   useEffect(() => {
     if (work.record?.mode !== 'flexible' || !hasFlexiblePlannedEndReached(work.record, now)) return
@@ -498,6 +498,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       targetSeconds={targetSeconds}
       actualAmount={pendingActualAmount}
       fullDayAmount={pendingBaseAmount}
+      basePayLabel={vacation ? `${vacation.name}工资` : undefined}
       secondRate={workRates.second}
       error={settlementError}
       onActual={()=>settlePendingRecord('actual')}

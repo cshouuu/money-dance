@@ -401,7 +401,7 @@ export function Slacking() {
       {active ? <button type="button" className="stop-button" onClick={stop}><Square size={18}/>结束摸鱼</button> : <button type="button" className="primary-button big" onClick={() => setTimeDialogPurpose('start')}><Play size={18}/>开始摸鱼</button>}
       {stopError && <div className="timer-stop-error" role="alert"><span>{stopError}</span>{pendingRepairStart ? <button type="button" onClick={retryPendingRepair}>重试保存</button> : null}</div>}
       <button type="button" className="timer-backfill-button" onClick={() => setTimeDialogPurpose('backfill')}><History size={15}/>补记已结束摸鱼</button>
-      <span className="timer-rate">+ ¥{rate.toFixed(5)} / 秒 · 午休和非工作时段不计收益</span>
+      <span className="timer-rate">+ ¥{rate.toFixed(5)} / 秒 · 按工作时段折算，午休和寒暑假等休息时段不计收益</span>
     </div>
     <div className="timer-side-panel">
       <div className="summary-strip slacking-summary"><div><small>历史摸鱼收益</small><strong>¥{totalMoney.toFixed(2)}</strong></div><div><small>累计计薪摸鱼时间</small><strong>{formatDuration(totalSeconds)}</strong></div><button type="button" className="text-button clear-slacking-button" disabled={sessions.length === 0} onClick={() => setPendingDelete({ type: 'all' })}><Trash2 size={15}/>清空历史</button></div>

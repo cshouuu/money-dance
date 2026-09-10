@@ -4,6 +4,7 @@ import type { TodayWorkSummary } from './work'
 import { chinaHolidayForDate, resolveAttendanceDay, type ChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateValue, toLocalTimeValue } from './form'
 import { shiftSessionLocalDate } from './sessionBusinessDate'
+import { upcomingVacations } from './vacations'
 
 export function countdownClock(target: Date, now: Date): string {
   const seconds = Math.max(0, Math.ceil((target.getTime() - now.getTime()) / 1000))
@@ -56,13 +57,15 @@ export function getRestCountdown(profile: SalaryProfile, work: TodayWorkSummary,
       const date = shiftSessionLocalDate(last, offset)
       const parsed = new Date(`${date}T12:00:00`)
       if (stage?.endDate && date > stage.endDate) break
-      if (resolveAttendanceDay(parsed, profile, attendance.find(item => item.date === date), settings).isWorkday) { returnDate = date; break }
+      const manual = attendance.find(item => item.date === date)
+      const resolved = resolveAttendanceDay(parsed, profile, manual, settings)
+      if (resolved.isWorkday || (!manual && records.some(item => item.date === date))) { returnDate = date; break }
     }
     const days = Math.max(0, Math.round((Date.parse(last) - Date.parse(today)) / 86400000) + 1)
     vacation = { label: `${currentVacation.name}中`, value: `还剩 ${days} 天`, hint: `${last} 结束 · ${returnDate ? `${returnDate} 恢复上班` : '之后暂无上班安排'}` }
   } else {
-    const upcoming = profile.vacations?.filter(plan => plan.startDate > today && vacationForDate(profile, plan.startDate)?.id === plan.id).sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
-    if (upcoming) vacation = { label: `距离${upcoming.name}`, value: `${Math.round((Date.parse(upcoming.startDate) - Date.parse(today)) / 86400000)} 天`, hint: `${upcoming.startDate} 至 ${upcoming.endDate}` }
+    const upcoming = upcomingVacations(profile, today)[0]
+    if (upcoming) vacation = { label: `距离${upcoming.plan.name}`, value: `${Math.round((Date.parse(upcoming.start) - Date.parse(today)) / 86400000)} 天`, hint: `${upcoming.start} 至 ${upcoming.end}` }
   }
   return { featured, nextBreak, end: active ? end : null, endLabel: ended && work.dayType === 'work' ? '已下班' : work.dayType !== 'work' ? '今天休息' : '未设置', rest, holiday, vacation }
 }
