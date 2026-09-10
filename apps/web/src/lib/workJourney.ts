@@ -1,4 +1,4 @@
-import { calculateRates, getBreakPeriods, getPaidSecondsPerDay, type SalaryProfile, type WorkStage } from '@salary-flow/core'
+import { calculateRates, vacationForDate, getBreakPeriods, getPaidSecondsPerDay, type SalaryProfile, type WorkStage } from '@salary-flow/core'
 import type { ActiveOvertime } from '../types'
 import { loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue, toLocalTimeValue } from './form'
@@ -14,7 +14,7 @@ import { loadWorkRecords } from './work'
 import { actualPaidIntervalsForDate } from './paidTime'
 
 export function profileSnapshot(profile: SalaryProfile): Omit<SalaryProfile, 'workJourney'> {
-  const { workJourney: _journey, ...snapshot } = profile
+  const { workJourney: _journey, vacations: _vacations, ...snapshot } = profile
   return structuredClone(snapshot)
 }
 
@@ -86,6 +86,7 @@ export async function commitJourney(expected: SalaryProfile, stages: WorkStage[]
       ...current, ...(open?.profile ?? {}),
       // Living expenses belong to the person and continue through career gaps.
       livingCostHistory: current.livingCostHistory,
+      vacations: current.vacations?.map(plan => !current.workJourney && plan.stageId === null ? { ...plan, stageId: stages.find(stage => stage.profile && stage.startDate <= plan.endDate && (!stage.endDate || stage.endDate >= plan.startDate))?.id ?? null } : plan),
       workJourney: { version: 1, revision: (current.workJourney?.revision ?? 0) + 1, stages: [...stages].sort((a, b) => b.startDate.localeCompare(a.startDate)) },
     }
     const previousPlans = loadTimerPlans()
@@ -136,7 +137,7 @@ export function stageDays(profile: SalaryProfile, stage: WorkStage, now = new Da
       return `${toLocalTimeValue(start)}–${end ? `${toLocalDateValue(end) > date ? '次日 ' : ''}${toLocalTimeValue(end)}` : '计时中'}`
     }).join(' / ') : seconds ? `${stage.profile.workStartTime}–${stage.profile.workEndTime < stage.profile.workStartTime ? '次日 ' : ''}${stage.profile.workEndTime}` : '—'
     const amount = incomeByDate.get(date) ?? (stage.profile ? 0 : null)
-    rows.push({ date, seconds, amount, times, label: record?.status === 'leave' ? '请假' : record?.status === 'holiday' ? '假日' : seconds ? '工作' : !stage.profile ? '待补充' : '无工时' })
+    rows.push({ date, seconds, amount, times, label: record?.status === 'leave' ? '请假' : record?.status === 'holiday' ? '假日' : seconds ? '工作' : vacationForDate(profile, date)?.name ?? (!stage.profile ? '待补充' : '无工时') })
   }
   return rows.reverse()
 }

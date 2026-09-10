@@ -1,4 +1,4 @@
-import { isEmployedOn, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
+import { calculateRates, isEmployedOn, vacationForDate, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
@@ -16,7 +16,7 @@ export interface ChinaHolidaySettings {
 
 export interface AttendanceDayResolution {
   isWorkday: boolean
-  source: 'manual' | 'china-holiday' | 'profile'
+  source: 'manual' | 'vacation' | 'china-holiday' | 'profile'
   holiday?: ChinaHolidayDay
 }
 
@@ -206,6 +206,8 @@ export function resolveAttendanceDay(
     }
   }
 
+  if (vacationForDate(profile, toLocalDateValue(date))) return { isWorkday: false, source: 'vacation', holiday: chinaHolidayForDate(toLocalDateValue(date), settings) }
+
   const holiday = chinaHolidayForDate(toLocalDateValue(date), settings)
   if (holiday) {
     return {
@@ -216,6 +218,22 @@ export function resolveAttendanceDay(
   }
 
   return { isWorkday: isProfileWorkday(date, profile), source: 'profile' }
+}
+
+/** Use the original salary shares, not the reduced number of attendance days.
+ * Default vacation duty changes attendance only; explicit daily pay overrides
+ * are applied by callers. A weekend does not create a second salary share.
+ */
+export function getVacationPayAmount(date: string, profile: SalaryProfile, settings = loadChinaHolidaySettings()): number | null {
+  const plan = vacationForDate(profile, date)
+  if (!plan) return null
+  const baseline = { ...profile, vacations: undefined }
+  const day = toLocalDateTime(date)
+  const official = chinaHolidayForDate(date, settings)
+  const paid = official ? official.kind === 'adjusted-workday' || (official.statutory && ['monthly', 'annual'].includes(baseline.salaryType)) : isConfiguredWorkday(day, baseline, settings)
+  if (!paid || plan.payMode === 'unpaid') return 0
+  if (plan.payMode === 'monthly') return calculateRates({ ...baseline, salary: plan.value, salaryType: 'monthly' }).daily
+  return calculateRates(baseline).daily * (plan.payMode === 'ratio' ? plan.value : 1)
 }
 
 export function isConfiguredWorkday(

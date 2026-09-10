@@ -1,6 +1,6 @@
-import { calculateEarnedToday, calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
+import { calculateEarnedToday, vacationForDate, calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerDirection, LedgerEntry, LedgerKind } from '../types'
-import { attendancePayModeLabel, attendanceStatusLabel, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, loadAttendanceRecords, loadChinaHolidaySettings } from './attendance'
+import { getVacationPayAmount, attendancePayModeLabel, attendanceStatusLabel, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, loadAttendanceRecords, loadChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { loadOvertimeSessions, migrateLegacyOvertimeLedgerDates } from './overtime'
@@ -220,10 +220,11 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     // The effective date only limits automatically generated history. A saved
     // attendance adjustment is an explicit instruction and must still be
     // reflected in the ledger, even when it predates the salary history range.
-    if (day < effectiveDate && !attendance && !workRecord) continue
+    if (day < effectiveDate && !attendance && !workRecord && !vacationForDate(profile, date)) continue
     let amount = 0
     let source = '工资收入'
     const customAttendanceAmount = getCustomAttendanceAmount(attendance, rates.daily)
+    const vacationAmount = getVacationPayAmount(date, datedProfile, holidaySettings)
     const officialHolidayAmount = attendance || workRecord ? null : getOfficialHolidayPayAmount(date, datedProfile, rates.daily, holidaySettings)
     if (attendance?.status === 'leave' || attendance?.status === 'holiday') {
       source = `工资收入 · ${attendanceStatusLabel(attendance)}`
@@ -231,6 +232,9 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
     } else if (attendance?.status === 'normal' && customAttendanceAmount !== null) {
       amount = customAttendanceAmount
       source = `工资收入 · 正常出勤 · ${attendancePayModeLabel(attendance)}`
+    } else if (vacationAmount !== null) {
+      amount = vacationAmount
+      source = `工资收入 · ${vacationForDate(profile, date)?.name ?? '假期'}${attendance?.status === 'normal' || workRecord ? ' · 值班' : ''}`
     } else if (officialHolidayAmount !== null) {
       const holiday = chinaHolidayForDate(date, holidaySettings)
       amount = officialHolidayAmount

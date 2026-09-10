@@ -15,7 +15,7 @@ export function MonthlyPerformance({ stats, now }: { stats: MonthlyWorkStats; no
     <article className="dashboard-performance-card" aria-label="本月战绩">
       <div className="dashboard-performance-primary"><div><small>本月累计收入</small><strong>{money(stats.income)}</strong><span>本月预计 {money(stats.expectedIncome)}</span></div></div>
       <div className="dashboard-performance-progress">
-        <div><span>计划工时进度</span><strong>{(stats.progress * 100).toFixed(0)}%</strong></div>
+        <div><span>{stats.plannedSeconds > 0 ? '计划工时进度' : '本月无计划上班'}</span><strong>{stats.plannedSeconds > 0 ? `${(stats.progress * 100).toFixed(0)}%` : '—'}</strong></div>
         <div className="dashboard-performance-track" role="progressbar" aria-label="本月计划工时进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stats.progress * 100)}><i style={{ width: `${stats.progress * 100}%` }}/></div>
         <small>{formatDuration(stats.workedSeconds)} / {formatDuration(stats.plannedSeconds)} · 本月 {stats.workdayCount} 个工作日</small>
       </div>
@@ -42,7 +42,7 @@ export function MonthlyPerformance({ stats, now }: { stats: MonthlyWorkStats; no
           <div className="monthly-performance-notes">
             <p>工作收入 {money(stats.workIncome)} = 工资 {money(stats.salaryIncome)} + 加班收益 {money(stats.overtimeIncome)}。综合时薪 = 工作收入 ÷ 累计工作时长。</p>
             <p>加班、摸鱼仅统计已结束记录，跨月归入开始月。工时去重，摸鱼只计工作内的部分。</p>
-            <p>摸鱼收益已包含在工资中，时薪不计意外、手工收入。本月累计收入沿用账本口径，计划进度不额外累加加班。</p>
+            <p>工资包含带薪假期收入。摸鱼收益已包含在工资中，时薪不计意外、手工收入。本月累计收入沿用账本口径，计划进度不额外累加加班。</p>
           </div>
         </div>,
       }]}/>

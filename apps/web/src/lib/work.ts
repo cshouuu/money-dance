@@ -1,6 +1,6 @@
-import { calculateRates, isEmployedOn, workProfileForDate, workStageForDate, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
+import { calculateRates, vacationForDate, isEmployedOn, workProfileForDate, workStageForDate, getWorkedPaidSeconds, parseClock, type SalaryProfile, type SalaryRates, type WorkMode } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, DailyWorkStatus, FlexibleWorkSettlementMode, WorkSession } from '../types'
-import { attendanceLeavePeriod, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
+import { attendanceLeavePeriod, getVacationPayAmount, chinaHolidayForDate, getCustomAttendanceAmount, getOfficialHolidayPayAmount, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateTime, toLocalDateValue } from './form'
 import { createId } from './id'
 import { actualPaidIntervalsForDate } from './paidTime'
@@ -16,6 +16,7 @@ export interface TodayWorkSummary {
   businessDate: string
   record?: DailyWorkRecord
   attendance?: AttendanceRecord
+  vacationName?: string
   officialHolidayName?: string
 }
 
@@ -307,8 +308,12 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     }
   }
 
-  const officialHoliday = attendance || record ? undefined : chinaHolidayForDate(businessDate, holidaySettings)
-  const officialHolidayAmount = attendance || record ? null : getOfficialHolidayPayAmount(businessDate, datedProfile, rates.daily, holidaySettings)
+  const vacation = vacationForDate(profile, businessDate)
+  const vacationAmount = getVacationPayAmount(businessDate, datedProfile, holidaySettings)
+  if (vacation && !attendance && !record) return { mode, status: 'ended', dayType: 'holiday', workedSeconds: 0, earnedAmount: vacationAmount ?? 0, businessDate, vacationName: vacation.name }
+
+  const officialHoliday = attendance || record || vacation ? undefined : chinaHolidayForDate(businessDate, holidaySettings)
+  const officialHolidayAmount = attendance || record || vacation ? null : getOfficialHolidayPayAmount(businessDate, datedProfile, rates.daily, holidaySettings)
   if (officialHolidayAmount !== null) {
     return {
       mode,
@@ -365,7 +370,7 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
     businessDate,
     earnedAmount: (attendance?.status === 'normal' || isHalfDayLeave(attendance)) && customAttendanceAmount !== null
       ? customAttendanceAmount
-      : automaticEarnedAmount,
+      : vacationAmount ?? automaticEarnedAmount,
     record,
     attendance,
   }

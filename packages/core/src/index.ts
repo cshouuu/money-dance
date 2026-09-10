@@ -33,6 +33,7 @@ export interface BreakPeriod {
 }
 
 export interface SalaryProfile {
+  vacations?: VacationPlan[]
   /** Opt-in work history; absent preserves the legacy single-job behavior. */
   workJourney?: WorkJourney
   salary: number
@@ -65,6 +66,25 @@ export interface SalaryProfile {
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
   defaultWorkMode: WorkMode
+}
+
+export interface VacationPlan {
+  id: string
+  stageId: string | null
+  name: string
+  kind: 'winter' | 'summer' | 'custom'
+  startDate: string
+  endDate: string
+  payMode: 'normal' | 'ratio' | 'monthly' | 'unpaid'
+  /** Ratio in [0, 1], or replacement gross monthly salary. */
+  value: number
+}
+
+export function vacationForDate(profile: SalaryProfile, date: string): VacationPlan | undefined {
+  if (!isEmployedOn(profile, date)) return undefined
+  const stage = workStageForDate(profile, date)
+  return profile.vacations?.find(plan => plan.startDate <= date && date <= plan.endDate
+    && (profile.workJourney ? plan.stageId === stage?.id : plan.stageId === null))
 }
 
 export interface WorkStage {
@@ -100,7 +120,7 @@ export function workProfileForDate(profile: SalaryProfile, date: string): Salary
   const stage = workStageForDate(profile, date)
   if (!stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false }
   // Each stage owns its rules, including an active job with a planned end date.
-  return { ...stage.profile, workJourney: profile.workJourney }
+  return { ...stage.profile, vacations: profile.vacations, workJourney: profile.workJourney }
 }
 
 export interface SalaryRates {

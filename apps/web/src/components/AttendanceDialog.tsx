@@ -1,4 +1,4 @@
-import { isEmployedOn } from '@salary-flow/core'
+import { vacationForDate, isEmployedOn } from '@salary-flow/core'
 import { useProfile } from '../lib/useProfile'
 import { CalendarCheck2, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
@@ -112,6 +112,7 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     <form ref={dialogRef} className="attendance-dialog" role="dialog" aria-modal="true" aria-labelledby="attendance-dialog-title" onSubmit={submit}>
       <div className="attendance-dialog-header"><div><p className="eyebrow">ATTENDANCE DETAIL</p><h2 id="attendance-dialog-title">调整出勤情况</h2><span><CalendarCheck2 size={14}/>{formatDate(date)}</span></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
 
+      {vacationForDate(profile, date) && <p className="vacation-note">这天属于「{vacationForDate(profile, date)?.name}」。单日调整优先；正常上班默认保留假期工资，额外补贴可另记加班收入。恢复自动判断后继续应用假期安排。</p>}
       <fieldset className="attendance-field"><legend>这一天怎么过的？</legend><Tabs className="attendance-switch attendance-status-switch" value={status} onValueChange={value => selectStatus(value as AttendanceSelection)}><TabsTrigger value="automatic">自动判断</TabsTrigger><TabsTrigger value="normal">正常上班</TabsTrigger><TabsTrigger value="leave">请假</TabsTrigger><TabsTrigger value="holiday">放假</TabsTrigger></Tabs></fieldset>
 
       {status === 'automatic' ? <div className="attendance-automatic-card"><b>跟随自动判断</b><span>不会创建手工出勤记录，将继续按中国大陆节假日、调休补班及工作周规则计算。</span></div> : <div className="attendance-detail-fields">

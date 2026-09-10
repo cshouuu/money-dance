@@ -1,4 +1,4 @@
-import { DEFAULT_PROFILE, getBreakPeriods, parseClock, workProfileForDate, workStageForDate, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
+import { DEFAULT_PROFILE, vacationForDate, getBreakPeriods, parseClock, workProfileForDate, workStageForDate, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
 import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
@@ -14,7 +14,7 @@ export function settingsWorkStage(profile: SalaryProfile, date = toLocalDateValu
 function settingsProfile(profile: SalaryProfile, date: string): SalaryProfile {
   const stage = settingsWorkStage(profile, date)
   if (!stage?.profile) return profile
-  return { ...profile, ...stage.profile, workJourney: profile.workJourney,
+  return { ...profile, ...stage.profile, vacations: profile.vacations, workJourney: profile.workJourney,
     includeLivingCost: profile.includeLivingCost, monthlyLivingCost: profile.monthlyLivingCost,
     livingCostMode: profile.livingCostMode, livingCostHistory: profile.livingCostHistory }
 }
@@ -23,7 +23,7 @@ function settingsProfile(profile: SalaryProfile, date: string): SalaryProfile {
 export function withSettingsStage(profile: SalaryProfile, date = toLocalDateValue()): SalaryProfile {
   if (!profile.workJourney) return profile
   const stage = settingsWorkStage(profile, date)
-  const { workJourney, ...snapshot } = profile
+  const { workJourney, vacations: _vacations, ...snapshot } = profile
   return { ...profile, workJourney: { ...workJourney,
     stages: workJourney.stages.map(item => item.id === stage?.id ? { ...item, profile: snapshot } : item) } }
 }
@@ -156,7 +156,15 @@ export function salaryProfileForBusinessDate(
     livingCostMode: configuration.mode === 'daily-ledger' ? 'daily-ledger' : 'deduct',
     monthlyLivingCost: configuration.monthlyAmount,
   }
-  if (datedProfile.monthlyRateBasis !== 'actual-calendar') return datedProfile
+  const monthPlans = profile.vacations?.filter(plan => {
+    if (profile.workJourney ? plan.stageId !== stage?.id : plan.stageId !== null) return false
+    const start = stage && stage.startDate > plan.startDate ? stage.startDate : plan.startDate
+    const end = stage?.endDate && stage.endDate < plan.endDate ? stage.endDate : plan.endDate
+    return start <= end && start.slice(0, 7) <= date.slice(0, 7) && end.slice(0, 7) >= date.slice(0, 7)
+  }) ?? []
+  const vacationMonth = monthPlans.length > 0
+  if (vacationMonth) attendanceRecords = attendanceRecords.filter(record => !vacationForDate(profile, record.date))
+  if (datedProfile.monthlyRateBasis !== 'actual-calendar' && !(vacationMonth && (['monthly', 'annual'].includes(profile.salaryType) || monthPlans.some(plan => plan.payMode === 'monthly')))) return datedProfile
   const paidDays = getMonthlyPaidDayCount({ ...datedProfile, workJourney: undefined }, toLocalDateTime(date), attendanceRecords, holidaySettings)
   return paidDays > 0 ? { ...datedProfile, monthlyWorkDays: paidDays } : datedProfile
 }
@@ -277,7 +285,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
 export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryProfile | null {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
   // A stale settings tab may not overwrite a journey edited in another tab.
-  if (profileFingerprint(stored.workJourney) !== profileFingerprint(profile.workJourney)) return null
+  if (profileFingerprint(stored.workJourney) !== profileFingerprint(profile.workJourney) || profileFingerprint(stored.vacations) !== profileFingerprint(profile.vacations)) return null
   const previousConfiguration: LivingCostConfiguration = {
     mode: (stored.includeLivingCost ?? DEFAULT_PROFILE.includeLivingCost)
       ? normalizeLivingCostMode(stored.livingCostMode)

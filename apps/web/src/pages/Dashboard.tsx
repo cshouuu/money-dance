@@ -1,5 +1,6 @@
 import { useProfile } from '../lib/useProfile'
-import { isEmployedOn, type SalaryProfile } from '@salary-flow/core'
+import { vacationPayLabel } from '../lib/vacations'
+import { vacationForDate, isEmployedOn, type SalaryProfile } from '@salary-flow/core'
 import { JourneyRestDashboard } from '../components/JourneyRestDashboard'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
@@ -88,7 +89,8 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   ), [attendanceRecords, holidaySettings, profile, today])
   const paydayCountdown = getPaydayCountdown(profile.payday, now, {
     adjustment: profile.paydayAdjustment,
-    isWorkday: date => isConfiguredWorkday(date, profile, holidaySettings),
+    // A personal school vacation does not move the payroll calendar.
+    isWorkday: date => isConfiguredWorkday(date, { ...profile, vacations: undefined }, holidaySettings),
   })
   const work = summarizeTodayWork(profile, workRecords, now, undefined, attendanceRecords)
   const restCountdown = useMemo(() => getRestCountdown(profile, work, new Date(currentMinute * 60_000), attendanceRecords, workRecords, holidaySettings), [profile, work.businessDate, work.dayType, work.status, work.record, currentMinute, attendanceRecords, workRecords, holidaySettings])
@@ -134,15 +136,16 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const plannedEndLabel = work.record?.plannedEndTime
     ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`
     : null
-  const attendanceLabel = work.attendance ? attendanceStatusLabel(work.attendance) : work.officialHolidayName ?? ''
+  const vacation = vacationForDate(profile, work.businessDate)
+  const attendanceLabel = work.vacationName ?? (work.attendance ? attendanceStatusLabel(work.attendance) : work.officialHolidayName ?? '')
   const customAttendancePayLabel = work.attendance ? attendancePayModeLabel(work.attendance) : null
-  const attendancePayLabel = customAttendancePayLabel ?? (work.attendance ? '不计薪' : work.dayType === 'holiday' ? earned > 0 ? '正常日薪' : '不计薪' : '')
+  const attendancePayLabel = customAttendancePayLabel ?? (vacation ? vacationPayLabel(vacation) : null) ?? (work.attendance ? '不计薪' : work.dayType === 'holiday' ? earned > 0 ? '正常日薪' : '不计薪' : '')
   const isNormalPayOverride = work.attendance?.status === 'normal' && customAttendancePayLabel !== null
   const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride || isHalfDayLeave(work.attendance)
   const isFullDaySettlement = isFlexibleFullDaySettlement(work.record, profile.salaryType)
   const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride || isHalfDayLeave(work.attendance) || (work.mode === 'scheduled' && work.status === 'ended')
-  const heroLabel = work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
-  const modeStatus = work.dayType === 'rest'
+  const heroLabel = work.vacationName ? `${work.vacationName}中 · 今日假期工资` : work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
+  const modeStatus = work.vacationName && vacation ? `仍在职 · ${vacationPayLabel(vacation)}` : work.dayType === 'rest'
     ? '非工作日 · 不自动计薪'
     : isAttendanceOverride
       ? `${attendanceLabel} · ${attendancePayLabel}`
@@ -446,7 +449,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     <div className="dashboard-countdown-overview">
     <RestCountdown value={restCountdown} payday={paydayCountdown} now={now}/>
     <aside className="dashboard-insights" aria-label="今日概览">
-      <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.dayType === 'work' ? work.status === 'ended' ? '已下班' : '计薪中' : '今日休息'}</span></div>
+      <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.vacationName ? `${work.vacationName}中` : work.dayType === 'work' ? work.status === 'ended' ? '已下班' : '计薪中' : '今日休息'}</span></div>
       <div className="dashboard-insight-grid dashboard-insight-grid-compact">
         <Link className="dashboard-insight-card" to="/settings">
           <span className="dashboard-insight-card-heading"><i><Clock3 size={16}/></i><b>时间单价</b></span>

@@ -1,7 +1,7 @@
 import { calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, LedgerEntry, OvertimeSession, SlackingSession } from '../types'
 import { monthlyWorkBreakdown, type WorkInterval } from './monthlyWorkBreakdown'
-import { getMonthlyScheduledWorkDayCount, loadChinaHolidaySettings, resolveAttendanceDay, getCustomAttendanceAmount, getOfficialHolidayPayAmount, attendanceWorkedFraction } from './attendance'
+import { getVacationPayAmount, getMonthlyScheduledWorkDayCount, loadChinaHolidaySettings, resolveAttendanceDay, getCustomAttendanceAmount, getOfficialHolidayPayAmount, attendanceWorkedFraction } from './attendance'
 import { actualPaidIntervalsForDate } from './paidTime'
 import { toLocalDateValue, toLocalMonthValue } from './form'
 import { getSummaryRange, summarizeLedger } from './ledger'
@@ -34,20 +34,22 @@ export function getMonthlyWorkStats(
   let plannedSeconds = workdayCount * rates.paidSecondsPerDay
   let plannedSalary = rates.daily * currentRateProfile.monthlyWorkDays
 
-  if (profile.workJourney) {
+  if (profile.workJourney || profile.vacations?.length) {
     plannedSeconds = 0
     plannedSalary = 0
     for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
       const date = toLocalDateValue(cursor)
-      if (!isEmployedOn(profile, date) || !workStageForDate(profile, date)?.profile) continue
+      if (!isEmployedOn(profile, date) || (profile.workJourney && !workStageForDate(profile, date)?.profile)) continue
       const dated = salaryProfileForBusinessDate(profile, date, [...attendanceRecords], holidaySettings)
       const dailyRates = calculateRates(dated)
       const attendance = attendanceRecords.find(record => record.date === date)
       const workday = resolveAttendanceDay(cursor, profile, attendance, holidaySettings).isWorkday
       if (workday) plannedSeconds += dailyRates.paidSecondsPerDay * (attendance ? attendanceWorkedFraction(attendance) : 1)
-      const custom = getCustomAttendanceAmount(attendance, dailyRates.daily)
+      const customAmount = getCustomAttendanceAmount(attendance, dailyRates.daily)
+      const custom = attendance && (attendance.status === 'leave' || attendance.status === 'holiday') ? customAmount ?? 0 : customAmount
       const holiday = attendance ? null : getOfficialHolidayPayAmount(date, profile, dailyRates.daily, holidaySettings)
-      plannedSalary += custom ?? holiday ?? (workday ? dailyRates.daily : 0)
+      const vacationPay = getVacationPayAmount(date, dated, holidaySettings)
+      plannedSalary += custom ?? vacationPay ?? holiday ?? (workday ? dailyRates.daily : 0)
     }
   }
 
