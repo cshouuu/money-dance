@@ -1,3 +1,6 @@
+import { continuedRosterShifts } from '../lib/roster'
+import { Link } from 'react-router-dom'
+import { rosterForDate } from '@salary-flow/core'
 import { vacationForDate, isEmployedOn } from '@salary-flow/core'
 import { useProfile } from '../lib/useProfile'
 import { CalendarCheck2, X } from 'lucide-react'
@@ -112,10 +115,12 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     <form ref={dialogRef} className="attendance-dialog" role="dialog" aria-modal="true" aria-labelledby="attendance-dialog-title" onSubmit={submit}>
       <div className="attendance-dialog-header"><div><p className="eyebrow">ATTENDANCE DETAIL</p><h2 id="attendance-dialog-title">调整出勤情况</h2><span><CalendarCheck2 size={14}/>{formatDate(date)}</span></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
 
+      {rosterForDate(profile, date) && <p className="vacation-note">本日新开班次按排班计算。<Link to={`/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>调整本日班次与工资 →</Link></p>}
+      {continuedRosterShifts(profile,date).map(({businessDate,shift})=><p className="vacation-note" key={`${businessDate}-${shift.id}`}>「{shift.name}」从 {businessDate} 延续至今天，整班出勤、休息及工资请在<Link to={`/roster?date=${businessDate}&stage=${rosterForDate(profile,businessDate)?.stageId??''}`} onClick={onCancel}>开班日调整 →</Link>。下方设置仅影响今天新开的班次及日薪。</p>)}
       {vacationForDate(profile, date) && <p className="vacation-note">这天属于「{vacationForDate(profile, date)?.name}」。单日调整优先；正常上班默认保留假期工资，额外补贴可另记加班收入。恢复自动判断后继续应用假期安排。</p>}
       <fieldset className="attendance-field"><legend>这一天怎么过的？</legend><Tabs className="attendance-switch attendance-status-switch" value={status} onValueChange={value => selectStatus(value as AttendanceSelection)}><TabsTrigger value="automatic">自动判断</TabsTrigger><TabsTrigger value="normal">正常上班</TabsTrigger><TabsTrigger value="leave">请假</TabsTrigger><TabsTrigger value="holiday">放假</TabsTrigger></Tabs></fieldset>
 
-      {status === 'automatic' ? <div className="attendance-automatic-card"><b>跟随自动判断</b><span>不会创建手工出勤记录，将继续按中国大陆节假日、调休补班及工作周规则计算。</span></div> : <div className="attendance-detail-fields">
+      {status === 'automatic' ? <div className="attendance-automatic-card"><b>跟随自动判断</b><span>不会创建手工出勤记录，将继续按排班、个人假期、中国大陆节假日及工作周规则计算。</span></div> : <div className="attendance-detail-fields">
         {status === 'leave' && <>
           <SelectField label="请假类型" value={leaveType} onValueChange={value => setLeaveType(value as LeaveType)}>{LEAVE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</SelectField>
           <fieldset className="attendance-field attendance-leave-period-field"><legend>请多久？</legend><Tabs className="attendance-switch attendance-leave-period-switch" value={leavePeriod} onValueChange={value => setLeavePeriod(value as AttendanceLeavePeriod)}><TabsTrigger value="full-day">全天</TabsTrigger><TabsTrigger value="morning">上午半天</TabsTrigger><TabsTrigger value="afternoon">下午半天</TabsTrigger></Tabs></fieldset>
@@ -129,7 +134,7 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
         </div>}
       </div>}
 
-      <p className="attendance-dialog-note">{status === 'automatic' ? '使用自动判断不会新增手工记录；如果这一天已有手工出勤，则会在成功移除后恢复自动规则。' : '保存后，账本中这一天的工资收入会立即重新计算。半天无薪假保留半日正常工资；倍率或固定金额只作用于请假半日，再与另外半日的正常工资相加。出勤设置会优先于已有的手工工资调整。'}</p>
+      <p className="attendance-dialog-note">{status === 'automatic' ? '使用自动判断不会新增手工记录；如果这一天已有手工出勤，则会在成功移除后恢复自动规则。' : '保存后，账本中这一天的工资收入会立即重新计算。半天无薪假保留半日正常工资；倍率或固定金额只作用于请假半日，再与另外半日的正常工资相加。出勤设置会优先于已有的手工工资调整；如排班中填写了每日最终工资，则以该金额为准。'}</p>
       {saveError && <p className="attendance-save-error" role="alert">{saveError}</p>}
       <div className={`attendance-dialog-actions${record ? ' has-reset' : ''}`}>{record && <button type="button" className="attendance-reset" disabled={saving} onClick={() => void persist(onReset)}>恢复自动判断</button>}<button type="button" className="dialog-cancel" disabled={saving} onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm" disabled={saving}>{saving ? '保存中…' : status === 'automatic' ? '使用自动判断' : '保存出勤'}</button></div>
     </form>

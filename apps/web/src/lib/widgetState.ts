@@ -183,7 +183,7 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
   // snapshot is refreshed after midnight.
   for (const date of [...relevantDates]) relevantDates.add(getScheduledBusinessDate(profile, toLocalDateTime(date)))
   const workRecords = options.workRecords.filter(record => (
-    relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt)
+    relevantDates.has(record.date) || flexibleRecordTouchesRange(record, startAt, endAt) || record.sessions.some(session=>new Date(session.startTime).getTime()<endAt && new Date(session.endTime ?? record.plannedEndTime ?? new Date(endAt).toISOString()).getTime()>startAt)
   ))
   const relevantAttendanceDates = new Set(relevantDates)
   if (profile.defaultWorkMode === 'scheduled') {
@@ -290,7 +290,7 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
   const validUntil = safeSyncedAt + horizonMs
   const rates = options.rates ?? calculateRates(salaryProfileForBusinessDate(
     options.profile,
-    toLocalDateValue(new Date(safeSyncedAt)),
+    options.activeOvertime ? resolveSessionStartBusinessDate(options.activeOvertime.startTime,options.activeOvertime.startLocalDate,options.activeOvertime.startTimezoneOffsetMinutes)?.startLocalDate ?? toLocalDateValue(new Date(safeSyncedAt)) : toLocalDateValue(new Date(safeSyncedAt)),
     options.attendanceRecords,
   ))
   const activeSlacking = normalizeActiveSlacking(options.activeSlacking)

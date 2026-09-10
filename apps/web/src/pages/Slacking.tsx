@@ -1,3 +1,4 @@
+import { getScheduledBusinessDate } from '../lib/work'
 import { isEmployedOn } from '@salary-flow/core'
 import { useProfile } from '../lib/useProfile'
 import { TimerPlans } from '../components/TimerPlans'
@@ -66,7 +67,7 @@ export function Slacking() {
   const now = useNow(1000)
   const [workRecords] = useState(() => loadWorkRecords())
   const [attendanceRecords] = useState(() => loadAttendanceRecords())
-  const currentDate = toLocalDateValue(now)
+  const currentDate = profile.rosters?.length ? getScheduledBusinessDate(profile,now) : toLocalDateValue(now)
   const rateProfile = useMemo(
     () => salaryProfileForBusinessDate(profile, currentDate, attendanceRecords),
     [attendanceRecords, currentDate, profile],

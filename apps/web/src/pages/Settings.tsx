@@ -1,3 +1,6 @@
+import { rosterForDate } from '@salary-flow/core'
+import { rosterStandardDayAmount } from '../lib/roster'
+import { Link } from 'react-router-dom'
 import {
   calculateMonthlySalaryDeductions,
   calculateRates,
@@ -84,6 +87,7 @@ export function Settings() {
   const [openSection, setOpenSection] = useState<string | null>('salary')
 
   const draftProfile = buildProfile(profile, salaryInput, paydayInput, monthlyLivingCostInput, monthlyWorkDaysInput, workDaysPerWeekInput)
+  const activeRoster=rosterForDate(withSettingsStage(draftProfile??profile),toLocalDateValue())
   let rates: SalaryRates | null = null
   let rateProfile: SalaryProfile | null = null
   let monthlyDeductions = 0
@@ -265,7 +269,7 @@ export function Settings() {
     <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
   </div>
 
-  const workSection = <div className="settings-section-content" id="work-schedule">
+  const workSection = <div className="settings-section-content" id="work-schedule"><Link className="text-button" to="/roster">{activeRoster?'当前使用排班 · 调整规则 →':'轮班或长班？设置排班 →'}</Link>{activeRoster&&<p className="work-mode-hint">排班日期使用班次时间、休息和计薪规则；以下作息在未启用排班的日期生效。</p>}
     <ChoiceGroup className="default-work-mode-options" legend="默认计薪方式" value={profile.defaultWorkMode} onValueChange={value => set('defaultWorkMode', value as WorkMode)}>{([
       ['scheduled', '固定作息', '按设置的上下班时间自动计薪，适合大多数用户'],
       ['flexible', '弹性作息', '每天开始工作后计薪，也可以临时切回固定作息'],
@@ -347,7 +351,7 @@ export function Settings() {
     <form className="settings-card" noValidate onSubmit={submit}>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
         <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
-        <div className="settings-rate-details"><div><small>{rateLabelPrefix}日薪</small><b>¥{rates.daily.toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
+        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,toLocalDateValue(),rates.daily).toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
       </section>}
       <BouncyAccordion
         className="settings-accordion"

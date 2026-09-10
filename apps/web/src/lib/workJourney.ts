@@ -1,3 +1,6 @@
+import { validateRoster } from './rosterStorage'
+import { rosterShiftsForDate } from '@salary-flow/core'
+import { rosterDayLabel, shiftHours } from './roster'
 import { calculateRates, vacationForDate, getBreakPeriods, getPaidSecondsPerDay, type SalaryProfile, type WorkStage } from '@salary-flow/core'
 import type { ActiveOvertime } from '../types'
 import { loadAttendanceRecords } from './attendance'
@@ -14,7 +17,7 @@ import { loadWorkRecords } from './work'
 import { actualPaidIntervalsForDate } from './paidTime'
 
 export function profileSnapshot(profile: SalaryProfile): Omit<SalaryProfile, 'workJourney'> {
-  const { workJourney: _journey, vacations: _vacations, ...snapshot } = profile
+  const { workJourney: _journey, vacations: _vacations, rosters: _rosters, calculationHours: _hours, ...snapshot } = profile
   return structuredClone(snapshot)
 }
 
@@ -86,8 +89,14 @@ export async function commitJourney(expected: SalaryProfile, stages: WorkStage[]
       ...current, ...(open?.profile ?? {}),
       // Living expenses belong to the person and continue through career gaps.
       livingCostHistory: current.livingCostHistory,
+      rosters: current.rosters?.map(plan => !current.workJourney && plan.stageId === null ? { ...plan, stageId: [...stages].sort((a,b)=>a.startDate.localeCompare(b.startDate)).find(stage => stage.profile && (!stage.endDate || stage.endDate >= plan.effectiveFrom))?.id ?? null } : plan),
       vacations: current.vacations?.map(plan => !current.workJourney && plan.stageId === null ? { ...plan, stageId: stages.find(stage => stage.profile && stage.startDate <= plan.endDate && (!stage.endDate || stage.endDate >= plan.startDate))?.id ?? null } : plan),
       workJourney: { version: 1, revision: (current.workJourney?.revision ?? 0) + 1, stages: [...stages].sort((a, b) => b.startDate.localeCompare(a.startDate)) },
+    }
+    for(const roster of next.rosters??[]) {
+      if(!next.workJourney?.stages.some(stage=>stage.id===roster.stageId && stage.profile)) continue
+      const error=validateRoster(roster,next)
+      if(error)return `排班需同步调整：${error}`
     }
     const previousPlans = loadTimerPlans()
     const ids = new Set(affected.map(plan => plan.id))
@@ -131,13 +140,14 @@ export function stageDays(profile: SalaryProfile, stage: WorkStage, now = new Da
     const seconds = stage.profile ? actualPaidIntervalsForDate(profile, date, now, records, attendance).reduce((sum, interval) => sum + Math.max(0, Math.min(now.getTime(), interval.end.getTime()) - interval.start.getTime()) / 1000, 0) : null
     const record = attendance.find(item => item.date === date)
     const workRecord = records.find(item => item.date === date)
-    const times = !stage.profile ? '时间待补充' : workRecord?.sessions.length ? workRecord.sessions.map(session => {
+    const dayShifts = rosterShiftsForDate(profile,date)
+    const times = !workRecord?.sessions.length && dayShifts.length ? dayShifts.map(shift=>`${shift.startTime}–${shift.endDay?`+${shift.endDay}天 `:''}${shift.endTime}`).join(' / ') : !stage.profile ? '时间待补充' : workRecord?.sessions.length ? workRecord.sessions.map(session => {
       const start = new Date(session.startTime)
       const end = session.endTime ? new Date(session.endTime) : null
-      return `${toLocalTimeValue(start)}–${end ? `${toLocalDateValue(end) > date ? '次日 ' : ''}${toLocalTimeValue(end)}` : '计时中'}`
+      return `${toLocalTimeValue(start)}–${end ? `${toLocalDateValue(end) > date ? `${toLocalDateValue(end)} ` : ''}${toLocalTimeValue(end)}` : '计时中'}`
     }).join(' / ') : seconds ? `${stage.profile.workStartTime}–${stage.profile.workEndTime < stage.profile.workStartTime ? '次日 ' : ''}${stage.profile.workEndTime}` : '—'
     const amount = incomeByDate.get(date) ?? (stage.profile ? 0 : null)
-    rows.push({ date, seconds, amount, times, label: record?.status === 'leave' ? '请假' : record?.status === 'holiday' ? '假日' : seconds ? '工作' : vacationForDate(profile, date)?.name ?? (!stage.profile ? '待补充' : '无工时') })
+    rows.push({ date, seconds, amount, times, label: record?.status === 'leave' ? '请假' : record?.status === 'holiday' ? '假日' : seconds ? rosterDayLabel(profile,date) ?? '工作' : vacationForDate(profile, date)?.name ?? (!stage.profile ? '待补充' : '无工时') })
   }
   return rows.reverse()
 }

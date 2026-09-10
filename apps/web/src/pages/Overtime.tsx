@@ -34,7 +34,7 @@ import {
 } from '../lib/overtime'
 import { toLocalDateValue } from '../lib/form'
 import { loadProfile, salaryProfileForBusinessDate } from '../lib/profile'
-import { resolveSessionStartBusinessDate } from '../lib/sessionBusinessDate'
+import { sessionStartLocalDate, resolveSessionStartBusinessDate } from '../lib/sessionBusinessDate'
 import { keys, loadJSON, removeJSON, saveJSON } from '../lib/storage'
 import { runReversibleStorageTransaction } from '../lib/storageTransaction'
 import { createWebTimerSessionId, sameTimerStart, upsertTimerSession } from '../lib/timerStop'
@@ -79,13 +79,14 @@ export function Overtime() {
   const currentDate = toLocalDateValue(now)
   const [attendanceRecords] = useState(() => loadAttendanceRecords())
   const [holidaySettings] = useState(() => loadChinaHolidaySettings())
+  const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
+  const rateDate = active ? sessionStartLocalDate(active) : currentDate
   const rates = useMemo(() => calculateRates(salaryProfileForBusinessDate(
     profile,
-    currentDate,
+    rateDate,
     attendanceRecords,
     holidaySettings,
-  )), [attendanceRecords, currentDate, holidaySettings, profile])
-  const [active, setActive] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
+  )), [attendanceRecords, rateDate, holidaySettings, profile])
   const [sessions, setSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [achievementState, setAchievementState] = useState(() => reconcileAchievementSessions(
     'overtime',
@@ -353,7 +354,7 @@ export function Overtime() {
         id: sessionId,
         endTime,
         durationSeconds,
-        earnedAmount: calculateOvertimeEarnings(stopActive, durationSeconds, rates.second),
+        earnedAmount: calculateOvertimeEarnings(stopActive, durationSeconds, calculateRates(salaryProfileForBusinessDate(loadProfile(),businessDate.startLocalDate)).second),
       }
       const next = upsertTimerSession(latest.sessions, session)
       const nextLedger = [

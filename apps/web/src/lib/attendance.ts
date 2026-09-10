@@ -1,3 +1,4 @@
+import { parseClock, rosterForDate, rosterShiftsForDate } from '@salary-flow/core'
 import { calculateRates, isEmployedOn, vacationForDate, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
@@ -16,7 +17,7 @@ export interface ChinaHolidaySettings {
 
 export interface AttendanceDayResolution {
   isWorkday: boolean
-  source: 'manual' | 'vacation' | 'china-holiday' | 'profile'
+  source: 'roster' | 'manual' | 'vacation' | 'china-holiday' | 'profile'
   holiday?: ChinaHolidayDay
 }
 
@@ -206,10 +207,15 @@ export function resolveAttendanceDay(
     }
   }
 
+  const overridePlan = rosterForDate(profile,toLocalDateValue(date))
+  if(overridePlan?.overrides.some(item=>item.date===toLocalDateValue(date))) return {isWorkday:rosterShiftsForDate(profile,toLocalDateValue(date)).length>0,source:'roster'}
   if (vacationForDate(profile, toLocalDateValue(date))) return { isWorkday: false, source: 'vacation', holiday: chinaHolidayForDate(toLocalDateValue(date), settings) }
 
+  const roster = rosterForDate(profile, toLocalDateValue(date))
+  if (roster && (roster.overrides.some(item => item.date === toLocalDateValue(date)) || !roster.respectHolidays)) return { isWorkday: rosterShiftsForDate(profile, toLocalDateValue(date)).length > 0, source: 'roster' }
   const holiday = chinaHolidayForDate(toLocalDateValue(date), settings)
   if (holiday) {
+    if(roster) return {isWorkday:holiday.kind!=='holiday'&&rosterShiftsForDate(profile,toLocalDateValue(date)).length>0,source:'roster',holiday}
     return {
       isWorkday: holiday.kind === 'adjusted-workday',
       source: 'china-holiday',
@@ -217,6 +223,7 @@ export function resolveAttendanceDay(
     }
   }
 
+  if (roster) return { isWorkday: rosterShiftsForDate(profile, toLocalDateValue(date)).length > 0, source: 'roster' }
   return { isWorkday: isProfileWorkday(date, profile), source: 'profile' }
 }
 
@@ -227,6 +234,15 @@ export function resolveAttendanceDay(
 export function getVacationPayAmount(date: string, profile: SalaryProfile, settings = loadChinaHolidaySettings()): number | null {
   const plan = vacationForDate(profile, date)
   if (!plan) return null
+  const roster = rosterForDate(profile, date)
+  if (roster) {
+    if (plan.payMode === 'unpaid') return 0
+    const [year, month] = date.split('-').map(Number)
+    const baseline = { ...profile, calculationHours: undefined, vacations: undefined }
+    const monthly = plan.payMode === 'monthly' ? { ...baseline, salary: plan.value, salaryType: 'monthly' as const } : baseline
+    const original = roster.pay.mode === 'salary' || plan.payMode === 'monthly' ? calculateRates(monthly).daily * monthly.monthlyWorkDays / new Date(year, month, 0).getDate() : rosterShiftsForDate(profile, date).reduce((sum, shift) => sum + (roster.pay.mode === 'shift' ? shift.amount : (shift.endDay * 86400 + parseClock(shift.endTime) - parseClock(shift.startTime) - shift.breaks.filter(item => !item.paid).reduce((total, rest) => total + (rest.endMinute - rest.startMinute) * 60, 0)) / 3600 * roster.pay.value), 0)
+    return original * (plan.payMode === 'ratio' ? plan.value : 1)
+  }
   const baseline = { ...profile, vacations: undefined }
   const day = toLocalDateTime(date)
   const official = chinaHolidayForDate(date, settings)

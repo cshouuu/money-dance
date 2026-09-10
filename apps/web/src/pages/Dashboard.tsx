@@ -1,3 +1,5 @@
+import { rosterForDate } from '@salary-flow/core'
+import { rosterActualIntervals, rosterPayForDate, intervalSeconds, shiftHours } from '../lib/roster'
 import { useProfile } from '../lib/useProfile'
 import { vacationPayLabel } from '../lib/vacations'
 import { vacationForDate, isEmployedOn, type SalaryProfile } from '@salary-flow/core'
@@ -97,6 +99,10 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const workRates = useMemo(() => calculateRates(
     salaryProfileForBusinessDate(profile, work.businessDate, attendanceRecords, holidaySettings),
   ), [attendanceRecords, holidaySettings, profile, work.businessDate])
+  const roster = rosterForDate(profile,work.businessDate)
+  const rosterExpected = roster ? rosterPayForDate(profile,work.businessDate,new Date(8640000000000000),[],attendanceRecords,holidaySettings) ?? 0 : 0
+  const scheduleStart = work.rosterStart ? toLocalTimeValue(new Date(work.rosterStart)) : profile.workStartTime
+  const scheduleEnd = work.rosterEnd ? `${toLocalDateValue(new Date(work.rosterEnd)) === work.businessDate ? '' : `${toLocalDateValue(new Date(work.rosterEnd))} `}${toLocalTimeValue(new Date(work.rosterEnd))}` : profile.workEndTime
   const targetSeconds = workRates.paidSecondsPerDay * attendanceWorkedFraction(work.attendance)
   const earned = work.earnedAmount
   const worked = work.workedSeconds
@@ -144,8 +150,8 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const isAttendanceOverride = work.dayType === 'leave' || work.dayType === 'holiday' || isNormalPayOverride || isHalfDayLeave(work.attendance) || !!vacation
   const isFullDaySettlement = isFlexibleFullDaySettlement(work.record, profile.salaryType)
   const isSettledDailyAmount = isFullDaySettlement || isNormalPayOverride || isHalfDayLeave(work.attendance) || !!vacation || (work.mode === 'scheduled' && work.status === 'ended')
-  const heroLabel = work.vacationName ? `${work.vacationName}中 · 今日假期工资` : work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
-  const modeStatus = work.vacationName && vacation ? `仍在职 · ${vacationPayLabel(vacation)}` : work.dayType === 'rest'
+  const heroLabel = roster ? roster.pay.mode==='salary'?(work.businessDate===toLocalDateValue(now)?'今日工资':'开班日工资'):work.dayType==='work'?'本班工资与补贴':'排班休息' : work.vacationName ? `${work.vacationName}中 · 今日假期工资` : work.dayType === 'rest' ? '今天休息' : work.dayType === 'holiday' ? '今天放假' : work.dayType === 'leave' ? '今日出勤调整' : isSettledDailyAmount ? '今日工作收入' : work.mode === 'flexible' ? '今日实际已赚' : '今日已经赚了'
+  const modeStatus = roster ? `${work.rosterName ?? '排班'} · ${work.status === 'ended' ? '已结束' : work.status === 'ready' ? '等待开班' : work.status === 'paused' ? '已暂停' : '按排班计薪'}` : work.vacationName && vacation ? `仍在职 · ${vacationPayLabel(vacation)}` : work.dayType === 'rest'
     ? '非工作日 · 不自动计薪'
     : isAttendanceOverride
       ? `${attendanceLabel} · ${attendancePayLabel}`
@@ -197,8 +203,8 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       setSettlementError('工时已经停止，但暂时无法保存。请释放设备存储空间后重试结算。')
       return
     }
-    const workedSeconds = getFlexibleWorkedSeconds(frozen, new Date(frozen.updatedAt))
-    const automaticMode = getAutomaticFlexibleSettlementMode(profile.salaryType, workedSeconds, targetSeconds, isAttendanceOverride)
+    const workedSeconds = roster ? intervalSeconds(rosterActualIntervals(profile,frozen.date,new Date(frozen.updatedAt),[frozen],attendanceRecords),new Date(frozen.updatedAt)) : getFlexibleWorkedSeconds(frozen, new Date(frozen.updatedAt))
+    const automaticMode = roster && roster.pay.overtime !== 'manual' ? 'actual' : getAutomaticFlexibleSettlementMode(profile.salaryType, workedSeconds, targetSeconds, isAttendanceOverride || !!roster)
     if (automaticMode) {
       if (!removeLinkedFlexibleOvertime(frozen)) {
         setPendingEndRecord(frozen)
@@ -217,16 +223,16 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     }
     setSettlementError('')
     setPendingEndRecord(frozen)
-  }, [focusSettledAction, isAttendanceOverride, persistRecord, profile.salaryType, removeLinkedFlexibleOvertime, targetSeconds])
+  }, [focusSettledAction, isAttendanceOverride, persistRecord, profile, roster, attendanceRecords, removeLinkedFlexibleOvertime, targetSeconds])
   const startAt = useCallback((time: string, plannedEndTime?: string) => {
-    const started = startFlexibleWork(today, time, work.record, plannedEndTime)
+    const started = startFlexibleWork(roster ? workDate : today, time, work.record, plannedEndTime)
     if (!commitFlexibleWorkStart(() => persistRecord(started))) {
       setSettlementError('开始工作暂时无法保存，计时尚未启动。请释放设备存储空间后重试。')
       return
     }
     setSettlementError('')
     setDialogPurpose(null)
-  }, [persistRecord, today, work.record])
+  }, [persistRecord, today, work.record, roster, workDate])
   const adjustTime = useCallback((startTime: string, endTime?: string, endDate?: string) => {
     if (work.mode === 'scheduled') {
       if (!persistRecord(replaceScheduledWorkTime(workDate, startTime, endTime, endDate ?? workDate))) {
@@ -261,7 +267,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const endWork = useCallback(() => {
     if (work.mode === 'scheduled') {
       const end = new Date()
-      const start = work.record?.sessions[0]?.startTime ?? localDateWithTime(workDate, profile.workStartTime).toISOString()
+      const start = work.record?.sessions[0]?.startTime ?? work.rosterStart ?? localDateWithTime(workDate, profile.workStartTime).toISOString()
       if (new Date(start) >= end) return
       if (!persistRecord(replaceScheduledWorkTime(workDate, toLocalTimeValue(new Date(start)), toLocalTimeValue(end), toLocalDateValue(end)))) {
         setSettlementError('下班时间暂时无法保存，请重试。')
@@ -270,7 +276,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     }
     if (work.record?.mode !== 'flexible') return
     requestSettlement(freezeFlexibleWorkForSettlement(work.record))
-  }, [persistRecord, profile.workStartTime, work.mode, work.record, workDate, requestSettlement])
+  }, [persistRecord, profile.workStartTime, work.mode, work.record, work.rosterStart, workDate, requestSettlement])
   const resumeWork = useCallback(() => {
     if (work.record?.mode === 'flexible') persistRecord(resumeFlexibleWork(work.record))
   }, [work.record, persistRecord])
@@ -298,7 +304,8 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   }, [focusSettledAction, pendingEndRecord, persistRecord, removeLinkedFlexibleOvertime])
   const settleFlexibleOvertime = useCallback((option: OvertimeStartOption) => {
     if (!pendingEndRecord || settlingRef.current) return
-    const window = getFlexibleOvertimeWindow(pendingEndRecord, targetSeconds, new Date(pendingEndRecord.updatedAt))
+    const overtimeRecord = roster ? { ...pendingEndRecord, sessions: rosterActualIntervals(profile,pendingEndRecord.date,new Date(pendingEndRecord.updatedAt),[pendingEndRecord],attendanceRecords).map((item,index)=>({id:String(index),startTime:item.start.toISOString(),endTime:item.end.toISOString()})) } : pendingEndRecord
+    const window = getFlexibleOvertimeWindow(overtimeRecord, targetSeconds, new Date(pendingEndRecord.updatedAt))
     if (!window || !pendingEndRecord.overtimeSessionId) {
       setSettlementError('没有找到有效的超出工时，请修正工作时间后重试。')
       return
@@ -369,7 +376,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     } finally {
       settlingRef.current = false
     }
-  }, [focusSettledAction, pendingEndRecord, persistRecord, targetSeconds, workRates.second])
+  }, [focusSettledAction, pendingEndRecord, persistRecord, targetSeconds, workRates.second, roster, profile, attendanceRecords])
   const adjustAttendance = useCallback(() => {
     if (!pendingEndRecord) return
     if (!removeLinkedFlexibleOvertime(pendingEndRecord)) {
@@ -388,10 +395,10 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     setPendingEndRecord(null)
     setSettlementError('')
   }, [])
-  const pendingWorkedSeconds = pendingEndRecord ? getFlexibleWorkedSeconds(pendingEndRecord, new Date(pendingEndRecord.updatedAt)) : 0
+  const pendingWorkedSeconds = pendingEndRecord && roster ? intervalSeconds(rosterActualIntervals(profile,pendingEndRecord.date,new Date(pendingEndRecord.updatedAt),[pendingEndRecord],attendanceRecords),new Date(pendingEndRecord.updatedAt)) : pendingEndRecord ? getFlexibleWorkedSeconds(pendingEndRecord, new Date(pendingEndRecord.updatedAt)) : 0
   const pendingRequirement = getFlexibleSettlementRequirement(pendingWorkedSeconds, targetSeconds)
   const pendingActualAmount = pendingEndRecord ? getFlexibleEarnedAmount({ ...pendingEndRecord, settlementMode: 'actual' }, workRates, profile.salaryType, new Date(pendingEndRecord.updatedAt)) : 0
-  const pendingBaseAmount = getFlexibleBaseSettlementAmount(work.attendance, workRates.daily, vacation ? work.earnedAmount : null)
+  const pendingBaseAmount = getFlexibleBaseSettlementAmount(work.attendance, workRates.daily, vacation || roster ? work.earnedAmount : null)
 
   useEffect(() => {
     if (work.record?.mode !== 'flexible' || !hasFlexiblePlannedEndReached(work.record, now)) return
@@ -411,7 +418,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       <div className="hero-glow" />
       <div className="hero-heading-row"><p className="hero-label"><Sparkles size={16}/> {heroLabel}</p><span className="hero-mode-status">{modeStatus}</span></div>
       <NumberTicker className="money-ticker" value={earned * 100} format={moneyFromCents} duration={0.38} stagger={0} startOnView={false} />
-      <p className="rate-line">{work.dayType === 'rest'
+      <p className="rate-line">{roster ? roster.pay.mode==='salary'?'固定工资按自然日分摊，休息不产生工时':roster.pay.mode==='shift'?'完成班次后按固定金额结算；跨日不重复计薪':`按计薪工时计算 · ¥${roster.pay.value}/小时` : work.dayType === 'rest'
         ? '休息日不自动计薪'
         : work.officialHolidayName
           ? '已按中国大陆节假日日历计算'
@@ -426,7 +433,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
                 : work.status === 'ended' ? '已下班，按实际工时结算' : `+ ¥${workRates.second.toFixed(5)} / 秒`}</p>
 
       {work.dayType === 'work' && work.mode === 'scheduled' && <div className="work-controls">
-        {work.status === 'ended' ? <span className="work-ended-label">今天辛苦了 · 已下班</span> : <button type="button" className="hero-work-secondary" disabled={localDateWithTime(workDate, profile.workStartTime) >= now} onClick={endWork}><Square size={15}/>结束工作</button>}
+        {work.status === 'ended' ? <span className="work-ended-label">今天辛苦了 · 已下班</span> : <button type="button" className="hero-work-secondary" disabled={(work.rosterStart ? new Date(work.rosterStart) : localDateWithTime(workDate, profile.workStartTime)) >= now} onClick={endWork}><Square size={15}/>结束工作</button>}
         <button type="button" className="hero-work-link" onClick={()=>setDialogPurpose('adjust')}>修正时间</button>
         {settlementError && <span role="alert">{settlementError}</span>}
       </div>}
@@ -438,11 +445,11 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       </div>}
 
       {work.dayType === 'work' ? <>
-        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}`}><span>{firstStart ? toLocalTimeValue(new Date(firstStart)) : work.mode === 'flexible' ? '未开始' : profile.workStartTime}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? plannedEndLabel ? `预计 ${plannedEndLabel}` : `目标 ${formatDuration(targetSeconds)}` : work.record?.sessions.at(-1)?.endTime ? toLocalTimeValue(new Date(work.record.sessions.at(-1)!.endTime!)) : plannedEndLabel ? `预计 ${plannedEndLabel}` : work.record?.sessions.length ? '手动结束' : profile.workEndTime}</span></div>
-        <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>{work.mode === 'flexible' || isSettledDailyAmount ? '实际记录' : '已计薪'} <b>{formatDuration(worked)}</b></span><span>{isSettledDailyAmount ? '今日结算' : work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(isSettledDailyAmount ? earned : workRates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
+        <div className={`progress-row${work.mode === 'flexible' ? ' flexible' : ''}${roster ? ' roster-progress' : ''}`}><span>{firstStart ? toLocalTimeValue(new Date(firstStart)) : work.mode === 'flexible' ? '未开始' : scheduleStart}</span><div className="progress-track"><div className="progress-fill" style={{ width:`${progress}%` }}/><i style={{ left:`calc(${progress}% - 5px)` }}/></div><span>{work.mode === 'flexible' ? plannedEndLabel ? `预计 ${plannedEndLabel}` : `目标 ${formatDuration(targetSeconds)}` : work.record?.sessions.at(-1)?.endTime ? toLocalTimeValue(new Date(work.record.sessions.at(-1)!.endTime!)) : plannedEndLabel ? `预计 ${plannedEndLabel}` : work.record?.sessions.length ? '手动结束' : scheduleEnd}</span></div>
+        <div className="hero-meta"><span>工作进度 <b>{progress.toFixed(0)}%</b></span><span>{work.mode === 'flexible' || isSettledDailyAmount ? '实际记录' : '已计薪'} <b>{roster || worked>=86400 ? shiftHours(worked) : formatDuration(worked)}</b></span><span>{isSettledDailyAmount ? '今日结算' : work.mode === 'flexible' ? '完成目标可赚' : '今日预计'} <b>{money(roster ? rosterExpected : isSettledDailyAmount ? earned : workRates.daily)}</b></span>{work.mode === 'scheduled' && <button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button>}</div>
       </> : <>
-        <div className="dashboard-day-note">{work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : work.officialHolidayName ? `已自动识别为${work.officialHolidayName}假期；你仍可在薪苦日历中手工覆盖。` : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
-        <div className="hero-meta"><span>今日状态 <b>{work.dayType === 'rest' ? '休息' : attendanceLabel}</b></span><span>计薪方式 <b>{work.dayType === 'rest' ? '不自动计薪' : attendancePayLabel}</b></span><span>今日收入 <b>{money(earned)}</b></span>{work.dayType === 'rest' && <><button type="button" className="hero-mode-switch" onClick={useScheduledToday}>今天也上班 · 按平时作息</button><button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button></>}</div>
+        <div className="dashboard-day-note">{roster ? '按排班规则计算本日工资。临时值班可从薪苦日历调整班次。' : work.dayType === 'rest' ? '默认休息日不会计算工资；如果今天实际上班，可以手工开始计薪。' : work.officialHolidayName ? `已自动识别为${work.officialHolidayName}假期；你仍可在薪苦日历中手工覆盖。` : `${attendanceLabel}已覆盖今天的默认计薪安排。`}</div>
+        <div className="hero-meta"><span>今日状态 <b>{work.dayType === 'rest' ? '休息' : attendanceLabel}</b></span><span>计薪方式 <b>{roster ? roster.pay.mode==='salary'?'保留固定工资':'按排班规则' : work.dayType === 'rest' ? '不自动计薪' : attendancePayLabel}</b></span><span>今日收入 <b>{money(earned)}</b></span>{work.dayType === 'rest' && !roster && <><button type="button" className="hero-mode-switch" onClick={useScheduledToday}>今天也上班 · 按平时作息</button><button type="button" className="hero-mode-switch" onClick={()=>setDialogPurpose('start')}>今天弹性上班</button></>}</div>
       </>}
     </div>
 
@@ -490,7 +497,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       })}
     </div>}
 
-    <WorkTimeDialog open={dialogPurpose!==null} purpose={dialogPurpose ?? 'start'} date={dialogPurpose === 'adjust' ? workDate : today} plannedStart={profile.workStartTime} record={work.record} storageError={settlementError} onStart={startAt} onAdjust={adjustTime} onCancel={closeDialog}/>
+    <WorkTimeDialog open={dialogPurpose!==null} purpose={dialogPurpose ?? 'start'} date={dialogPurpose === 'adjust' || roster ? workDate : today} plannedStart={scheduleStart} record={work.record} storageError={settlementError} onStart={startAt} onAdjust={adjustTime} onCancel={closeDialog}/>
     <EarlyFinishDialog
       open={pendingEndRecord!==null}
       settlementKind={pendingRequirement === 'over-target' ? 'over-target' : 'under-target'}
@@ -498,7 +505,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       targetSeconds={targetSeconds}
       actualAmount={pendingActualAmount}
       fullDayAmount={pendingBaseAmount}
-      basePayLabel={vacation ? `${vacation.name}工资` : undefined}
+      basePayLabel={vacation ? `${vacation.name}工资` : roster ? '本班基本工资' : undefined}
       secondRate={workRates.second}
       error={settlementError}
       onActual={()=>settlePendingRecord('actual')}

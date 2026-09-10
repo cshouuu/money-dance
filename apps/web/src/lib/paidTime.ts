@@ -1,3 +1,5 @@
+import { rosterForDate } from '@salary-flow/core'
+import { MAX_SHIFT_DAYS, rosterIntervals, rosterActualIntervals } from './roster'
 import { calculateRates, isEmployedOn, workProfileForDate, workStageForDate, getUnpaidBreakOffsets, parseClock, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
 import { attendanceLeavePeriod, isConfiguredWorkday, isHalfDayLeave, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
@@ -38,6 +40,7 @@ function intervalAtOffset(shiftStart: Date, startSeconds: number, endSeconds: nu
 
 /** Paid slices for one configured shift, with the union of unpaid breaks removed. */
 export function scheduledPaidIntervalsForDate(profile: SalaryProfile, businessDate: string): PaidTimeInterval[] {
+  if (rosterForDate(profile, businessDate)) return rosterIntervals(profile, businessDate)
   if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
   profile = workProfileForDate(profile, businessDate)
   try {
@@ -114,6 +117,7 @@ export function actualPaidIntervalsForDate(
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(businessDate)),
 ): PaidTimeInterval[] {
+  if (rosterForDate(profile, businessDate)) return rosterActualIntervals(profile, businessDate, rangeEnd, workRecords, attendanceRecords, settings)
   if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
   profile = workProfileForDate(profile, businessDate)
   const attendance = attendanceForDate(attendanceRecords, businessDate)
@@ -148,6 +152,7 @@ export function plannedPaidIntervalsForDate(
   attendanceRecords: readonly AttendanceRecord[] = [],
   settings: ChinaHolidaySettings = loadChinaHolidaySettings(toLocalDateTime(businessDate)),
 ): PaidTimeInterval[] {
+  if (rosterForDate(profile, businessDate)) return rosterIntervals(profile, businessDate, attendanceRecords, settings)
   if (!isEmployedOn(profile, businessDate) || (profile.workJourney && !workStageForDate(profile, businessDate)?.profile)) return []
   profile = workProfileForDate(profile, businessDate)
   const attendance = attendanceForDate(attendanceRecords, businessDate)
@@ -162,8 +167,8 @@ export function plannedPaidIntervalsForDate(
     : sliceIntervalsByPaidOffset(intervals, 0, half)
 }
 
-function candidateBusinessDates(start: Date, end: Date): string[] {
-  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1, 12)
+function candidateBusinessDates(start: Date, end: Date, lookback = 1): string[] {
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate() - lookback, 12)
   const finalDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12)
   const dates: string[] = []
   for (let count = 0; cursor <= finalDate && count < MAX_INTERVAL_DAYS; count += 1) {
@@ -201,7 +206,7 @@ export function actualPaidIntervalsInRange(
   settings = loadChinaHolidaySettings(start),
 ): PaidTimeInterval[] {
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return []
-  return mergeIntervals(candidateBusinessDates(start, end).flatMap(date => (
+  return mergeIntervals(candidateBusinessDates(start, end, profile.rosters?.length ? MAX_SHIFT_DAYS : 1).flatMap(date => (
     actualPaidIntervalsForDate(profile, date, end, workRecords, attendanceRecords, settings)
       .map(interval => clippedInterval(interval, start, end))
       .filter((interval): interval is PaidTimeInterval => interval !== null)
@@ -250,7 +255,7 @@ export function estimatePaidWorkCompletionDate(
   if (Number.isNaN(start.getTime()) || !Number.isFinite(requiredPaidSeconds)) return null
   if (requiredPaidSeconds <= 0) return start
   let remaining = requiredPaidSeconds
-  const firstBusinessDate = toLocalDateValue(datePlusDays(toLocalDateValue(start), -1))
+  const firstBusinessDate = toLocalDateValue(datePlusDays(toLocalDateValue(start), profile.rosters?.length ? -MAX_SHIFT_DAYS : -1))
   let businessDate = firstBusinessDate
 
   for (let count = 0; count < MAX_INTERVAL_DAYS; count += 1) {
@@ -279,7 +284,7 @@ export function estimatePaidEarningsCompletionDate(
   if (Number.isNaN(start.getTime()) || !Number.isFinite(requiredAmount)) return null
   if (requiredAmount <= 0) return start
   let remaining = requiredAmount
-  const firstBusinessDate = toLocalDateValue(datePlusDays(toLocalDateValue(start), -1))
+  const firstBusinessDate = toLocalDateValue(datePlusDays(toLocalDateValue(start), profile.rosters?.length ? -MAX_SHIFT_DAYS : -1))
   let businessDate = firstBusinessDate
 
   for (let count = 0; count < MAX_INTERVAL_DAYS; count += 1) {
@@ -288,7 +293,7 @@ export function estimatePaidEarningsCompletionDate(
     if (secondRate > 0) {
       const fixedRecord = workRecords.find(record => record.date === businessDate && record.mode === 'scheduled')
       const intervals = fixedRecord
-        ? actualPaidIntervalsForDate(profile, businessDate, datePlusDays(businessDate, 2), [fixedRecord], attendanceRecords, settings)
+        ? actualPaidIntervalsForDate(profile, businessDate, datePlusDays(businessDate, profile.rosters?.length ? MAX_SHIFT_DAYS + 1 : 2), [fixedRecord], attendanceRecords, settings)
         : plannedPaidIntervalsForDate(profile, businessDate, attendanceRecords, settings)
       for (const interval of intervals) {
         const intervalStart = new Date(Math.max(start.getTime(), interval.start.getTime()))

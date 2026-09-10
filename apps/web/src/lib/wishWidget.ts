@@ -1,3 +1,4 @@
+import { MAX_SHIFT_DAYS } from './roster'
 import { calculateRates, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, WishItem } from '../types'
 import { actualPaidIntervalsForDate, calculatePaidTimeEarnings } from './paidTime'
@@ -26,7 +27,7 @@ export function buildWishWidgetSnapshot(profile: SalaryProfile, items: WishItem[
   })
   const timeline: { startAt: number; endAt: number; ratePerSecond: number }[] = []
   if (wishes.length) {
-    const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12)
+    const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (profile.rosters?.length ? MAX_SHIFT_DAYS : 1), 12)
     // An unbounded flexible timer cannot predict future days. Continue at most
     // through the existing 36-hour native horizon; reopening refreshes it.
     const boundedRecords = workRecords.map(record => record.mode !== 'flexible' ? record : {

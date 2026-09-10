@@ -1,3 +1,4 @@
+import { attendanceRosterShifts, rosterDayLabel, shiftDuration } from './roster'
 import { getShiftBreaks, vacationForDate, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
 import type { TodayWorkSummary } from './work'
@@ -13,14 +14,17 @@ export function countdownClock(target: Date, now: Date): string {
 
 export function getRestCountdown(profile: SalaryProfile, work: TodayWorkSummary, now: Date, attendance: AttendanceRecord[], records: DailyWorkRecord[], settings: ChinaHolidaySettings) {
   const today = toLocalDateValue(now)
-  const start = localDateWithTime(work.businessDate, profile.workStartTime)
-  const shiftEnd = localDateWithTime(work.businessDate, profile.workEndTime)
+  const start = work.rosterStart ? new Date(work.rosterStart) : localDateWithTime(work.businessDate, profile.workStartTime)
+  const shiftEnd = work.rosterEnd ? new Date(work.rosterEnd) : localDateWithTime(work.businessDate, profile.workEndTime)
   if (shiftEnd <= start) shiftEnd.setDate(shiftEnd.getDate() + 1)
   const selectedEnd = work.record?.status === 'ended' ? work.record.sessions.at(-1)?.endTime ?? work.record.plannedEndTime : work.record?.plannedEndTime
   const end = selectedEnd ? new Date(selectedEnd) : work.mode === 'scheduled' ? shiftEnd : null
   const ended = work.status === 'ended' || !!(end && end <= now)
   const active = work.dayType === 'work' && !ended && work.status !== 'ready'
-  const periods = work.mode === 'scheduled' ? getShiftBreaks(profile).map(period => ({
+  const rosterShifts = attendanceRosterShifts(profile,work.businessDate,attendance,settings)
+  const rosterBreaks = rosterShifts.flatMap(shift=>shift.breaks.map(rest=>({name:rest.name,start:new Date(+localDateWithTime(work.businessDate,shift.startTime)+rest.startMinute*60000),end:new Date(+localDateWithTime(work.businessDate,shift.startTime)+rest.endMinute*60000)})))
+  for(let index=1;index<rosterShifts.length;index++){const previous=rosterShifts[index-1];const from=new Date(+localDateWithTime(work.businessDate,previous.startTime)+shiftDuration(previous)*1000);const to=localDateWithTime(work.businessDate,rosterShifts[index].startTime);if(to>from)rosterBreaks.push({name:'班间休息',start:from,end:to})}
+  const periods = work.rosterName ? rosterBreaks.sort((a,b)=>+a.start-+b.start) : work.mode === 'scheduled' ? getShiftBreaks(profile).map(period => ({
     name: period.name,
     start: new Date(start.getTime() + period.start * 1000),
     end: new Date(Math.min(start.getTime() + period.end * 1000, end?.getTime() ?? Infinity)),
@@ -29,7 +33,7 @@ export function getRestCountdown(profile: SalaryProfile, work: TodayWorkSummary,
   let featured = { label: ended && work.dayType === 'work' ? '今天已下班' : work.dayType === 'work' ? '按自己的节奏工作' : '今天好好休息', target: null as Date | null, hint: '下一份期待，也在慢慢靠近' }
   if (upcoming && now < upcoming.start) featured = { label: `距离${upcoming.name}`, target: upcoming.start, hint: `${toLocalTimeValue(upcoming.start)} 开始 · 好好休息一下` }
   else if (upcoming) featured = { label: `${upcoming.name}中`, target: upcoming.end, hint: `距离${upcoming.name}结束 · 好好放松一下` }
-  else if (active && end) featured = { label: '距离下班', target: end, hint: `${toLocalTimeValue(end)} 下班 · 忙完就好好休息` }
+  else if (active && end) featured = { label: '距离下班', target: end, hint: `${work.rosterEnd && toLocalDateValue(end)!==today ? `${toLocalDateValue(end)} ` : ''}${toLocalTimeValue(end)} 下班 · 忙完就好好休息` }
   else if (active) featured.hint = '设置预计结束时间后，显示下班倒计时'
   const nextBreak = upcoming
     ? { label: now < upcoming.start ? `离${upcoming.name}` : `${upcoming.name}中`, target: now < upcoming.start ? upcoming.start : upcoming.end, hint: now < upcoming.start ? `${toLocalTimeValue(upcoming.start)} 开始${upcoming.name}` : `距离${upcoming.name}结束` }
@@ -41,7 +45,7 @@ export function getRestCountdown(profile: SalaryProfile, work: TodayWorkSummary,
     const key = toLocalDateValue(date)
     const manual = attendance.find(item => item.date === key)
     const recorded = records.some(item => item.date === key)
-    const working = manual ? resolveAttendanceDay(date, profile, manual, settings).isWorkday : recorded || resolveAttendanceDay(date, profile, undefined, settings).isWorkday
+    const working = manual ? resolveAttendanceDay(date, profile, manual, settings).isWorkday : recorded || (rosterDayLabel(profile,key,settings) ? rosterDayLabel(profile,key,settings)!=='排班休息' : resolveAttendanceDay(date, profile, undefined, settings).isWorkday)
     if (!rest && !working && !(key === today && active)) rest = { days, hint: `${date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', weekday: 'short' })}休息` }
     const official = chinaHolidayForDate(key, settings)
     if (!holiday && official?.kind === 'holiday') holiday = { days, hint: official.name }
@@ -67,5 +71,15 @@ export function getRestCountdown(profile: SalaryProfile, work: TodayWorkSummary,
     const upcoming = upcomingVacations(profile, today)[0]
     if (upcoming) vacation = { label: `距离${upcoming.plan.name}`, value: `${Math.round((Date.parse(upcoming.start) - Date.parse(today)) / 86400000)} 天`, hint: `${upcoming.start} 至 ${upcoming.end}` }
   }
-  return { featured, nextBreak, end: active ? end : null, endLabel: ended && work.dayType === 'work' ? '已下班' : work.dayType !== 'work' ? '今天休息' : '未设置', rest, holiday, vacation }
+  let nextShift: {label:string;value:string;hint:string} | null = null
+  if(profile.rosters?.length) for(let offset=0;offset<=366&&!nextShift;offset++) {
+    const date=shiftSessionLocalDate(today,offset)
+    const manual=attendance.find(item=>item.date===date)
+    if(manual && !resolveAttendanceDay(new Date(`${date}T12:00:00`),profile,manual,settings).isWorkday)continue
+    for(const shift of attendanceRosterShifts(profile,date,attendance,settings)) {
+      const begins=localDateWithTime(date,shift.startTime)
+      if(begins>now){nextShift={label:'下一班',value:shift.name,hint:`${date} ${shift.startTime} 开始`};break}
+    }
+  }
+  return { featured, nextBreak, nextShift, end: active ? end : null, endLabel: ended && work.dayType === 'work' ? '已下班' : work.dayType !== 'work' ? '今天休息' : '未设置', rest, holiday, vacation }
 }
