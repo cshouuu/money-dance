@@ -1,19 +1,4 @@
-import {
-  BarChart3,
-  Boxes,
-  BriefcaseBusiness,
-  CalendarCheck2,
-  CircleDollarSign,
-  Coins,
-  Fish,
-  Grid2X2,
-  Heart,
-  Palette,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Settings2,
-  Route,
-} from 'lucide-react'
+import { Grid2X2, Palette, PanelLeftClose, PanelLeftOpen, SlidersHorizontal } from 'lucide-react'
 import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -21,34 +6,27 @@ import { AnimatedSidebar } from '../ui/AnimatedSidebar'
 import { BottomSheet } from '../ui/BottomSheet'
 import { ThemePickerSheet } from './ThemePicker'
 import { initializeTheme } from './theme'
+import { NAVIGATION_ITEMS as items } from '../lib/navigation'
+import { loadDockPaths, subscribeDockPaths } from '../lib/mobileDock'
+import { Button } from '../ui/BeuiControls'
+import { MobileDockSettings } from './MobileDockSettings'
 import './Shell.css'
 
 initializeTheme()
 
 const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
-const items = [
-  ['/', Coins, '今日', true],
-  ['/convert', Heart, '心愿清单', false],
-  ['/summary', BarChart3, '账本', false],
-  ['/accidents', CircleDollarSign, '意外收支', false],
-  ['/slacking', Fish, '摸鱼', true],
-  ['/overtime', BriefcaseBusiness, '加班', true],
-  ['/attendance', CalendarCheck2, '薪苦日历', false],
-  ['/assets', Boxes, '物品', false],
-  ['/journey', Route, '工作旅程', false],
-  ['/settings', Settings2, '我的', true],
-] as const
-
 const overviewItems = items.slice(0, 4)
 const workItems = items.slice(4, 9)
 const settingsItem = items[9]
-const compactItems = items.filter(([, , , compact]) => compact)
-const drawerItems = items.filter(([, , , compact]) => !compact)
 
 export function Shell() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [dockPaths, setDockPaths] = useState(loadDockPaths)
+  const [dockSettingsOpen, setDockSettingsOpen] = useState(false)
+  const compactItems = dockPaths.map(path => items.find(([to]) => to === path)!)
+  useEffect(() => subscribeDockPaths(setDockPaths), [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
 
@@ -150,17 +128,19 @@ export function Shell() {
       open={mobileOpen}
       onOpenChange={setMobileOpen}
       title="全部功能"
-      description="低频功能集中在这里，日常入口继续保留在底部。"
+      description="所有功能都在这里，也可以自定义底部常用入口。"
       className="mobile-more-sheet"
     >
+      <Button variant="secondary" className="mobile-dock-customize" onClick={() => { setMobileOpen(false); setDockSettingsOpen(true) }}><SlidersHorizontal size={17}/>自定义底部栏</Button>
       <nav className="mobile-drawer-grid" aria-label="全部功能">
-        {drawerItems.map(item => renderMobileItem(item, true))}
+        {items.map(item => renderMobileItem(item, true))}
         <button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
           <Palette size={20}/>
           <span>一键换肤</span>
         </button>
       </nav>
     </BottomSheet>
+    <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <ThemePickerSheet open={themePickerOpen} onOpenChange={setThemePickerOpen}/>
     </div>
   </LazyMotion>

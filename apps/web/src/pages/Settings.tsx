@@ -24,6 +24,7 @@ import { alternatingWeekTypeForDate, getWeekStartDateValue } from '../lib/attend
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
 import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveProfile, settingsWorkStage, withSettingsStage } from '../lib/profile'
+import { MobileDockSettings } from '../components/MobileDockSettings'
 import './Settings.css'
 
 function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
@@ -66,6 +67,7 @@ function buildProfile(
 }
 
 export function Settings() {
+  const [dockSettingsOpen, setDockSettingsOpen] = useState(false)
   const [initialProfile] = useState(() => loadProfile())
   const [profile, setProfile] = useState<SalaryProfile>(initialProfile)
   const [salaryInput, setSalaryInput] = useState(String(initialProfile.salary))
@@ -364,6 +366,8 @@ export function Settings() {
       {saveError && <p className="settings-warning" role="alert">{saveError}</p>}
       <Button className="settings-save-button" type="submit" size="lg" ripple>{saved ? <><CheckCircle2 size={17}/>已保存</> : '保存薪资设置'}</Button>
     </form>
+    <section className="settings-dock-card"><div><h2>移动端底部栏</h2><p>选择并排列四个常用功能，其余功能随时从「全部」进入。</p></div><Button variant="secondary" onClick={() => setDockSettingsOpen(true)}>自定义底部栏</Button></section>
+    <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <div className="settings-update-card"><AppUpdateCard/></div>
   </section>
 }
