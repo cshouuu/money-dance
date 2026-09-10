@@ -1,29 +1,19 @@
 import { calculateRates, isEmployedOn, workStageForDate, type SalaryProfile } from '@salary-flow/core'
-import type { AttendanceRecord, DailyWorkRecord, LedgerEntry } from '../types'
+import type { AttendanceRecord, DailyWorkRecord, LedgerEntry, OvertimeSession, SlackingSession } from '../types'
+import { monthlyWorkBreakdown, type WorkInterval } from './monthlyWorkBreakdown'
 import { getMonthlyScheduledWorkDayCount, loadChinaHolidaySettings, resolveAttendanceDay, getCustomAttendanceAmount, getOfficialHolidayPayAmount, attendanceWorkedFraction } from './attendance'
 import { actualPaidIntervalsForDate } from './paidTime'
 import { toLocalDateValue, toLocalMonthValue } from './form'
 import { getSummaryRange, summarizeLedger } from './ledger'
 import { salaryProfileForBusinessDate } from './profile'
-import { summarizeTodayWork } from './work'
 
-export interface MonthlyWorkStats {
+export interface MonthlyWorkStats extends ReturnType<typeof monthlyWorkBreakdown> {
   income: number
   expectedIncome: number
   workedSeconds: number
   plannedSeconds: number
   workdayCount: number
   progress: number
-  averageHourlyIncome: number
-}
-
-function completedDayEvaluation(date: Date, profile: SalaryProfile): Date {
-  const [startHour = 0, startMinute = 0] = profile.workStartTime.split(':').map(Number)
-  const [endHour = 0, endMinute = 0] = profile.workEndTime.split(':').map(Number)
-  const crossesMidnight = endHour * 60 + endMinute < startHour * 60 + startMinute
-  return crossesMidnight
-    ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 12)
-    : new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999)
 }
 
 export function getMonthlyWorkStats(
@@ -32,6 +22,7 @@ export function getMonthlyWorkStats(
   workRecords: readonly DailyWorkRecord[],
   attendanceRecords: readonly AttendanceRecord[],
   now = new Date(),
+  sessions: { overtime?: readonly OvertimeSession[]; slacking?: readonly SlackingSession[] } = {},
 ): MonthlyWorkStats {
   const month = toLocalMonthValue(now)
   const { start, end } = getSummaryRange('month', month)
@@ -42,7 +33,6 @@ export function getMonthlyWorkStats(
   const workdayCount = getMonthlyScheduledWorkDayCount(profile, now, attendanceRecords, holidaySettings)
   let plannedSeconds = workdayCount * rates.paidSecondsPerDay
   let plannedSalary = rates.daily * currentRateProfile.monthlyWorkDays
-  let workedSeconds = 0
 
   if (profile.workJourney) {
     plannedSeconds = 0
@@ -58,33 +48,32 @@ export function getMonthlyWorkStats(
       const custom = getCustomAttendanceAmount(attendance, dailyRates.daily)
       const holiday = attendance ? null : getOfficialHolidayPayAmount(date, profile, dailyRates.daily, holidaySettings)
       plannedSalary += custom ?? holiday ?? (workday ? dailyRates.daily : 0)
-      workedSeconds += actualPaidIntervalsForDate(profile, date, now, [...workRecords], [...attendanceRecords]).reduce((sum, interval) => sum + Math.max(0, Math.min(now.getTime(), interval.end.getTime()) - interval.start.getTime()) / 1000, 0)
     }
   }
 
   const todayValue = toLocalDateValue(now)
-  for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
-    if (profile.workJourney) break
-    const date = new Date(cursor)
-    date.setHours(12, 0, 0, 0)
-    const dateValue = toLocalDateValue(date)
-    if (dateValue > todayValue) break
-    const evaluation = dateValue === todayValue ? now : completedDayEvaluation(date, profile)
-    const day = summarizeTodayWork(profile, [...workRecords], evaluation, undefined, [...attendanceRecords])
-    if (day.businessDate === dateValue) workedSeconds += day.workedSeconds
-  }
-
   const additionalIncome = summary.entries
     .filter(entry => entry.direction === 'income' && entry.category !== '薪资')
     .reduce((total, entry) => total + entry.amount, 0)
   const expectedIncome = plannedSalary + additionalIncome
+  const normalIntervals: WorkInterval[] = []
+  for (const cursor = new Date(start); cursor < end && cursor <= now; cursor.setDate(cursor.getDate() + 1)) {
+    normalIntervals.push(...actualPaidIntervalsForDate(profile, toLocalDateValue(cursor), now, workRecords, attendanceRecords, holidaySettings)
+      .map(interval => ({ start: interval.start.getTime(), end: Math.min(interval.end.getTime(), now.getTime()) })))
+  }
+  const salaryIncome = summary.entries
+    .filter(entry => entry.direction === 'income' && (entry.kind === 'salary' || entry.kind === 'salary_override')
+      && (entry.localDate ?? toLocalDateValue(new Date(entry.occurredAt))) <= todayValue)
+    .reduce((sum, entry) => sum + entry.amount, 0)
+  const breakdown = monthlyWorkBreakdown(month, normalIntervals, sessions.overtime ?? [], sessions.slacking ?? [], salaryIncome, now)
+  const workedSeconds = breakdown.normalWorkedSeconds
   return {
+    ...breakdown,
     income: summary.income,
     expectedIncome,
     workedSeconds,
     plannedSeconds,
     workdayCount,
     progress: plannedSeconds > 0 ? Math.min(1, Math.max(0, workedSeconds / plannedSeconds)) : 0,
-    averageHourlyIncome: workedSeconds > 0 ? summary.income / (workedSeconds / 3600) : 0,
   }
 }

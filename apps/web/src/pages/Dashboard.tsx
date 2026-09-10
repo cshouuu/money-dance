@@ -3,11 +3,12 @@ import { isEmployedOn, type SalaryProfile } from '@salary-flow/core'
 import { JourneyRestDashboard } from '../components/JourneyRestDashboard'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
-import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square, Target, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, BriefcaseBusiness, Clock3, Fish, Pause, Play, RotateCcw, Sparkles, Square } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EarlyFinishDialog } from '../components/EarlyFinishDialog'
 import { WorkTimeDialog } from '../components/WorkTimeDialog'
+import { MonthlyPerformance } from '../components/MonthlyPerformance'
 import { NumberTicker } from '../ui/NumberTicker'
 import { loadAchievementState, reconcileAchievementSessions, saveAchievementState } from '../lib/achievements'
 import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isConfiguredWorkday, isHalfDayLeave, loadAttendanceRecords, loadChinaHolidaySettings } from '../lib/attendance'
@@ -126,8 +127,9 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     ledger,
     workRecords,
     attendanceRecords,
-    new Date(currentMinute * 60_000),
-  ), [attendanceRecords, currentMinute, ledger, profile, workRecords])
+    now,
+    { overtime: overtimeSessions, slacking: slackingSessions },
+  ), [attendanceRecords, currentMinute, ledger, profile, workRecords, overtimeSessions, slackingSessions])
   const firstStart = work.record?.sessions[0]?.startTime
   const plannedEndLabel = work.record?.plannedEndTime
     ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`
@@ -469,20 +471,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     </div>
     </div>
 
-    <div className="section-title dashboard-performance-title"><div><p className="eyebrow">MONTHLY SCORE</p><h2>本月战绩</h2></div><span>{now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })}</span></div>
-    <article className="dashboard-performance-card">
-      <div className="dashboard-performance-primary"><div><small>本月累计收入</small><strong>{money(monthlyStats.income)}</strong><span>本月预计 {money(monthlyStats.expectedIncome)}</span></div></div>
-      <div className="dashboard-performance-progress">
-        <div><span>计划工时进度</span><strong>{(monthlyStats.progress * 100).toFixed(0)}%</strong></div>
-        <div className="dashboard-performance-track" role="progressbar" aria-label="本月计划工时进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(monthlyStats.progress * 100)}><i style={{ width: `${monthlyStats.progress * 100}%` }} /></div>
-        <small>{formatDuration(monthlyStats.workedSeconds)} / {formatDuration(monthlyStats.plannedSeconds)}</small>
-      </div>
-      <div className="dashboard-performance-details">
-        <div><Target size={16} /><span>本月工作日</span><b>{monthlyStats.workdayCount} 天</b></div>
-        <div><Clock3 size={16} /><span>累计有效工时</span><b>{formatDuration(monthlyStats.workedSeconds)}</b></div>
-        <div><TrendingUp size={16} /><span>平均每小时收入</span><b>{money(monthlyStats.averageHourlyIncome)}</b></div>
-      </div>
-    </article>
+    <MonthlyPerformance stats={monthlyStats} now={now}/>
 
     <div className="section-title dashboard-wishlist-title"><div><p className="eyebrow">WISH LIST</p><h2>我的心愿清单</h2></div><Link className="dashboard-wishlist-link" to="/convert">查看全部 {wishlistItems.length} 项 <ArrowUpRight size={14}/></Link></div>
     {featuredWishes.length === 0 ? <div className="dashboard-wishlist-empty"><span>✨</span><div><b>还没有心愿</b><small>把想买的东西换算成需要工作的时间。</small></div><Link to="/convert">去心愿清单</Link></div> : <div className="dashboard-wishlist-grid">
