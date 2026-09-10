@@ -67,7 +67,8 @@ jobs:
           npm run build -w @salary-flow/core
           npm run build -w @salary-flow/web
       - name: Install pinned Capacitor toolchain
-        run: npm install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
+        # npm 10 crashes resolving Vitest 4 optional peers during this install.
+        run: npx --yes npm@11.19.1 install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
       - name: Generate Android project
         working-directory: apps/web
         run: |
