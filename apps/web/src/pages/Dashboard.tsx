@@ -488,10 +488,12 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       {featuredWishes.map(item => {
         const wishProgress = featuredWishProgress.get(item.id)
         const percent = (wishProgress?.progress ?? 0) * 100
+        const remainingSeconds = wishProgress?.remainingSeconds ?? 0
+        const remainingWorkDays = remainingSeconds === 0 ? 0 : currentRates.paidSecondsPerDay > 0 ? remainingSeconds / currentRates.paidSecondsPerDay : Number.POSITIVE_INFINITY
         return <article className="dashboard-wish-card" key={item.id}>
           <span className="dashboard-wish-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</span>
           <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · {wishProgress?.upcomingStart ? `尚未开始 · ${toLocalDateValue(wishProgress.upcomingStart)}` : `已完成 ${percent.toFixed(0)}%`}</small></div>
-          <div className="dashboard-wish-time"><small>还差纯工时</small><strong>{formatDuration(wishProgress?.remainingSeconds ?? 0)}</strong></div>
+          <div className="dashboard-wish-time"><small>还差纯工时</small><strong>{formatDuration(remainingSeconds)}</strong><small className="dashboard-wish-days" title="按当前设置的每天计薪工时折算，不包含休息日">{Number.isFinite(remainingWorkDays) ? <>{remainingWorkDays > 0 && remainingWorkDays < 0.01 ? '不足' : '约'} <b>{remainingWorkDays > 0 && remainingWorkDays < 0.01 ? '0.01' : remainingWorkDays.toFixed(2)}</b> 个工作日</> : '暂无法折算工作日'}</small></div>
           <div className="dashboard-wish-progress" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
         </article>
       })}

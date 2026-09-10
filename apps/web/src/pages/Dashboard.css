@@ -61,3 +61,5 @@
   .dashboard-overview-grid .rest-countdown-tile { padding:12px; }
   .dashboard-overview-grid .rest-countdown-tile > strong { font-size:clamp(15px,1.3vw,20px); }
 }
+
+.dashboard-wish-days{white-space:nowrap}.dashboard-wish-days b{font-weight:650;font-variant-numeric:tabular-nums}
