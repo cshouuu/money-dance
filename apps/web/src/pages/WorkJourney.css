@@ -56,4 +56,6 @@ a.journey-button{display:inline-flex;align-items:center;justify-content:center;g
 .journey-undo { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:20px; }
 .journey-undo p { flex-basis:100%; }
 .journey-detail-footer { flex-wrap:wrap; gap:12px; }
+.journey-header-actions { display:flex; flex-direction:column; align-items:flex-end; flex-shrink:0; gap:6px; }
+.journey-header-actions a { color:var(--green); font-size:13px; font-weight:600; text-decoration:none; padding:8px 0; }
 .journey-dialog-body ul { padding-left:20px; font-size:13px; line-height:1.9; }

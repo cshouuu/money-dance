@@ -28,6 +28,9 @@
 .settings-change-scope p { margin: 12px 0 0; font-size: 13px; line-height: 1.7; }
 .settings-change-scope small { display: block; margin-top: 6px; font-weight: 400; color: var(--muted); }
 .settings-history-confirm { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; font-size: 13px; line-height: 1.6; }
+.settings-history-impact { margin-top: 16px; padding: 14px; border: 1px solid var(--accent-border); border-radius: 12px; background: var(--accent-faint); }
+.settings-history-impact p { margin-top: 0; }
+.settings-history-impact .beui-button { margin-top: 12px; }
 .settings-rule-history { margin-top: 18px; font-size: 13px; line-height: 1.7; }
 .settings-page .work-mode-hint,.settings-page .work-week-hint { font-size: 12px; line-height: 1.7; }
 .alternating-week-settings { flex-wrap: wrap; }

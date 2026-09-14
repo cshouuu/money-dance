@@ -27,8 +27,10 @@ import { Button, Checkbox, ChoiceCard, ChoiceGroup, Input, SelectField, Switch }
 import { alternatingWeekTypeForDate, getWeekStartDateValue, loadAttendanceRecords } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey, toLocalDateValue } from '../lib/form'
 import { createId } from '../lib/id'
-import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveDatedProfile, settingsWorkStage, withDatedWorkSettings } from '../lib/profile'
+import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays, salaryProfileForBusinessDate, saveDatedProfile, settingsWorkStage, withDatedWorkSettings, withSettingsStage } from '../lib/profile'
 import { plannedIncomeForDate } from '../lib/monthlyStats'
+import { getSummaryRange, loadLedger, summarizeLedger } from '../lib/ledger'
+import { loadWorkRecords } from '../lib/work'
 import { isSessionLocalDate } from '../lib/sessionBusinessDate'
 import { MobileDockSettings } from '../components/MobileDockSettings'
 import './Settings.css'
@@ -98,14 +100,22 @@ export function Settings() {
   const draftProfile = buildProfile(profile, salaryInput, paydayInput, monthlyLivingCostInput, monthlyWorkDaysInput, workDaysPerWeekInput)
   const activeRoster=rosterForDate(profile, isSessionLocalDate(effectiveFrom) ? effectiveFrom : toLocalDateValue())
   const changesHistory = effectiveFrom < toLocalDateValue() || salaryEffectiveDateInput !== expectedProfile.salaryEffectiveDate
+  const shortensHistory = salaryEffectiveDateInput > expectedProfile.salaryEffectiveDate
   let rates: SalaryRates | null = null
   let rateProfile: SalaryProfile | null = null
   let monthlyDeductions = 0
   let calculationError = ''
   let previewIncome: { before: number; after: number } | null = null
+  let previewAccumulatedIncome: { before: number; after: number } | null = null
   if (draftProfile) {
     try {
-      const preview = withDatedWorkSettings(expectedProfile, draftProfile, effectiveFrom)
+      // The ledger start belongs to the job snapshot, independently of its
+      // dated salary rules. Preview both exactly as a settings save would.
+      const preview = withSettingsStage(withDatedWorkSettings(expectedProfile, {
+        ...draftProfile,
+        salaryEffectiveDate: salaryEffectiveDateInput,
+        salaryHistoryMode: salaryEffectiveDateInput < toLocalDateValue() ? 'custom' : 'none',
+      }, effectiveFrom))
       rateProfile = salaryProfileForBusinessDate(preview, effectiveFrom)
       rates = calculateRates(rateProfile)
       monthlyDeductions = calculateMonthlySalaryDeductions(rateProfile)
@@ -117,6 +127,14 @@ export function Settings() {
         const date = `${month}-${String(day).padStart(2, '0')}`
         previewIncome.before += plannedIncomeForDate(expectedProfile, date, attendance)
         previewIncome.after += plannedIncomeForDate(preview, date, attendance)
+      }
+      const now = new Date()
+      const { start, end } = getSummaryRange('month', toLocalDateValue(now).slice(0, 7))
+      const ledger = loadLedger()
+      const work = loadWorkRecords()
+      previewAccumulatedIncome = {
+        before: summarizeLedger(expectedProfile, ledger, start, end, now, work, attendance).income,
+        after: summarizeLedger(preview, ledger, start, end, now, work, attendance).income,
       }
     } catch (error) {
       calculationError = error instanceof Error ? error.message : '请检查生效日期、上下班时间和休息设置。'
@@ -403,8 +421,10 @@ export function Settings() {
       <section className="settings-change-scope" aria-label="本次修改的生效范围">
         <Input label="本次工资与作息从哪天生效" required type="date" min={settingsWorkStage(profile)?.startDate ?? '1900-01-01'} max={settingsWorkStage(profile)?.endDate ?? undefined} value={effectiveFrom} onValueChange={value => { setEffectiveFrom(value); if (value && value < salaryEffectiveDateInput) setSalaryEffectiveDateInput(value); setHistoryConfirmed(false); setSaved(false) }}/>
         <p>{effectiveFrom} 之前沿用原规则；从这天起使用本次设置，直到下一条已保存规则生效。修改本月计薪日或排班工时，会更新本月的参考日薪、时薪及相关估算。</p>
+        {previewAccumulatedIncome && <p aria-label="本月累计收入变化"><b>本月累计收入：¥{previewAccumulatedIncome.before.toFixed(2)} → ¥{previewAccumulatedIncome.after.toFixed(2)}</b><small>按当前记录预览，与首页「本月战绩」的累计收入口径相同。</small></p>}
         {previewIncome && <p><b>{effectiveFrom.slice(0,7)} 按已安排出勤预计基本工资：¥{previewIncome.before.toFixed(2)} → ¥{previewIncome.after.toFixed(2)}</b><small>含已设置扣除与出勤调整，不含加班、手工账目和生活费账本支出；实际收入以记录为准。</small></p>}
-        {changesHistory && <label className="settings-history-confirm"><Checkbox checked={historyConfirmed} onCheckedChange={setHistoryConfirmed} ariaLabel="确认重算所选历史范围"/><span>我确认重算所选历史范围的收入及关联进度，原始记录保留。</span></label>}
+        {shortensHistory && <div className="settings-history-impact" role="status"><p><b>你正在缩短自动记薪范围</b><br/>开始日期将从 {expectedProfile.salaryEffectiveDate} 改为 {salaryEffectiveDateInput}。过去部分工资可能不再计入累计，具体变化见上方。只想调薪时，保留原开始日期即可。</p><Button type="button" variant="secondary" onClick={() => { setSalaryEffectiveDateInput(expectedProfile.salaryEffectiveDate); setHistoryConfirmed(false); setSaved(false); setSaveError('') }}>保留原记薪开始日期</Button></div>}
+        {changesHistory && <label className="settings-history-confirm"><Checkbox checked={historyConfirmed} onCheckedChange={setHistoryConfirmed} ariaLabel="确认重算所选历史范围"/><span>{shortensHistory ? `我确认将自动记薪开始日期推后到 ${salaryEffectiveDateInput}，并接受上方累计收入变化。` : '我确认重算所选历史范围的收入及关联进度，原始记录保留。'}</span></label>}
       </section>
       {calculationError && <p className="settings-warning" role="alert">{calculationError}</p>}
       {draftProfile && draftProfile.includeLivingCost && draftProfile.livingCostMode === 'deduct' && draftProfile.monthlyLivingCost > draftProfile.salary && draftProfile.salaryType === 'monthly' && <p className="settings-warning">生活成本高于月薪，当前可支配薪资会按 0 计算。</p>}
