@@ -60,10 +60,10 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-          apksigner_path="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          test -n "$apksigner_path"
-          "$apksigner_path" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/wish-test-certificate.txt"
-          grep -Fq 'Signer #1 certificate SHA-256 digest: a3ce39fb1165b8dd26e492b26e0cb046427fa5312ef0d666d831c534e1f9a3fa' "$RUNNER_TEMP/wish-test-certificate.txt"
+          apksigner_jar="$(find -L "$ANDROID_HOME/build-tools" -name apksigner.jar -type f | sort -V | tail -n 1)"
+          test -n "$apksigner_jar" || { echo 'Android signing verifier was not found'; exit 1; }
+          java -jar "$apksigner_jar" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/wish-test-certificate.txt"
+          grep -Fq 'Signer #1 certificate SHA-256 digest: a3ce39fb1165b8dd26e492b26e0cb046427fa5312ef0d666d831c534e1f9a3fa' "$RUNNER_TEMP/wish-test-certificate.txt" || { echo 'Unexpected test signing certificate'; exit 1; }
       - name: Stage preview files
         run: |
           mkdir -p preview-site/test-build
