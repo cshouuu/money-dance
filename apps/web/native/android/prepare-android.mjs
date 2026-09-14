@@ -404,11 +404,11 @@ if (releaseSigning) {
 await writeFile(gradlePath, gradle)
 if (testBuild) {
   // Only the test build changes identity; namespace stays aligned with native Java.
-  await writeFile(gradlePath, gradle.replace(/applicationId\s+"[^"]+"/, 'applicationId "com.cshouuu.moneydance.usability.v2"'))
+  await writeFile(gradlePath, gradle.replace(/applicationId\s+"[^"]+"/, 'applicationId "com.cshouuu.moneydance.usability.wishes"'))
   const stringsPath = join(appRoot, 'src/main/res/values/strings.xml')
   const strings = (await readFile(stringsPath, 'utf8'))
-    .replace(/(<string name="(?:app_name|title_activity_main)">)[^<]+/g, '$1MoneyDance 易用性V2')
-    .replace(/(<string name="custom_url_scheme">)[^<]+/, '$1com.cshouuu.moneydance.usability.v2')
+    .replace(/(<string name="(?:app_name|title_activity_main)">)[^<]+/g, '$1MoneyDance 心愿测试')
+    .replace(/(<string name="custom_url_scheme">)[^<]+/, '$1com.cshouuu.moneydance.usability.wishes')
   await writeFile(stringsPath, strings)
 }
 console.log(`Prepared Android project: versionName=${versionName}, versionCode=${versionCode}, releaseSigning=${releaseSigning}, pgyerShortcut=${pgyerAppShortcut}`)

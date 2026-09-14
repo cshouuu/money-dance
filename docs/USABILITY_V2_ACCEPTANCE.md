@@ -32,4 +32,4 @@
 
 测试站点：https://usability.money-dance-usability.pages.dev/
 
-Android 测试应用 ID：`com.cshouuu.moneydance.usability.v2`；关闭正式版更新入口，独立于正式应用存储。测试 APK 由功能分支的 `Usability preview only` 工作流生成，站点的 `test-build/` 目录提供按提交区分的安装包。
+早期 V2 测试应用 ID 为 `com.cshouuu.moneydance.usability.v2`。加入心愿顺序分配后，当前交付为 `MoneyDance 心愿测试`（`com.cshouuu.moneydance.usability.wishes`），使用固定测试签名，与早期 V2 并存；详见 `WISH_ALLOCATION_ACCEPTANCE.md`。关闭正式版更新入口，独立于正式应用存储。测试 APK 由功能分支的 `Usability preview only` 工作流生成，站点的 `test-build/` 目录提供按提交区分的安装包。
