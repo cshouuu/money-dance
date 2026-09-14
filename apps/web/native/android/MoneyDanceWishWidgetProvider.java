@@ -55,39 +55,19 @@ public class MoneyDanceWishWidgetProvider extends AppWidgetProvider {
         for (int id : manager.getAppWidgetIds(new ComponentName(context, MoneyDanceWishWidgetProvider.class))) render(context, manager, id);
     }
 
-    private static double earned(JSONObject wish, double extra) {
-        return Math.min(Math.max(0, wish.optDouble("price", 0)), Math.max(0, wish.optDouble("earnedAmount", 0) + extra));
-    }
-
-    private static double progress(JSONObject wish, double extra) {
-        double price = wish.optDouble("price", 0);
-        return price <= 0 ? 1 : Math.max(0, Math.min(1, earned(wish, extra) / price));
-    }
-
     private static void render(Context context, AppWidgetManager manager, int id) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.money_dance_wish_widget);
         JSONObject snapshot = WidgetStateStore.getSnapshot(context).optJSONObject("wishWidget");
         JSONArray wishes = snapshot == null ? null : snapshot.optJSONArray("wishes");
         int count = wishes == null ? 0 : Math.min(3, wishes.length());
         long now = System.currentTimeMillis();
-        double extra = 0;
-        if (snapshot != null) {
-            long until = Math.min(now, snapshot.optLong("validUntil", now));
-            JSONArray timeline = snapshot.optJSONArray("timeline");
-            if (timeline != null) for (int i = 0; i < timeline.length(); i++) {
-                JSONObject slice = timeline.optJSONObject(i);
-                if (slice == null) continue;
-                extra += Math.max(0L, Math.min(until, slice.optLong("endAt")) - slice.optLong("startAt")) / 1000D
-                        * Math.max(0, slice.optDouble("ratePerSecond", 0));
-            }
-        }
         int selected = Math.max(0, Math.min(count - 1, context.getSharedPreferences("wish-widget", Context.MODE_PRIVATE).getInt("selected-" + id, 0)));
         for (int slot = 0; slot < 3; slot++) {
             JSONObject wish = wishes == null ? null : wishes.optJSONObject(slot);
             views.setViewVisibility(ROWS[slot], wish == null ? View.GONE : View.VISIBLE);
             if (wish == null) continue;
             views.setTextViewText(ROWS[slot], (slot == selected ? "● " : "○ ") + wish.optString("name", "心愿")
-                    + "  " + String.format(Locale.CHINA, "%.0f%%", progress(wish, extra) * 100));
+                    + "  " + String.format(Locale.CHINA, "%.0f%%", WishProgressProjection.progress(snapshot, wish, now) * 100));
             Intent select = new Intent(context, MoneyDanceWishWidgetProvider.class).setAction(SELECT)
                     .setData(Uri.parse("moneydance://wish-select/" + id + "/" + slot))
                     .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).putExtra("slot", slot);
@@ -95,11 +75,12 @@ public class MoneyDanceWishWidgetProvider extends AppWidgetProvider {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         }
         JSONObject active = count == 0 ? null : wishes.optJSONObject(selected);
-        double value = active == null ? 0 : progress(active, extra);
+        double value = active == null ? 0 : WishProgressProjection.progress(snapshot, active, now);
         views.setImageViewBitmap(R.id.wish_pie, pie(value));
         views.setTextViewText(R.id.wish_title, active == null ? "把心愿放到桌面" : active.optString("name", "心愿"));
+        String amountLabel = snapshot != null && "sequential".equals(snapshot.optString("allocationMode")) ? "预计已攒" : "独立估算";
         views.setTextViewText(R.id.wish_amount, active == null ? "打开清单，指定最多 3 个心愿" : String.format(Locale.CHINA,
-                "已积累 ¥%.2f / ¥%.2f", earned(active, extra), active.optDouble("price", 0)));
+                amountLabel + " ¥%.2f / ¥%.2f", WishProgressProjection.earned(snapshot, active, now), active.optDouble("price", 0)));
         views.setTextViewText(R.id.wish_updated, snapshot != null && now > snapshot.optLong("validUntil", 0)
                 ? "打开应用刷新进度" : "更新于 " + android.text.format.DateFormat.format("MM-dd HH:mm", now));
         Intent open = new Intent(context, MainActivity.class).setAction(Intent.ACTION_VIEW)

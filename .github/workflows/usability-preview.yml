@@ -1,0 +1,93 @@
+name: Usability preview only
+
+on:
+  push:
+    branches: [codex/feature-usability]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: usability-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/codex/feature-usability'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VITE_TEST_BUILD: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Install Android toolchain
+        run: npx --yes npm@11.19.1 install --no-save --package-lock=false @capacitor/core@8.5.0 @capacitor/android@8.5.0 @capacitor/cli@8.5.0
+      - name: Prepare isolated Android app
+        working-directory: apps/web
+        env:
+          ANDROID_TEST_BUILD: 'true'
+          ANDROID_VERSION_NAME: 0.4.0-usability.${{ github.run_number }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          npx cap add android
+          npx cap sync android
+          node native/android/prepare-android.mjs
+          grep -Fq 'applicationId "com.cshouuu.moneydance.usability.wishes"' android/app/build.gradle
+      - name: Restore stable test signing key
+        env:
+          ANDROID_WISH_TEST_KEYSTORE_BASE64: ${{ secrets.ANDROID_WISH_TEST_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_WISH_TEST_KEYSTORE_BASE64"
+          test_key_file="$RUNNER_TEMP/money-dance-wish-test.keystore"
+          printf '%s' "$ANDROID_WISH_TEST_KEYSTORE_BASE64" | base64 --decode > "$test_key_file"
+          chmod 600 "$test_key_file"
+          printf 'ANDROID_TEST_KEYSTORE_PATH=%s\n' "$test_key_file" >> "$GITHUB_ENV"
+      - name: Build test APK
+        working-directory: apps/web/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+          apksigner_jar="$(find -L "$ANDROID_HOME/build-tools" -name apksigner.jar -type f | sort -V | tail -n 1)"
+          test -n "$apksigner_jar" || { echo 'Android signing verifier was not found'; exit 1; }
+          java -jar "$apksigner_jar" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/wish-test-certificate.txt"
+          certificate_sha256="$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/wish-test-certificate.txt" | tr '[:upper:]' '[:lower:]' | sort -u)"
+          test "$certificate_sha256" = 'a3ce39fb1165b8dd26e492b26e0cb046427fa5312ef0d666d831c534e1f9a3fa' || { echo 'Unexpected test signing certificate'; exit 1; }
+      - name: Stage preview files
+        run: |
+          mkdir -p preview-site/test-build
+          cp -R apps/web/dist/. preview-site/
+          cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk preview-site/test-build/MoneyDance-usability.apk
+          cp preview-site/test-build/MoneyDance-usability.apk "preview-site/test-build/MoneyDance-wishes-${GITHUB_SHA::7}.apk"
+          node -e "require('node:fs').writeFileSync('preview-site/test-build/build.json', JSON.stringify({commit:process.env.GITHUB_SHA,version:'0.4.0-usability.'+process.env.GITHUB_RUN_NUMBER,appId:'com.cshouuu.moneydance.usability.wishes',appLabel:'MoneyDance 心愿测试',environment:'usability'}))"
+          cd preview-site/test-build
+          sha256sum MoneyDance-usability.apk > MoneyDance-usability.apk.sha256
+          test "$(stat -c%s MoneyDance-usability.apk)" -lt 25000000
+      - name: Deploy isolated Pages project
+        working-directory: preview-site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          # The test project has no production download function or R2 binding.
+          npx --no-install wrangler pages project list --json > /tmp/pages-projects.json
+          if ! node -e 'const p=require("/tmp/pages-projects.json"); process.exit(p.some(x=>x["Project Name"]==="money-dance-usability")?0:1)'; then
+            npx --no-install wrangler pages project create money-dance-usability --production-branch=preview-only
+          fi
+          npx --no-install wrangler pages deploy . --project-name=money-dance-usability --branch=usability --commit-hash="$GITHUB_SHA" --commit-dirty=false
+          echo 'Test app and APK deployed to the money-dance-usability project only.' >> "$GITHUB_STEP_SUMMARY"

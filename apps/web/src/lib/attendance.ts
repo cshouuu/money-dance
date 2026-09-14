@@ -4,6 +4,7 @@ import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../type
 import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
+import { rosterSalaryAllocation } from './roster'
 
 const CHINA_HOLIDAY_SETTINGS_KEY = 'money-dance.china-holiday-calendar.v1'
 const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -240,7 +241,7 @@ export function getVacationPayAmount(date: string, profile: SalaryProfile, setti
     const [year, month] = date.split('-').map(Number)
     const baseline = { ...profile, calculationHours: undefined, vacations: undefined }
     const monthly = plan.payMode === 'monthly' ? { ...baseline, salary: plan.value, salaryType: 'monthly' as const } : baseline
-    const original = roster.pay.mode === 'salary' || plan.payMode === 'monthly' ? calculateRates(monthly).daily * monthly.monthlyWorkDays / new Date(year, month, 0).getDate() : rosterShiftsForDate(profile, date).reduce((sum, shift) => sum + (roster.pay.mode === 'shift' ? shift.amount : (shift.endDay * 86400 + parseClock(shift.endTime) - parseClock(shift.startTime) - shift.breaks.filter(item => !item.paid).reduce((total, rest) => total + (rest.endMinute - rest.startMinute) * 60, 0)) / 3600 * roster.pay.value), 0)
+    const original = roster.pay.mode === 'salary' || plan.payMode === 'monthly' ? calculateRates(monthly).daily * monthly.monthlyWorkDays * (roster.pay.mode === 'salary' ? rosterSalaryAllocation(monthly, date, loadAttendanceRecords(), settings).fraction : 1 / new Date(year, month, 0).getDate()) : rosterShiftsForDate(profile, date).reduce((sum, shift) => sum + (roster.pay.mode === 'shift' ? shift.amount : (shift.endDay * 86400 + parseClock(shift.endTime) - parseClock(shift.startTime) - shift.breaks.filter(item => !item.paid).reduce((total, rest) => total + (rest.endMinute - rest.startMinute) * 60, 0)) / 3600 * roster.pay.value), 0)
     return original * (plan.payMode === 'ratio' ? plan.value : 1)
   }
   const baseline = { ...profile, vacations: undefined }
@@ -266,6 +267,14 @@ export function isConfiguredWorkday(
  * generated ledger also keeps one normal day of pay for them. Personal leave
  * remains a planned salary day; explicit company holidays can remove a day.
  */
+export function isPlannedSalaryDay(profile: SalaryProfile, date: Date, record: AttendanceRecord | undefined, settings: ChinaHolidaySettings): boolean {
+  if (record) return record.status === 'normal' || record.status === 'leave' || (record.status === 'holiday' && record.payMode !== 'unpaid')
+  const value = toLocalDateValue(date)
+  const holiday = chinaHolidayForDate(value, settings)
+  if (holiday) return holiday.kind === 'adjusted-workday' || (!!holiday.statutory && ['monthly', 'annual'].includes(workProfileForDate(profile, value).salaryType))
+  return isProfileWorkday(date, profile)
+}
+
 export function getMonthlyPaidDayCount(
   profile: SalaryProfile,
   date: Date,
@@ -281,20 +290,7 @@ export function getMonthlyPaidDayCount(
   for (let day = 1; day <= daysInMonth; day += 1) {
     const current = new Date(year, month, day, 12)
     const dateValue = toLocalDateValue(current)
-    const record = recordsByDate.get(dateValue)
-    if (record) {
-      if (record.status === 'normal' || record.status === 'leave') paidDays += 1
-      else if (record.status === 'holiday' && record.payMode !== 'unpaid') paidDays += 1
-      continue
-    }
-
-    const holiday = chinaHolidayForDate(dateValue, settings)
-    if (holiday) {
-      if (holiday.kind === 'adjusted-workday') paidDays += 1
-      else if (holiday.statutory && (profile.salaryType === 'monthly' || profile.salaryType === 'annual')) paidDays += 1
-      continue
-    }
-    if (isProfileWorkday(current, profile)) paidDays += 1
+    if (isPlannedSalaryDay(profile, current, recordsByDate.get(dateValue), settings)) paidDays += 1
   }
 
   return paidDays

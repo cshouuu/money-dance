@@ -60,7 +60,7 @@ export function getMonthlyWorkStats(
     { length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() },
     (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`,
   ).some(date => rosterForDate(profile, date))
-  if (profile.workJourney || hasVacationThisMonth || hasRosterThisMonth) {
+  if (profile.workJourney || profile.workSettingsHistory?.length || hasVacationThisMonth || hasRosterThisMonth) {
     plannedSeconds = 0
     plannedSalary = 0
     for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {

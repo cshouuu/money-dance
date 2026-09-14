@@ -6,10 +6,12 @@ import { useProfile } from '../lib/useProfile'
 import { CalendarCheck2, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LEAVE_TYPES } from '../lib/attendance'
+import { plannedIncomeForDate } from '../lib/monthlyStats'
+import { loadLedger, salaryEntryIdForDate } from '../lib/ledger'
+import { LEAVE_TYPES, loadAttendanceRecords } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
 import type { AttendanceLeavePeriod, AttendancePayMode, AttendanceRecord, AttendanceStatus, LeaveType } from '../types'
-import { Input, SelectField, Tabs, TabsTrigger } from '../ui/BeuiControls'
+import { Checkbox, Input, SelectField, Tabs, TabsTrigger } from '../ui/BeuiControls'
 import { useDialogFocus } from './useDialogFocus'
 import { useModalViewport } from './useModalViewport'
 import './AttendanceDialog.css'
@@ -39,6 +41,8 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
   const [payMode, setPayMode] = useState<Exclude<AttendancePayMode, 'unpaid'>>('multiplier')
   const [multiplier, setMultiplier] = useState('1')
   const [fixedAmount, setFixedAmount] = useState('')
+  const [customPay, setCustomPay] = useState(false)
+  const [overrideConfirmed, setOverrideConfirmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const dialogRef = useRef<HTMLFormElement>(null)
@@ -52,6 +56,8 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     setLeaveType(record?.leaveType ?? 'personal')
     setLeavePeriod(record?.leavePeriod === 'morning' || record?.leavePeriod === 'afternoon' ? record.leavePeriod : 'full-day')
     setPayEnabled(Boolean(nextMode && nextMode !== 'unpaid'))
+    setCustomPay(nextMode === 'fixed' || (nextMode === 'multiplier' && record?.multiplier !== 1))
+    setOverrideConfirmed(false)
     setPayMode(nextMode === 'fixed' ? 'fixed' : 'multiplier')
     setMultiplier(record?.multiplier === undefined ? '1' : String(record.multiplier))
     setFixedAmount(record?.fixedAmount === undefined ? '' : String(record.fixedAmount))
@@ -68,6 +74,8 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     setSaveError('')
     setLeavePeriod('full-day')
     setPayEnabled(false)
+    setCustomPay(false)
+    setOverrideConfirmed(false)
     setPayMode('multiplier')
     setMultiplier('1')
     setFixedAmount('')
@@ -86,10 +94,22 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     }
   }
 
+  const manualSalary = loadLedger().find(entry => !entry.deleted && entry.kind === 'salary_override' && entry.replacesId === salaryEntryIdForDate(date))
+  const rosterFinal = rosterForDate(profile, date)?.overrides.find(item => item.date === date)?.amount
+  const previewRecord: AttendanceRecord | undefined = status === 'automatic' ? undefined : {
+    date, status, updatedAt: new Date().toISOString(),
+    ...(status === 'leave' ? { leaveType, leavePeriod } : {}),
+    ...(!payEnabled ? status === 'normal' ? {} : { payMode: 'unpaid' as const } : payMode === 'multiplier'
+      ? { payMode, multiplier: Number(multiplier) } : { payMode, fixedAmount: Number(fixedAmount) }),
+  }
+  const previewRecords = [...loadAttendanceRecords().filter(item => item.date !== date), ...(previewRecord ? [previewRecord] : [])]
+  const previewAmount = status === 'automatic' && manualSalary ? manualSalary.amount : plannedIncomeForDate(profile, date, previewRecords)
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (status !== 'automatic' && !isEmployedOn(profile, date)) { setSaveError('该日期不在任职范围内。请先在「工作旅程」补录或调整工作日期，再设置出勤。'); return }
     if (!event.currentTarget.reportValidity()) return
+    if (manualSalary && status !== 'automatic' && !overrideConfirmed) { setSaveError('请确认将这天已指定的工资改按出勤规则计算。'); return }
     if (status === 'automatic') {
       await persist(onReset)
       return
@@ -125,16 +145,19 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
           <SelectField label="请假类型" value={leaveType} onValueChange={value => setLeaveType(value as LeaveType)}>{LEAVE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</SelectField>
           <fieldset className="attendance-field attendance-leave-period-field"><legend>请多久？</legend><Tabs className="attendance-switch attendance-leave-period-switch" value={leavePeriod} onValueChange={value => setLeavePeriod(value as AttendanceLeavePeriod)}><TabsTrigger value="full-day">全天</TabsTrigger><TabsTrigger value="morning">上午半天</TabsTrigger><TabsTrigger value="afternoon">下午半天</TabsTrigger></Tabs></fieldset>
         </>}
+        {rosterFinal !== undefined && <p className="vacation-note">排班中已指定本日基本工资 ¥{rosterFinal.toFixed(2)}，修改下方出勤不会改变这个金额。<Link to={`/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>修改本日工资 →</Link></p>}
         {status === 'normal'
           ? <fieldset className="attendance-field"><legend>当天工资怎么计算？</legend><Tabs className="attendance-switch attendance-normal-pay-switch" value={!payEnabled ? 'default' : payMode} onValueChange={value => { if (value === 'default') { setPayEnabled(false) } else { setPayEnabled(true); setPayMode(value as Exclude<AttendancePayMode, 'unpaid'>) } }}><TabsTrigger value="default">默认工资</TabsTrigger><TabsTrigger value="multiplier">工资倍率</TabsTrigger><TabsTrigger value="fixed">固定金额</TabsTrigger></Tabs></fieldset>
-          : <fieldset className="attendance-field"><legend>{status === 'holiday' ? '放假类型' : '当天是否计薪？'}</legend><Tabs className="attendance-switch" value={payEnabled ? 'paid' : 'unpaid'} onValueChange={value => setPayEnabled(value === 'paid')}><TabsTrigger value="unpaid">{status === 'holiday' ? '无薪假' : '不计薪'}</TabsTrigger><TabsTrigger value="paid">{status === 'holiday' ? '带薪假' : '计薪'}</TabsTrigger></Tabs></fieldset>}
-        {payEnabled && <div className="attendance-pay-card">
-          {status !== 'normal' && <Tabs className="attendance-pay-tabs" value={payMode} onValueChange={value => setPayMode(value as Exclude<AttendancePayMode, 'unpaid'>)}><TabsTrigger value="multiplier">按工资倍率</TabsTrigger><TabsTrigger value="fixed">固定金额</TabsTrigger></Tabs>}
+          : <fieldset className="attendance-field"><legend>{status === 'leave' && leavePeriod !== 'full-day' ? '请假这半天的工资' : '这天的工资'}</legend><Tabs className="attendance-switch" value={!payEnabled ? 'unpaid' : customPay ? 'custom' : 'normal'} onValueChange={value => { setPayEnabled(value !== 'unpaid'); setCustomPay(value === 'custom'); if(value === 'normal') { setPayMode('multiplier'); setMultiplier('1') } }}><TabsTrigger value="unpaid">不计薪</TabsTrigger><TabsTrigger value="normal">工资照常</TabsTrigger><TabsTrigger value="custom">另设金额</TabsTrigger></Tabs></fieldset>}
+        {payEnabled && (status === 'normal' || customPay) && <div className="attendance-pay-card">
+          {status !== 'normal' && <Tabs className="attendance-pay-tabs" value={payMode} onValueChange={value => setPayMode(value as Exclude<AttendancePayMode, 'unpaid'>)}><TabsTrigger value="multiplier">按正常工资的比例</TabsTrigger><TabsTrigger value="fixed">固定金额</TabsTrigger></Tabs>}
           {payMode === 'multiplier' ? <Input label={status === 'holiday' ? '假期工资倍率' : status === 'normal' ? '正常出勤工资倍率' : leavePeriod === 'full-day' ? '工资倍率' : '半天请假工资倍率'} required type="number" inputMode="decimal" min="0.01" max="100" step="0.01" value={multiplier} rightIcon="倍" onKeyDown={preventInvalidNumberKey} onValueChange={value => setMultiplier(normalizeDecimalInput(value))} placeholder="例如 0.8" hint={status === 'leave' && leavePeriod !== 'full-day' ? '当天工资 = 半日正常工资 + 半日标准工资 × 这个倍率' : `${status === 'holiday' ? '当天假期工资' : '当天工作收入'} = 标准日薪 × 这个倍率`}/> : <Input label={status === 'holiday' ? '当天假期工资' : status === 'normal' ? '当天正常出勤工资' : leavePeriod === 'full-day' ? '当天固定收入' : '请假半天固定工资'} required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={fixedAmount} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => setFixedAmount(normalizeDecimalInput(value))} placeholder="0.00" hint={status === 'leave' && leavePeriod !== 'full-day' ? '当天工资 = 半日正常工资 + 这里填写的请假半天工资。' : '保存后，以这笔金额覆盖当天的自动工资。'}/>}
         </div>}
       </div>}
 
-      <p className="attendance-dialog-note">{status === 'automatic' ? '使用自动判断不会新增手工记录；如果这一天已有手工出勤，则会在成功移除后恢复自动规则。' : '保存后，账本中这一天的工资收入会立即重新计算。半天无薪假保留半日正常工资；倍率或固定金额只作用于请假半日，再与另外半日的正常工资相加。出勤设置会优先于已有的手工工资调整；如排班中填写了每日最终工资，则以该金额为准。'}</p>
+      <p className="attendance-dialog-note">{status === 'automatic' ? '恢复这天原有的工作与假期安排。' : status === 'leave' && leavePeriod !== 'full-day' ? '未请假的半天照常计薪。这里选择的金额或比例只作用于请假半天。' : '仅更新这一天的出勤与基本工资，额外加班收入保留。'}</p>
+      <div className="attendance-amount-preview"><b>预计当天基本工资：{Number.isFinite(previewAmount) ? '¥' + previewAmount.toFixed(2) : '待填写'}</b><small>按整日安排计算，不含另记的加班与手工收入。</small></div>
+      {manualSalary && status !== 'automatic' && <label className="attendance-override-confirm"><Checkbox checked={overrideConfirmed} onCheckedChange={setOverrideConfirmed} ariaLabel="确认替换这天已指定的工资"/><span>账本已指定这天工资 ¥{manualSalary.amount.toFixed(2)}。我确认改按本次出勤计算；恢复自动判断后可恢复原指定工资。</span></label>}
       {saveError && <p className="attendance-save-error" role="alert">{saveError}</p>}
       <div className={`attendance-dialog-actions${record ? ' has-reset' : ''}`}>{record && <button type="button" className="attendance-reset" disabled={saving} onClick={() => void persist(onReset)}>恢复自动判断</button>}<button type="button" className="dialog-cancel" disabled={saving} onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm" disabled={saving}>{saving ? '保存中…' : status === 'automatic' ? '使用自动判断' : '保存出勤'}</button></div>
     </form>

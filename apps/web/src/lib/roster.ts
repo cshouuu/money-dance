@@ -1,6 +1,6 @@
-import { calculateRates, parseClock, rosterForDate, rosterShiftsForDate, vacationForDate, workProfileForDate, type SalaryProfile, type ShiftTemplate } from '@salary-flow/core'
+import { calculateRates, parseClock, rosterForDate, rosterShiftsForDate, vacationForDate, workProfileForDate, workStageForDate, isEmployedOn, type SalaryProfile, type ShiftTemplate } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord } from '../types'
-import { chinaHolidayForDate, isHalfDayLeave, attendanceLeavePeriod, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
+import { chinaHolidayForDate, isHalfDayLeave, isPlannedSalaryDay, attendanceLeavePeriod, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { localDateWithTime, toLocalDateValue } from './form'
 import { shiftSessionLocalDate } from './sessionBusinessDate'
 
@@ -42,9 +42,38 @@ export function attendanceRosterShifts(profile: SalaryProfile, date: string, att
 
 export function rosterStandardDayAmount(profile: SalaryProfile, date: string, fallback: number) {
   if (rosterForDate(profile,date)?.pay.mode!=='salary') return fallback
+  if (profile.calculationHours?.salaryDayAmount !== undefined) return profile.calculationHours.salaryDayAmount
   const base={...(profile.calculationHours ? profile : workProfileForDate(profile,date)),calculationHours:undefined}
-  const [year,month]=date.split('-').map(Number)
-  return calculateRates(base).daily*base.monthlyWorkDays/new Date(year,month,0).getDate()
+  return calculateRates(base).daily*base.monthlyWorkDays*rosterSalaryAllocation(profile,date).fraction
+}
+
+/** Keep a normal month's salary when newly switching between calendar-day
+ * roster pay and the existing workday allocation. Legacy plans retain their
+ * saved basis; only new plans explicitly opt into this transition handling. */
+export function rosterSalaryAllocation(profile: SalaryProfile, date: string, attendance: readonly AttendanceRecord[] = loadAttendanceRecords(), settings = loadChinaHolidaySettings()) {
+  const plan = rosterForDate(profile, date)
+  const stage = workStageForDate(profile, date)
+  const [year, month] = date.split('-').map(Number)
+  const days = new Date(year, month, 0).getDate()
+  const reference: SalaryProfile = { ...workProfileForDate(profile, date), workJourney: undefined, rosters: undefined, vacations: undefined,
+    workSettingsHistory: profile.workSettingsHistory?.filter(item => item.stageId === (stage?.id ?? null)).map(item => ({ ...item, stageId: null })) }
+  const byDate = new Map(attendance.map(item => [item.date, item]))
+  let paidDays = 0, coveredPaidDays = 0, coveredDays = 0, legacySalaryDays = 0, hasRegularDates = false
+  for (let day = 1; day <= days; day++) {
+    const at = new Date(year, month - 1, day, 12), key = toLocalDateValue(at)
+    const paid = isPlannedSalaryDay(reference, at, byDate.get(key), settings)
+    if (paid) paidDays++
+    if (!isEmployedOn(profile, key) || workStageForDate(profile, key)?.id !== stage?.id) continue
+    const owner = rosterForDate(profile, key)
+    if (!owner) hasRegularDates = true
+    else if (owner.pay.mode === 'salary') {
+      if (owner.pay.preserveMonthlySalary) { coveredDays++; if (paid) coveredPaidDays++ }
+      else legacySalaryDays++
+    }
+  }
+  const denominator = reference.monthlyRateBasis === 'actual-calendar' ? paidDays : reference.monthlyWorkDays
+  const share = hasRegularDates && coveredDays > 0 && denominator > 0 ? coveredPaidDays / denominator / coveredDays : 1 / days
+  return { fraction: plan?.pay.preserveMonthlySalary ? share : 1 / days, monthFraction: legacySalaryDays / days + coveredDays * share }
 }
 
 export function rosterIntervals(profile: SalaryProfile, date: string, attendance: readonly AttendanceRecord[] = [], settings = loadChinaHolidaySettings()): RosterInterval[] {
@@ -107,7 +136,7 @@ export const intervalSeconds = (items: RosterInterval[], until = new Date(864000
 
 const monthCache = new WeakMap<NonNullable<SalaryProfile['rosters']>, Map<string, { seconds:number; amount:number }>>()
 
-export function rosterRateHours(profile: SalaryProfile, date: string) {
+export function rosterRateHours(profile: SalaryProfile, date: string, attendance: readonly AttendanceRecord[] = loadAttendanceRecords(), settings = loadChinaHolidaySettings()) {
   const plan = rosterForDate(profile, date)
   if (!plan) return undefined
   const day = intervalSeconds(rosterShiftsForDate(profile, date).flatMap(shift => shiftIntervals(shift, date))) / 3600
@@ -132,16 +161,15 @@ export function rosterRateHours(profile: SalaryProfile, date: string) {
   }
   const hourly = plan.pay.mode === 'hourly' ? plan.pay.value : plan.pay.mode === 'shift' ? day > 0 ? rosterShiftsForDate(profile,date).reduce((sum,shift)=>sum+shift.amount,0)/day : aggregate.seconds>0 ? aggregate.amount/(aggregate.seconds/3600) : 0 : undefined
   let monthlyAmount: number | undefined
-  if(plan.pay.mode==='salary' && plan.pay.monthlyHours===0) {
-    let salaryDays = 0
-    for(let key=toLocalDateValue(start); key<toLocalDateValue(end); key=shiftSessionLocalDate(key,1)) {
-      const owner = rosterForDate(profile,key)
-      if(owner?.stageId===plan.stageId && owner.pay.mode==='salary') salaryDays++
-    }
+  let salaryDayAmount: number | undefined
+  if(plan.pay.mode==='salary') {
+    const allocation = rosterSalaryAllocation(profile,date,attendance,settings)
     const base={...profile,calculationHours:undefined}
-    monthlyAmount=calculateRates(base).daily*base.monthlyWorkDays*salaryDays/new Date(year,month,0).getDate()
+    const monthly = calculateRates(base).daily*base.monthlyWorkDays
+    salaryDayAmount = monthly * allocation.fraction
+    if (plan.pay.monthlyHours===0) monthlyAmount=monthly*allocation.monthFraction
   }
-  return { day, ...(monthlyAmount===undefined?{}:{monthlyAmount}), month: plan.pay.monthlyHours > 0 ? plan.pay.monthlyHours : aggregate.seconds / 3600, ...(hourly === undefined ? {} : {hourly}) }
+  return { day, ...(salaryDayAmount === undefined ? {} : {salaryDayAmount}), ...(monthlyAmount===undefined?{}:{monthlyAmount}), month: plan.pay.monthlyHours > 0 ? plan.pay.monthlyHours : aggregate.seconds / 3600, ...(hourly === undefined ? {} : {hourly}) }
 }
 
 /** Salary belongs to calendar dates; per-shift income belongs to its start date. */
@@ -152,15 +180,13 @@ export function rosterPayForDate(profile: SalaryProfile, date: string, now: Date
   if (override?.amount !== undefined) return override.amount
   const dated = profile.calculationHours ? profile : workProfileForDate(profile, date)
   const base = { ...dated, calculationHours: undefined }
-  const [year, month] = date.split('-').map(Number)
-  const days = new Date(year, month, 0).getDate()
   const shifts = attendanceRosterShifts(profile, date, attendance, settings)
   const actual = rosterActualIntervals(profile, date, now, records, attendance, settings)
   const planned = rosterIntervals(profile, date, attendance, settings)
   const actualSeconds = intervalSeconds(actual, now)
   const plannedSeconds = intervalSeconds(planned)
-  const second = calculateRates({ ...base, calculationHours: rosterRateHours(profile, date) }).second
-  let amount = plan.pay.mode === 'salary' ? calculateRates(base).daily * base.monthlyWorkDays / days : 0
+  const second = calculateRates({ ...base, calculationHours: dated.calculationHours ?? rosterRateHours(dated, date, attendance, settings) }).second
+  let amount = plan.pay.mode === 'salary' ? (dated.calculationHours?.salaryDayAmount ?? calculateRates(base).daily * base.monthlyWorkDays * rosterSalaryAllocation(dated,date,attendance,settings).fraction) : 0
   if (plan.pay.mode === 'hourly') amount = (plan.pay.basis === 'planned' ? intervalSeconds(planned, now) : Math.min(actualSeconds, plannedSeconds || actualSeconds)) * plan.pay.value / 3600
   for (const shift of shifts) {
     const parts = shiftIntervals(shift, date)

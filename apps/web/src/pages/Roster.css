@@ -5,3 +5,4 @@
 .progress-row.roster-progress{grid-template-columns:50px minmax(30px,1fr) minmax(50px,110px)}.progress-row.roster-progress>span:last-child{text-align:right;white-space:normal;line-height:1.5}
 
 .roster-page>.page-header{flex-wrap:wrap;gap:12px}.roster-page>.page-header>.text-button{flex-shrink:0}
+.roster-empty-confirm { display:flex; align-items:flex-start; gap:12px; border:1px solid var(--line); border-radius:12px; padding:16px; font-size:13px; line-height:1.7; }

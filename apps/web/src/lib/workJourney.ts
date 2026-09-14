@@ -7,17 +7,17 @@ import { loadAttendanceRecords } from './attendance'
 import { toLocalDateTime, toLocalDateValue, toLocalTimeValue } from './form'
 import { createId } from './id'
 import { loadLedger, summarizeLedger, summaryEntryDateValue } from './ledger'
-import { loadProfile, profileFingerprint, settingsWorkStage } from './profile'
+import { loadProfile, profileFingerprint, settingsWorkStage, workSettingsSnapshot } from './profile'
 import { isSessionLocalDate, shiftSessionLocalDate } from './sessionBusinessDate'
 import { loadActiveSlacking } from './slacking'
 import { keys, loadJSON, saveJSON } from './storage'
 import { runReversibleStorageTransaction } from './storageTransaction'
-import { loadTimerPlans, TIMER_PLANS_KEY, TIMER_PLANS_UPDATED } from './timerPlans'
+import { loadTimerPlans, TIMER_PLANS_KEY, TIMER_PLANS_UPDATED, type TimerPlan } from './timerPlans'
 import { loadWorkRecords } from './work'
 import { actualPaidIntervalsForDate } from './paidTime'
 
 export function profileSnapshot(profile: SalaryProfile): Omit<SalaryProfile, 'workJourney'> {
-  const { workJourney: _journey, vacations: _vacations, rosters: _rosters, calculationHours: _hours, ...snapshot } = profile
+  const { workJourney: _journey, workSettingsHistory: _history, vacations: _vacations, rosters: _rosters, calculationHours: _hours, ...snapshot } = profile
   return structuredClone(snapshot)
 }
 
@@ -89,6 +89,17 @@ export async function commitJourney(expected: SalaryProfile, stages: WorkStage[]
       ...current, ...(open?.profile ?? {}),
       // Living expenses belong to the person and continue through career gaps.
       livingCostHistory: current.livingCostHistory,
+      workSettingsHistory: current.workSettingsHistory?.flatMap(change => {
+        if (!current.workJourney && change.stageId === null) {
+          const owner = [...stages].sort((a,b)=>a.startDate.localeCompare(b.startDate)).find(stage => stage.profile && (!stage.endDate || stage.endDate >= current.salaryEffectiveDate))
+          return owner ? [{ ...change, stageId: owner.id }] : []
+        }
+        const before = current.workJourney?.stages.find(stage => stage.id === change.stageId)
+        const after = stages.find(stage => stage.id === change.stageId)
+        // Editing a job's payroll explicitly corrects that entire job. Metadata
+        // and end-date edits preserve all dated raises and schedule changes.
+        return before?.profile && after?.profile && profileFingerprint(workSettingsSnapshot(before.profile)) === profileFingerprint(workSettingsSnapshot(after.profile)) ? [change] : []
+      }),
       rosters: current.rosters?.map(plan => !current.workJourney && plan.stageId === null ? { ...plan, stageId: [...stages].sort((a,b)=>a.startDate.localeCompare(b.startDate)).find(stage => stage.profile && (!stage.endDate || stage.endDate >= plan.effectiveFrom))?.id ?? null } : plan),
       vacations: current.vacations?.map(plan => !current.workJourney && plan.stageId === null ? { ...plan, stageId: stages.find(stage => stage.profile && stage.startDate <= plan.endDate && (!stage.endDate || stage.endDate >= plan.startDate))?.id ?? null } : plan),
       workJourney: { version: 1, revision: (current.workJourney?.revision ?? 0) + 1, stages: [...stages].sort((a, b) => b.startDate.localeCompare(a.startDate)) },
@@ -106,6 +117,81 @@ export async function commitJourney(expected: SalaryProfile, stages: WorkStage[]
     }] : []
     steps.push({ write: () => saveJSON(keys.profile, next), rollback: () => { saveJSON(keys.profile, current) } })
     if (!runReversibleStorageTransaction(steps).success) return '保存失败，未完成本次修改。请释放浏览器存储空间后重试。'
+    window.dispatchEvent(new Event(TIMER_PLANS_UPDATED))
+    return null
+  }
+  return navigator.locks ? navigator.locks.request('money-dance-timer-plans', commit) : commit()
+}
+
+const JOURNEY_UNDO_KEY = 'money-dance:journey-deletion-undo'
+interface JourneyDeletionReceipt {
+  name: string
+  changes: { key: string; before: unknown; after: unknown }[]
+}
+export function loadJourneyDeletionUndo() { return loadJSON<JourneyDeletionReceipt | null>(JOURNEY_UNDO_KEY, null) }
+
+export function journeyDeletionImpact(profile: SalaryProfile, stage: WorkStage) {
+  const remaining = profile.workJourney?.stages.filter(item => item.id !== stage.id) ?? []
+  return {
+    rosters: profile.rosters?.filter(item => item.stageId === stage.id).length ?? 0,
+    vacations: profile.vacations?.filter(item => item.stageId === stage.id).length ?? 0,
+    manualEntries: loadLedger().filter(item => item.workStageId === stage.id).length,
+    plans: plansOutsideJourney(remaining).filter(item => {
+      const date = toLocalDateValue(new Date(item.startTime))
+      return date >= stage.startDate && (!stage.endDate || date <= stage.endDate)
+    }),
+  }
+}
+
+/** Remove a mistaken stage, not the underlying attendance, timers or manual money. */
+export async function deleteWorkStage(expected: SalaryProfile, stageId: string): Promise<string | null> {
+  const commit = () => {
+    const current = loadProfile()
+    if (profileFingerprint(current) !== profileFingerprint(expected)) return '工作设置已更新，请关闭后重新查看删除影响。'
+    const stage = current.workJourney?.stages.find(item => item.id === stageId)
+    if (!stage) return '这段工作已经不存在。'
+    const blocker = journeyBlocker()
+    if (blocker) return blocker
+    const impact = journeyDeletionImpact(current, stage)
+    const profile: SalaryProfile = { ...current,
+      workJourney: { ...current.workJourney!, revision: current.workJourney!.revision + 1, stages: current.workJourney!.stages.filter(item => item.id !== stageId) },
+      rosters: current.rosters?.filter(item => item.stageId !== stageId),
+      vacations: current.vacations?.filter(item => item.stageId !== stageId),
+      workSettingsHistory: current.workSettingsHistory?.filter(item => item.stageId !== stageId),
+    }
+    const ids = new Set(impact.plans.map(item => item.id))
+    const changes: JourneyDeletionReceipt['changes'] = [{ key: keys.profile, before: loadJSON(keys.profile, {}), after: profile }]
+    if (ids.size) changes.push({ key: TIMER_PLANS_KEY, before: loadTimerPlans(), after: loadTimerPlans().map(item => ids.has(item.id) ? { ...item, status: 'cancelled', message: '所属工作经历已删除' } : item) })
+    if (impact.manualEntries) changes.push({ key: keys.ledger, before: loadLedger(), after: loadLedger().map(item => {
+      if (item.workStageId !== stageId) return item
+      const { workStageId: _stageId, ...entry } = item
+      return entry
+    }) })
+    const previousUndo = loadJourneyDeletionUndo()
+    const steps = changes.map(item => ({ write: () => saveJSON(item.key, item.after), rollback: () => { saveJSON(item.key, item.before) } }))
+    steps.push({ write: () => saveJSON(JOURNEY_UNDO_KEY, { name: stage.name, changes }), rollback: () => { saveJSON(JOURNEY_UNDO_KEY, previousUndo) } })
+    if (!runReversibleStorageTransaction(steps).success) return '删除未完成，请检查存储空间后重试。'
+    window.dispatchEvent(new Event(TIMER_PLANS_UPDATED))
+    return null
+  }
+  return navigator.locks ? navigator.locks.request('money-dance-timer-plans', commit) : commit()
+}
+
+export async function undoWorkStageDeletion(): Promise<string | null> {
+  const commit = () => {
+    const receipt = loadJourneyDeletionUndo()
+    if (!receipt) return '没有可撤销的删除。'
+    const blocker = journeyBlocker()
+    if (blocker) return blocker
+    if (receipt.changes.some(item => profileFingerprint(loadJSON(item.key, null)) !== profileFingerprint(item.after))) return '删除后相关设置、账目或预约已有新改动，无法直接撤销。新数据已保留，可通过补录经历恢复。'
+    const steps = receipt.changes.map(item => ({
+      write: () => saveJSON(item.key, item.key === TIMER_PLANS_KEY
+        ? (item.before as TimerPlan[]).map(plan => ['scheduled', 'conflict'].includes(plan.status) && (item.after as TimerPlan[]).find(after => after.id === plan.id)?.status === 'cancelled' && +new Date(plan.startTime) <= Date.now()
+          ? { ...plan, status: 'cancelled', message: '撤销删除时预约已过期，未重新启动' } : plan) : item.before),
+      rollback: () => { saveJSON(item.key, item.after) },
+    }))
+    steps.push({ write: () => saveJSON(JOURNEY_UNDO_KEY, null), rollback: () => { saveJSON(JOURNEY_UNDO_KEY, receipt) } })
+    if (!runReversibleStorageTransaction(steps).success) return '撤销未完成，请检查存储空间后重试。'
     window.dispatchEvent(new Event(TIMER_PLANS_UPDATED))
     return null
   }

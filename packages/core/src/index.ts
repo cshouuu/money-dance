@@ -56,7 +56,7 @@ export interface RosterPlan {
   overrides: { date: string; shifts: ShiftTemplate[]; amount?: number; reason: string; keepVacationPay?: boolean }[]
   respectVacations: boolean
   respectHolidays: boolean
-  pay: { mode: 'salary' | 'hourly' | 'shift'; value: number; basis: 'planned' | 'actual'; monthlyHours: number; overtime: 'manual' | 'unpaid' | 'multiplier' | 'fixed'; overtimeValue: number }
+  pay: { mode: 'salary' | 'hourly' | 'shift'; value: number; basis: 'planned' | 'actual'; monthlyHours: number; overtime: 'manual' | 'unpaid' | 'multiplier' | 'fixed'; overtimeValue: number; preserveMonthlySalary?: boolean }
 }
 
 export function rosterForDate(profile: SalaryProfile, date: string): RosterPlan | undefined {
@@ -80,9 +80,11 @@ export function rosterShiftsForDate(profile: SalaryProfile, date: string): Shift
 }
 
 export interface SalaryProfile {
+  /** Dated changes within a job; absence preserves existing calculations. */
+  workSettingsHistory?: WorkSettingsChange[]
   rosters?: RosterPlan[]
   /** Derived rate inputs; never persisted as a job configuration. */
-  calculationHours?: { day: number; month: number; hourly?: number; monthlyAmount?: number }
+  calculationHours?: { day: number; month: number; hourly?: number; monthlyAmount?: number; salaryDayAmount?: number }
 
   vacations?: VacationPlan[]
   /** Opt-in work history; absent preserves the legacy single-job behavior. */
@@ -117,6 +119,18 @@ export interface SalaryProfile {
   salaryHistoryMode: SalaryHistoryMode
   salaryEffectiveDate: string
   defaultWorkMode: WorkMode
+}
+
+export type WorkSettingsSnapshot = Pick<SalaryProfile,
+  'salary' | 'salaryType' | 'payday' | 'paydayAdjustment' | 'salaryDeductions' |
+  'monthlyRateBasis' | 'monthlyWorkDays' | 'workDaysPerWeek' | 'workWeekMode' |
+  'alternatingAnchorDate' | 'alternatingAnchorType' | 'workStartTime' | 'workEndTime' |
+  'breakStartTime' | 'breakEndTime' | 'breakPeriods' | 'paidBreak' | 'defaultWorkMode'>
+
+export interface WorkSettingsChange {
+  stageId: string | null
+  effectiveFrom: string
+  settings: WorkSettingsSnapshot
 }
 
 export interface VacationPlan {
@@ -170,11 +184,13 @@ export function isEmployedOn(profile: SalaryProfile, date: string): boolean {
 
 /** Select schedules as well as salaries. Keep the timeline for downstream date guards. */
 export function workProfileForDate(profile: SalaryProfile, date: string): SalaryProfile {
-  if (!profile.workJourney) return profile
   const stage = workStageForDate(profile, date)
-  if (!stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false }
+  if (profile.workJourney && !stage?.profile) return { ...profile, salary: 0, payday: null, salaryDeductions: [], includeLivingCost: false, calculationHours: undefined }
+  const change = profile.workSettingsHistory?.filter(item => item.stageId === (stage?.id ?? null) && item.effectiveFrom <= date)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0]
   // Each stage owns its rules, including an active job with a planned end date.
-  return { ...stage.profile, vacations: profile.vacations, rosters: profile.rosters, workJourney: profile.workJourney }
+  return { ...(stage?.profile ?? profile), ...change?.settings, vacations: profile.vacations, rosters: profile.rosters,
+    workJourney: profile.workJourney, workSettingsHistory: profile.workSettingsHistory }
 }
 
 export interface SalaryRates {

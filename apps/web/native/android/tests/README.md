@@ -15,3 +15,19 @@ if ($LASTEXITCODE -eq 0) {
 ```
 
 成功时输出 `WidgetStateStore: 5 regression cases passed`。这些用例验证计算逻辑；完整 APK 构建及设备上的刷新、展示仍需另行验收。
+
+## 心愿分配组件
+
+`WishProgressProjectionTest.java` 直接调用正式组件使用的金额计算方法，覆盖按心愿 ID 消费分配时段、溢出到下一目标、待分配余额在未来日期入账、快照到期、零价心愿及旧快照兼容。只需 JDK 和上面的 JSON-java，无需 Android 桩：
+
+```powershell
+$wishClasses = Join-Path $env:TEMP 'money-dance-wish-tests'
+New-Item -ItemType Directory -Path $wishClasses -Force | Out-Null
+$wishClasspath = "$env:JSON_JAR;$wishClasses"
+javac -classpath $wishClasspath -d $wishClasses apps/web/native/android/WishProgressProjection.java apps/web/native/android/tests/WishProgressProjectionTest.java
+if ($LASTEXITCODE -eq 0) {
+  java -classpath $wishClasspath com.cshouuu.moneydance.WishProgressProjectionTest
+}
+```
+
+成功输出 `WishProgressProjection: 10 native regression checks passed`。Web 的 `wishAllocation.test.ts` 同时验证整份清单分配、时间预测与只展示部分心愿的快照输出。

@@ -36,6 +36,14 @@ export interface CompletedOvertimeInput extends OvertimeStartOption {
   segments?: OvertimeSegment[]
 }
 
+/** A time correction on the same local date retains the record's settled rate. */
+export function originalOvertimeSecondRate(session: OvertimeSession | null | undefined, startTime: string): number | null {
+  if (!session || session.payMode !== 'multiplier' || !session.multiplier || session.durationSeconds <= 0) return null
+  const oldDate = new Date(session.startTime).toDateString()
+  if (new Date(startTime).toDateString() !== oldDate) return null
+  return session.earnedAmount / session.durationSeconds / session.multiplier
+}
+
 function validTime(value: string): number | null {
   const timestamp = new Date(value).getTime()
   return Number.isFinite(timestamp) ? timestamp : null
