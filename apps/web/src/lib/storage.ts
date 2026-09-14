@@ -38,6 +38,7 @@ export const keys = {
   mobileDock: 'salary-flow.mobile-dock.v1',
   profile: 'salary-flow.profile.v1',
   wishes: 'salary-flow.wishes.v1',
+  wishAllocation: 'salary-flow.wish-allocation.v1',
   widgetWishes: 'salary-flow.widget-wishes.v1',
   sessions: 'salary-flow.sessions.v1',
   activeSlacking: 'salary-flow.active-slacking.v1',

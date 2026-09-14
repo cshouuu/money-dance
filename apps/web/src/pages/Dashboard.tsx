@@ -28,8 +28,10 @@ import { sessionStartLocalDate } from '../lib/sessionBusinessDate'
 import { loadSlackingSessions, slackingPaidDurationSeconds } from '../lib/slacking'
 import { useNow } from '../lib/useNow'
 import { getWishProgress } from '../lib/wishProgress'
+import { getQueuedWishProgress, type QueuedWishProgress } from '../lib/wishAllocation'
+import { useWishStore } from '../lib/useWishStore'
 import { closeActiveWorkSession, commitFlexibleOvertimeSettlement, commitFlexibleWorkCorrection, commitFlexibleWorkStart, freezeFlexibleWorkForSettlement, getAutomaticFlexibleSettlementMode, getCurrentWorkRecord, getFlexibleBaseSettlementAmount, getFlexibleEarnedAmount, getFlexibleOvertimeWindow, getFlexibleSettlementRequirement, getFlexibleWorkedSeconds, hasFlexiblePlannedEndReached, isFlexibleFullDaySettlement, loadWorkRecords, replaceFlexibleWorkTime, resumeFlexibleWork, saveWorkRecords, scheduledOverride, settleFlexibleWorkRecord, startFlexibleWork, summarizeTodayWork, upsertWorkRecord } from '../lib/work'
-import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession, WishItem } from '../types'
+import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSettlementMode, OvertimeSession, OvertimeStartOption, SlackingSession } from '../types'
 import { RestCountdown } from '../components/RestCountdown'
 import { getRestCountdown } from '../lib/restCountdown'
 import './Dashboard.css'
@@ -75,7 +77,8 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const [slackingSessions, setSlackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
   const [activeOvertime, setActiveOvertime] = useState<ActiveOvertime | null>(() => loadJSON<ActiveOvertime | null>(keys.activeOvertime, null))
-  const [wishes] = useState<WishItem[]>(() => loadJSON<WishItem[]>(keys.wishes, []))
+  const wishStore = useWishStore()
+  const wishes = wishStore.items
   const [dialogPurpose, setDialogPurpose] = useState<'start' | 'adjust' | null>(null)
   const [pendingEndRecord, setPendingEndRecord] = useState<DailyWorkRecord | null>(() => {
     const currentRecord = getCurrentWorkRecord(workRecords, new Date())
@@ -126,10 +129,12 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const overtimeMoney = completedOvertimeMoney + activeOvertimeMoney
   const wishlistItems = useMemo(() => wishes.filter(item => !item.purchasedAt), [wishes])
   const featuredWishes = useMemo(() => wishlistItems.slice(0, 3), [wishlistItems])
-  const featuredWishProgress = useMemo(() => new Map(featuredWishes.map(item => [
+  const featuredWishProgress = useMemo(() => wishStore.plan
+    ? getQueuedWishProgress(wishStore.plan, profile, new Date(currentMinute * 60_000), loadWorkRecords(), loadAttendanceRecords()).progress
+    : new Map(featuredWishes.map(item => [
     item.id,
     getWishProgress(item, profile, new Date(currentMinute * 60_000), workRecords, attendanceRecords),
-  ])), [attendanceRecords, currentMinute, featuredWishes, profile, workRecords])
+  ])), [attendanceRecords, currentMinute, featuredWishes, profile, workRecords, wishStore])
   const monthlyStats = useMemo(() => getMonthlyWorkStats(
     profile,
     ledger,
@@ -487,12 +492,13 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     {featuredWishes.length === 0 ? <div className="dashboard-wishlist-empty"><span>✨</span><div><b>还没有心愿</b><small>把想买的东西换算成需要工作的时间。</small></div><Link to="/convert">去心愿清单</Link></div> : <div className="dashboard-wishlist-grid">
       {featuredWishes.map(item => {
         const wishProgress = featuredWishProgress.get(item.id)
+        const queueState = wishStore.plan ? (wishProgress as QueuedWishProgress | undefined)?.state : null
         const percent = (wishProgress?.progress ?? 0) * 100
         const remainingSeconds = wishProgress?.remainingSeconds ?? 0
         const remainingWorkDays = remainingSeconds === 0 ? 0 : currentRates.paidSecondsPerDay > 0 ? remainingSeconds / currentRates.paidSecondsPerDay : Number.POSITIVE_INFINITY
         return <article className="dashboard-wish-card" key={item.id}>
           <span className="dashboard-wish-avatar">{item.name.trim().slice(0, 1).toUpperCase() || '愿'}</span>
-          <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · {wishProgress?.upcomingStart ? `尚未开始 · ${toLocalDateValue(wishProgress.upcomingStart)}` : `已完成 ${percent.toFixed(0)}%`}</small></div>
+          <div className="dashboard-wish-main"><b>{item.name}</b><small>{money(item.price)} · {wishProgress?.upcomingStart ? `${toLocalDateValue(wishProgress.upcomingStart)} 参与` : queueState === 'waiting' ? `排队中 · ${percent.toFixed(0)}%` : queueState === 'funded' ? '已攒够' : queueState === 'saving' ? `正在攒 · ${percent.toFixed(0)}%` : `独立估算 ${percent.toFixed(0)}%`}</small></div>
           <div className="dashboard-wish-time"><small>还差纯工时</small><strong>{formatDuration(remainingSeconds)}</strong><small className="dashboard-wish-days" title="按当前设置的每天计薪工时折算，不包含休息日">{Number.isFinite(remainingWorkDays) ? <>{remainingWorkDays > 0 && remainingWorkDays < 0.01 ? '不足' : '约'} <b>{remainingWorkDays > 0 && remainingWorkDays < 0.01 ? '0.01' : remainingWorkDays.toFixed(2)}</b> 个工作日</> : '暂无法折算工作日'}</small></div>
           <div className="dashboard-wish-progress" role="progressbar" aria-label={`${item.name} 的完成进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)}><i style={{ width: `${percent}%` }} /></div>
         </article>

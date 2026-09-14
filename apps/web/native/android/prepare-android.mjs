@@ -25,6 +25,7 @@ if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
 }
 
 const nativeJavaFiles = [
+  'WishProgressProjection.java',
   'AppearancePlugin.java',
   'AppUpdaterPlugin.java',
   'WidgetActionReceiver.java',
