@@ -1,7 +1,6 @@
 import { rosterForDate } from '@salary-flow/core'
 import { rosterStandardDayAmount } from '../lib/roster'
-import { Link, useSearchParams } from 'react-router-dom'
-import { TEST_BUILD } from '../lib/setup'
+import { Link } from 'react-router-dom'
 import {
   calculateMonthlySalaryDeductions,
   calculateRates,
@@ -18,7 +17,7 @@ import {
   type WorkMode,
   type WorkWeekMode,
 } from '@salary-flow/core'
-import { CheckCircle2, CircleDollarSign, Clock3, History, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, Clock3, History, Palette, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { AppUpdateCard } from '../components/AppUpdateCard'
 import { ThemePaletteGrid } from '../components/ThemePicker'
@@ -71,7 +70,6 @@ function buildProfile(
 }
 
 export function Settings() {
-  const [searchParams] = useSearchParams()
   const [dockSettingsOpen, setDockSettingsOpen] = useState(false)
   const [initialProfile] = useState(() => loadProfile())
   const [profile, setProfile] = useState<SalaryProfile>(initialProfile)
@@ -86,7 +84,7 @@ export function Settings() {
   const [salaryEffectiveDateInput, setSalaryEffectiveDateInput] = useState(initialProfile.salaryEffectiveDate || toLocalDateValue())
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState('')
-  const [openSection, setOpenSection] = useState<string | null>(searchParams.get('section') || 'salary')
+  const [openSection, setOpenSection] = useState<string | null>('salary')
 
   const draftProfile = buildProfile(profile, salaryInput, paydayInput, monthlyLivingCostInput, monthlyWorkDaysInput, workDaysPerWeekInput)
   const activeRoster=rosterForDate(withSettingsStage(draftProfile??profile),toLocalDateValue())
@@ -206,11 +204,6 @@ export function Settings() {
       setSaved(false)
       setOpenSection(sectionId ? sectionByContentId[sectionId] ?? 'salary' : 'salary')
       window.setTimeout(() => {
-        let ancestor: HTMLElement | null = firstInvalidInput.parentElement
-        while (ancestor) {
-          if (ancestor instanceof HTMLDetailsElement) ancestor.open = true
-          ancestor = ancestor.parentElement
-        }
         firstInvalidInput.focus()
         firstInvalidInput.reportValidity()
       }, 0)
@@ -250,20 +243,16 @@ export function Settings() {
     <div className="form-grid">
       <Input label="工资金额" required type="number" inputMode="decimal" min="0" max={MAX_MONEY_AMOUNT} step="0.01" value={salaryInput} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setSalaryInput(normalizeDecimalInput(value)) }}/>
       <SelectField label="工资周期" required value={profile.salaryType} onValueChange={value => set('salaryType', value as SalaryType)}><option value="monthly">月薪</option><option value="annual">年薪</option><option value="daily">日薪</option><option value="hourly">时薪</option></SelectField>
-
-
+      <Input label="每月发薪日" rootClassName="payday-field" type="number" inputMode="numeric" min="1" max="31" step="1" value={paydayInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setPaydayInput(normalizeDecimalInput(value, 0)) }} placeholder="例如：10" hint="可选 1—31 日；当月没有该日期时，按月末发薪。"/>
+      {profile.workWeekMode === 'fixed' && <Input label="每周工作日" required type="number" inputMode="numeric" min="1" max="7" step="1" value={workDaysPerWeekInput} onKeyDown={preventInvalidNumberKey} onValueChange={updateWorkDaysPerWeek}/>}
     </div>
 
-    <details className="simple-details"><summary>发薪提醒 · {paydayInput ? '每月 ' + paydayInput + ' 日' : '未设置（选填）'}</summary>
-      <Input label="每月发薪日" rootClassName="payday-field" type="number" inputMode="numeric" min="1" max="31" step="1" value={paydayInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setPaydayInput(normalizeDecimalInput(value, 0)) }} placeholder="例如：10" hint="可选 1—31 日；当月没有该日期时，按月末发薪。"/>
     {paydayInput && <ChoiceGroup className="payday-adjustment-options" legend="发薪日遇到非工作日" value={profile.paydayAdjustment} onValueChange={value => set('paydayAdjustment', value as PaydayAdjustment)}>{([
       ['previous-workday', '提前发放', '提前至上一个工作日，推荐'],
       ['next-workday', '顺延发放', '顺延至下一个工作日'],
       ['none', '保持日期', '不根据工作日调整'],
     ] as [PaydayAdjustment, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'previous-workday' ? '推荐' : undefined}/>)}</ChoiceGroup>}
 
-    </details>
-    {['monthly', 'annual'].includes(profile.salaryType) && <details className="simple-details"><summary>工资怎么算成时薪？ · {profile.monthlyRateBasis === 'average' ? '按月平均工作日' : '按本月日历'}</summary>
     <ChoiceGroup className="monthly-rate-options" legend="月薪折算方式" value={profile.monthlyRateBasis} onValueChange={value => set('monthlyRateBasis', value as MonthlyRateBasis)}>{([
       ['actual-calendar', '按本月实际日历', '根据工作周、法定节假日和调休自动计算'],
       ['average', '按月平均工作日', '使用固定平均值，时间单价不会每月变化'],
@@ -272,23 +261,25 @@ export function Settings() {
       ? <div className="form-grid monthly-average-field"><Input label="月平均工作日" required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setMonthlyWorkDaysInput(normalizeDecimalInput(value)) }}/></div>
       : <p className="work-mode-hint actual-calendar-hint">本月按 <b>{rateProfile?.monthlyWorkDays ?? '—'}</b> 个计薪日折算；节假日与调休变化会自动更新。</p>}
 
-    </details>}
-
+    <ChoiceGroup className="work-week-options" legend="工作周安排" value={profile.workWeekMode} onValueChange={value => selectWorkWeekMode(value as WorkWeekMode)}>{([
+      ['fixed', '固定工作周', '每周按相同天数上班'],
+      ['alternating', '大小周', '大周周六上班，小周周末休息'],
+    ] as [WorkWeekMode, string, string][]).map(([mode, title, description]) => <ChoiceCard key={mode} value={mode} title={title} description={description} badge={mode === 'fixed' ? '默认' : undefined}/>)}</ChoiceGroup>
+    {profile.workWeekMode === 'alternating' && <div className="alternating-week-settings"><div><b>告诉我们本周是哪一周</b><small>设置一次后，系统会按周自动交替</small></div><fieldset><legend className="sr-only">本周类型</legend>{(['big', 'small'] as AlternatingWeekType[]).map(type => <label key={type}><input type="radio" name="current-week-type" checked={currentWeekType === type} onChange={() => selectCurrentWeekType(type)}/><span>本周是{type === 'big' ? '大周' : '小周'}</span></label>)}</fieldset></div>}
+    <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
   </div>
 
   const workSection = <div className="settings-section-content" id="work-schedule"><Link className="text-button" to="/roster">{activeRoster?'当前使用排班 · 调整规则 →':'轮班或长班？设置排班 →'}</Link>{activeRoster&&<p className="work-mode-hint">排班日期使用班次时间、休息和计薪规则；以下作息在未启用排班的日期生效。</p>}
-    <SelectField label="工作周安排" value={profile.workWeekMode === 'alternating' ? 'alternating' : workDaysPerWeekInput} onValueChange={value => { if (value === 'alternating') selectWorkWeekMode('alternating'); else { selectWorkWeekMode('fixed'); updateWorkDaysPerWeek(value) } }}>
-      {[5,6,7,4,3,2,1].map(days => <option key={days} value={days}>{days === 5 ? '双休 · 周一至周五' : days === 6 ? '单休 · 周一至周六' : '每周 ' + days + ' 天（从周一开始）'}</option>)}<option value="alternating">大小周</option>
-    </SelectField>
-    {profile.workWeekMode === 'alternating' && <div className="alternating-week-settings"><div><b>告诉我们本周是哪一周</b><small>设置一次后，系统会按周自动交替</small></div><fieldset><legend className="sr-only">本周类型</legend>{(['big', 'small'] as AlternatingWeekType[]).map(type => <label key={type}><input type="radio" name="current-week-type" checked={currentWeekType === type} onChange={() => selectCurrentWeekType(type)}/><span>本周是{type === 'big' ? '大周' : '小周'}</span></label>)}</fieldset></div>}
-    <p className="work-week-hint">{profile.monthlyRateBasis === 'actual-calendar' ? '工作周会直接参与每个月的实际计薪日计算。' : profile.workWeekMode === 'alternating' ? '已按大小周推荐月平均工作日 23.83 天，你仍可手动调整。' : '修改每周工作日后，会自动推荐对应的月平均工作日。'}</p>
-    <SelectField label="上班方式" value={profile.defaultWorkMode} onValueChange={value => set('defaultWorkMode', value as WorkMode)}><option value="scheduled">固定作息 · 自动计薪</option><option value="flexible">弹性作息 · 每天自己开始和结束</option></SelectField>
+    <ChoiceGroup className="default-work-mode-options" legend="默认计薪方式" value={profile.defaultWorkMode} onValueChange={value => set('defaultWorkMode', value as WorkMode)}>{([
+      ['scheduled', '固定作息', '按设置的上下班时间自动计薪，适合大多数用户'],
+      ['flexible', '弹性作息', '每天开始工作后计薪，也可以临时切回固定作息'],
+    ] as [WorkMode, string, string][]).map(([mode, title, description]) => <ChoiceCard key={mode} value={mode} title={title} description={description} badge={mode === 'scheduled' ? '推荐' : undefined}/>)}</ChoiceGroup>
     <p className="work-mode-hint">这只是每天的默认方式，首页可以随时只调整当天。</p>
     <div className="form-grid work-time-grid">
       <Input label="上班时间" required type="time" value={profile.workStartTime} onValueChange={value => set('workStartTime', value)}/>
       <Input label="下班时间" required type="time" value={profile.workEndTime} onValueChange={value => set('workEndTime', value)}/>
     </div>
-    <details className="simple-details"><summary>休息时段 · {getBreakPeriods(profile).length} 段 · {profile.paidBreak ? '计薪' : '不计薪'}</summary><div className="settings-breaks">
+    <div className="settings-breaks">
       <div className="salary-deductions-header"><div><b>休息时段</b><small>可添加午休、晚休等多段休息</small></div><Button type="button" variant="secondary" size="sm" onClick={() => set('breakPeriods', [...getBreakPeriods(profile), { id: createId(), name: '休息', startTime: '18:00', endTime: '18:30' }])}><Plus size={15}/>添加休息</Button></div>
       {getBreakPeriods(profile).map((period, index) => <div className="settings-break-row" key={period.id}>
         <Input label={`休息名称 ${index + 1}`} required maxLength={30} value={period.name} onValueChange={value => set('breakPeriods', getBreakPeriods(profile).map((item, i) => i === index ? { ...item, name: value } : item))}/>
@@ -299,7 +290,6 @@ export function Settings() {
       <p className="work-mode-hint">结束早于开始表示跨午夜；仅计算与工作时间重合的部分，重叠休息不重复扣除。</p>
     </div>
     <div className="toggle-row"><Switch checked={profile.paidBreak} onCheckedChange={checked => set('paidBreak', checked)} ariaLabel="休息计薪"/><span><b>休息计薪</b><small>{profile.defaultWorkMode === 'flexible' ? '弹性工作使用“暂停”排除实际休息；休息时段用于计算每日目标工时' : '关闭后，实时工资和摸鱼收益自动排除全部休息时段'}</small></span></div>
-    </details>
   </div>
 
   const deductionsSection = <div className="settings-section-content" id="salary-deductions">
@@ -357,34 +347,31 @@ export function Settings() {
   </div>
 
   return <section className="page settings-page">
-    <header className="page-header"><div><p className="eyebrow">PROFILE & APPEARANCE</p><h1>我的工资与作息</h1><p>先确认工资和工作时间，其他规则需要时再调整。</p></div></header>
+    <header className="page-header"><div><p className="eyebrow">PROFILE & APPEARANCE</p><h1>先定义，你的一小时值多少钱。</h1><p>选择喜欢的整体配色，并用工资扣除项估算更接近到手的时间单价。</p></div></header>
     <form className="settings-card" noValidate onSubmit={submit}>
-      <section className="settings-profile-summary"><h2>当前设置预览</h2><p>{salaryInput ? '¥' + salaryInput : '待填写工资'} / {{monthly:'月',annual:'年',daily:'天',hourly:'小时'}[profile.salaryType]} · {profile.workWeekMode === 'alternating' ? '大小周' : '每周 ' + workDaysPerWeekInput + ' 天'} · {profile.workStartTime}—{profile.workEndTime}</p><p>{activeRoster ? '当前由排班规则计算；常规作息在没有排班的日期生效。' : profile.defaultWorkMode === 'scheduled' ? '固定作息自动计薪，无需每天打卡。' : '弹性作息，每天点击开始、暂停和结束工作。'}</p><div className="summary-tags">{monthlyDeductions > 0 && <span>每月扣除 ¥{monthlyDeductions.toFixed(2)}</span>}{profile.includeLivingCost && <span>{profile.livingCostMode === 'deduct' ? '首页已扣生活成本' : '生活成本每日记账'}</span>}{profile.salaryHistoryMode === 'custom' && <span>历史从 {salaryEffectiveDateInput} 起计算</span>}</div></section>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
-        <div className="settings-rate-primary"><span>{rateLabelPrefix || '按填写金额'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
-        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,toLocalDateValue(),rates.daily).toFixed(2)}</b></div></div>
+        <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}预估时薪</span><strong>¥{rates.hourly.toFixed(2)}</strong><small>随下方设置实时更新</small></div>
+        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,toLocalDateValue(),rates.daily).toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
       </section>}
       <BouncyAccordion
         className="settings-accordion"
         value={openSection}
         onValueChange={setOpenSection}
         items={[
-          { id: 'salary', icon: <CircleDollarSign size={18}/>, title: <><b>工资与发薪</b><small>填写金额；发薪提醒和计算方式选填</small></>, description: salarySection },
-          { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>工作周、上下班与休息安排</small></>, description: workSection },
+          { id: 'appearance', icon: <Palette size={18}/>, title: <><b>外观与配色</b><small>经典主题与 11 组双配色</small></>, description: appearanceSection },
+          { id: 'salary', icon: <CircleDollarSign size={18}/>, title: <><b>工资与发薪</b><small>工资周期、发薪日和折算方式</small></>, description: salarySection },
+          { id: 'work', icon: <Clock3 size={18}/>, title: <><b>工作时间</b><small>默认作息、上下班与多段休息</small></>, description: workSection },
           { id: 'deductions', icon: <ReceiptText size={18}/>, title: <><b>扣除与生活成本</b><small>工资扣除项和每月生活支出</small></>, description: deductionsSection },
-          { id: 'history', icon: <History size={18}/>, title: <><b>历史账本</b><small>需要补算过去的收入时再设置</small></>, description: historySection },
+          { id: 'history', icon: <History size={18}/>, title: <><b>历史账本</b><small>设置薪资生效的历史日期</small></>, description: historySection },
         ]}
       />
       {calculationError && <p className="settings-warning" role="alert">{calculationError}</p>}
       {draftProfile && draftProfile.includeLivingCost && draftProfile.livingCostMode === 'deduct' && draftProfile.monthlyLivingCost > draftProfile.salary && draftProfile.salaryType === 'monthly' && <p className="settings-warning">生活成本高于月薪，当前可支配薪资会按 0 计算。</p>}
       {saveError && <p className="settings-warning" role="alert">{saveError}</p>}
-      <p className="work-mode-hint">{profile.salaryHistoryMode === 'custom' ? '保存后，历史工资会从 ' + salaryEffectiveDateInput + ' 起按当前配置重新计算。' : '保存后按当前配置计算；已存在的手工出勤、工作记录仍按原有规则参与计算。'} 工资金额是估算，不代表实际到账；如填写到手金额，请勿重复添加扣除项。</p>
       <Button className="settings-save-button" type="submit" size="lg" ripple>{saved ? <><CheckCircle2 size={17}/>已保存</> : '保存薪资设置'}</Button>
     </form>
-    <section className="utility-section"><h2>工作与记录</h2><div className="task-links"><Link to="/attendance">工作日历 · 请假与调班</Link><Link to="/journey">工作经历 · 换工作或休息</Link><Link to="/roster">设置轮班与长班</Link></div></section>
-    <details className="simple-details utility-section"><summary>外观与配色</summary>{appearanceSection}</details>
     <section className="settings-dock-card"><div><h2>移动端底部栏</h2><p>选择并排列四个常用功能，其余功能随时从「全部」进入。</p></div><Button variant="secondary" onClick={() => setDockSettingsOpen(true)}>自定义底部栏</Button></section>
     <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
-    <div className="settings-update-card">{TEST_BUILD ? <p className="setup-note">当前为独立测试版，正式版更新提示已关闭。请使用本次提供的测试安装包更新。</p> : <AppUpdateCard/>}</div>
+    <div className="settings-update-card"><AppUpdateCard/></div>
   </section>
 }

@@ -12,7 +12,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('mobile dock preferences', () => {
-  it('uses task-oriented defaults for new users and unreadable storage', () => {
+  it('keeps the original four entries for new users and unreadable storage', () => {
     expect(loadDockPaths()).toEqual(DEFAULT_DOCK_PATHS)
     data.set(keys.mobileDock, '{broken')
     expect(loadDockPaths()).toEqual(DEFAULT_DOCK_PATHS)
@@ -21,21 +21,15 @@ describe('mobile dock preferences', () => {
   })
 
   it('repairs duplicate, missing and removed entries while preserving valid choices', () => {
-    expect(normalizeDockPaths(['/journey', '/journey', '/missing', null, '/attendance'])).toEqual(['/journey', '/attendance', '/', '/summary'])
+    expect(normalizeDockPaths(['/journey', '/journey', '/missing', null, '/attendance'])).toEqual(['/journey', '/attendance', '/', '/slacking'])
     expect(normalizeDockPaths({ items: ['/assets'] })).toEqual(DEFAULT_DOCK_PATHS)
   })
 
   it('replaces a slot or swaps an already chosen entry without duplicates', () => {
     const changed = setDockSlot(DEFAULT_DOCK_PATHS, 0, '/journey')
-    expect(changed).toEqual(['/journey', '/summary', '/convert', '/settings'])
-    expect(setDockSlot(changed, 1, '/settings')).toEqual(['/journey', '/settings', '/convert', '/summary'])
-    expect(DEFAULT_DOCK_PATHS).toEqual(['/', '/summary', '/convert', '/settings'])
-  })
-
-  it('retains an existing installation’s saved timer shortcuts', () => {
-    const previous = ['/', '/slacking', '/overtime', '/settings']
-    data.set(keys.mobileDock, JSON.stringify(previous))
-    expect(loadDockPaths()).toEqual(previous)
+    expect(changed).toEqual(['/journey', '/slacking', '/overtime', '/settings'])
+    expect(setDockSlot(changed, 1, '/settings')).toEqual(['/journey', '/settings', '/overtime', '/slacking'])
+    expect(DEFAULT_DOCK_PATHS).toEqual(['/', '/slacking', '/overtime', '/settings'])
   })
 
   it('persists custom ordering and notifies the dock immediately', () => {

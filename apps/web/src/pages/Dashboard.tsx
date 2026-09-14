@@ -33,7 +33,6 @@ import type { ActiveOvertime, AttendanceRecord, DailyWorkRecord, FlexibleWorkSet
 import { RestCountdown } from '../components/RestCountdown'
 import { getRestCountdown } from '../lib/restCountdown'
 import './Dashboard.css'
-import { BottomSheet } from '../ui/BottomSheet'
 
 const money = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const moneyFromCents = (cents: number) => money(cents / 100)
@@ -66,7 +65,6 @@ export function Dashboard() {
 
 function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const navigate = useNavigate()
-  const [adjustOpen, setAdjustOpen] = useState(false)
   const now = useNow(1000)
   const [workRecords, setWorkRecords] = useState<DailyWorkRecord[]>(() => loadWorkRecords())
   const workRecordsRef = useRef(workRecords)
@@ -411,11 +409,10 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     <header className="page-header">
       <div><p className="eyebrow">{now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</p><h1>今天的时间，正在变成钱。</h1></div>
       <div className="dashboard-header-actions">
-        <Link className="ghost-button" to="/attendance">工作日历 <ArrowUpRight size={16} /></Link>
+        <Link className="ghost-button" to="/settings">薪资设置 <ArrowUpRight size={16} /></Link>
       </div>
     </header>
 
-    <div className="task-links" aria-label="今日快捷操作"><Link to="/slacking"><Fish size={17}/>摸鱼{loadJSON(keys.activeSlacking, null) ? ' · 进行中' : ''}</Link><Link to="/overtime"><BriefcaseBusiness size={17}/>加班{activeOvertime ? ' · 进行中' : ''}</Link><button type="button" onClick={() => setAdjustOpen(true)}>调整今天</button></div>
     <div className="dashboard-overview-grid">
     <div className={`hero-card${work.dayType === 'work' && work.mode === 'flexible' ? ' flexible-work' : ''}`}>
       <div className="hero-glow" />
@@ -456,7 +453,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
       </>}
     </div>
 
-    <details className="dashboard-countdown-overview simple-details"><summary>倒计时与今日统计</summary>
+    <div className="dashboard-countdown-overview">
     <RestCountdown value={restCountdown} payday={paydayCountdown} now={now}/>
     <aside className="dashboard-insights" aria-label="今日概览">
       <div className="dashboard-insights-heading"><div><p className="eyebrow">TODAY OVERVIEW</p><h2>今日概览</h2></div><span>{work.vacationName ? `${work.vacationName}中` : work.dayType === 'work' ? work.status === 'ended' ? '已下班' : '计薪中' : '今日休息'}</span></div>
@@ -481,13 +478,10 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
         </Link>
       </div>
     </aside>
-    </details>
+    </div>
     </div>
 
-
-    <details className="simple-details today-explanation"><summary>今天的金额怎么算的？</summary><dl><dt>业务日期</dt><dd>{workDate}</dd><dt>当前安排</dt><dd>{roster ? '按排班规则' : isAttendanceOverride ? '按工作日历的手工调整' : work.officialHolidayName ? work.officialHolidayName : work.mode === 'flexible' ? '弹性工作记录' : '固定作息'}</dd><dt>当前计薪时长</dt><dd>{formatDuration(worked)}</dd><dt>参考时薪</dt><dd>{money(workRates.hourly)}</dd><dt>生活成本</dt><dd>{profile.includeLivingCost ? profile.livingCostMode === 'deduct' ? '已从工资中扣除' : '作为每日支出记入账本' : '未扣除'}</dd></dl><p>金额按你填写的工资及生效规则估算，不代表实际到账。摸鱼金额属于工资中的一部分，不是额外收入；加班收入单独统计。完整日薪、固定金额和排班结算以对应规则为准。</p><Link className="text-button" to="/settings">查看工资与作息 →</Link></details>
-    <BottomSheet open={adjustOpen} onOpenChange={setAdjustOpen} title="调整今天" description={workDate + ' · 跨日班次按开班日调整'}><div className="today-task-menu"><button type="button" onClick={() => { setAdjustOpen(false); setDialogPurpose('adjust') }}>修改实际工作时间<small>修正这一天的开始和结束时间</small></button><Link to={'/attendance?date=' + workDate}>请假、休息或临时上班<small>在工作日历中调整这一天，也可以修改当天工资</small></Link><Link to="/roster">调整班次<small>查看排班规则，选择要调整的日期</small></Link><Link to="/settings?section=work">修改常规作息<small>长期工作安排有变化时使用</small></Link></div></BottomSheet>
-    <details className="simple-details"><summary>本月工作与收入统计</summary><MonthlyPerformance stats={monthlyStats} now={now}/></details>
+    <MonthlyPerformance stats={monthlyStats} now={now}/>
 
     <div className="section-title dashboard-wishlist-title"><div><p className="eyebrow">WISH LIST</p><h2>我的心愿清单</h2></div><Link className="dashboard-wishlist-link" to="/convert">查看全部 {wishlistItems.length} 项 <ArrowUpRight size={14}/></Link></div>
     {featuredWishes.length === 0 ? <div className="dashboard-wishlist-empty"><span>✨</span><div><b>还没有心愿</b><small>把想买的东西换算成需要工作的时间。</small></div><Link to="/convert">去心愿清单</Link></div> : <div className="dashboard-wishlist-grid">

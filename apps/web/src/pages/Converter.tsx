@@ -123,7 +123,7 @@ export function Converter() {
     : null
 
   return <section className="page converter-page">
-    <header className="page-header"><div><p className="eyebrow">TIME CONVERTER</p><h1>这个东西，值你工作多久？</h1><p>把价格换算成真实的工作时间，并持续看看离它还有多远。</p></div></header><div className="task-links"><Link to="/assets">已购好物 · 查看持有成本 →</Link></div>
+    <header className="page-header"><div><p className="eyebrow">TIME CONVERTER</p><h1>这个东西，值你工作多久？</h1><p>把价格换算成真实的工作时间，并持续看看离它还有多远。</p></div></header>
     <form id="wish-form" className="input-card" onSubmit={add}>
       <div className="form-card-heading"><span>{editing ? 'EDIT WISH' : 'NEW WISH'}</span><div><b>{editing ? '编辑心愿' : '添加一个心愿'}</b><small>输入价格，立即换算需要投入的真实工作时间。</small></div></div>
       <Input label="想买什么" required maxLength={60} autoComplete="off" value={name} onValueChange={setName} placeholder="例如：AirPods Pro" />

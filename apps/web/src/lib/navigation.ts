@@ -7,9 +7,9 @@ export const NAVIGATION_ITEMS = [
   ['/accidents', CircleDollarSign, '意外收支'],
   ['/slacking', Fish, '摸鱼'],
   ['/overtime', BriefcaseBusiness, '加班'],
-  ['/attendance', CalendarCheck2, '工作日历'],
-  ['/assets', Boxes, '已购好物'],
-  ['/journey', Route, '工作经历'],
+  ['/attendance', CalendarCheck2, '薪苦日历'],
+  ['/assets', Boxes, '物品'],
+  ['/journey', Route, '工作旅程'],
   ['/settings', Settings2, '我的'],
 ] as const
 

@@ -11,15 +11,13 @@ import { loadDockPaths, subscribeDockPaths } from '../lib/mobileDock'
 import { Button } from '../ui/BeuiControls'
 import { MobileDockSettings } from './MobileDockSettings'
 import './Shell.css'
-import './Usability.css'
-import { TEST_BUILD } from '../lib/setup'
 
 initializeTheme()
 
 const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
-const overviewItems = ['/', '/summary', '/convert'].map(path => items.find(([to]) => to === path)!)
-const workItems = items.filter(([to]) => ['/slacking', '/overtime', '/attendance'].includes(to))
+const overviewItems = items.slice(0, 4)
+const workItems = items.slice(4, 9)
 const settingsItem = items[9]
 
 export function Shell() {
@@ -83,7 +81,7 @@ export function Shell() {
 
       <nav className="sidebar-navigation">
         <div className="nav-group">
-          <p>日常</p>
+          <p>总览</p>
           {overviewItems.map(renderDesktopItem)}
         </div>
         <div className="nav-group">
@@ -93,7 +91,6 @@ export function Shell() {
       </nav>
 
       <div className="sidebar-footer">
-        <button type="button" className="nav-item" onClick={() => setMobileOpen(true)} title="全部功能"><Grid2X2 size={18}/><span>全部功能</span></button>
         <button
           type="button"
           className="nav-item theme-switcher-button"
@@ -108,7 +105,7 @@ export function Shell() {
       </div>
     </AnimatedSidebar>
 
-    <main className="main">{TEST_BUILD && <div className="test-build-banner"><span className="test-build-label">易用性测试版 · 数据与正式版独立</span></div>}<div className="route-stage" key={location.pathname}><Outlet /></div></main>
+    <main className="main"><div className="route-stage" key={location.pathname}><Outlet /></div></main>
 
     <div className="mobile-nav-layer">
       <nav className="mobile-dock" aria-label="移动端主导航">
@@ -131,21 +128,17 @@ export function Shell() {
       open={mobileOpen}
       onOpenChange={setMobileOpen}
       title="全部功能"
-      description="按你想做的事情，找到对应功能。"
+      description="所有功能都在这里，也可以自定义底部常用入口。"
       className="mobile-more-sheet"
     >
-      {([
-        ['工作与时间', ['/', '/slacking', '/overtime', '/attendance', '/journey']],
-        ['收支与心愿', ['/summary', '/accidents', '/convert', '/assets']],
-        ['偏好设置', ['/settings']],
-      ] as [string, string[]][]).map(([label, paths]) => <section className="feature-directory" key={label}><h3>{label}</h3><nav className="mobile-drawer-grid" aria-label={label}>{paths.map(path => renderMobileItem(items.find(([to]) => to === path)!, true))}</nav></section>)}
-      <nav className="mobile-drawer-grid" aria-label="外观与导航">
+      <Button variant="secondary" className="mobile-dock-customize" onClick={() => { setMobileOpen(false); setDockSettingsOpen(true) }}><SlidersHorizontal size={17}/>自定义底部栏</Button>
+      <nav className="mobile-drawer-grid" aria-label="全部功能">
+        {items.map(item => renderMobileItem(item, true))}
         <button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
           <Palette size={20}/>
           <span>一键换肤</span>
         </button>
       </nav>
-      <Button variant="secondary" className="mobile-dock-customize" onClick={() => { setMobileOpen(false); setDockSettingsOpen(true) }}><SlidersHorizontal size={17}/>自定义底部栏</Button>
     </BottomSheet>
     <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <ThemePickerSheet open={themePickerOpen} onOpenChange={setThemePickerOpen}/>
