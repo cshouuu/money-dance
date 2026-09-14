@@ -1,7 +1,7 @@
 import { NAVIGATION_ITEMS, type NavigationPath } from './navigation'
 import { keys, loadJSON, saveJSON, STORAGE_CHANGED_EVENT } from './storage'
 
-export const DEFAULT_DOCK_PATHS: readonly NavigationPath[] = ['/', '/slacking', '/overtime', '/settings']
+export const DEFAULT_DOCK_PATHS: readonly NavigationPath[] = ['/', '/summary', '/convert', '/settings']
 const allowedPaths = new Set<string>(NAVIGATION_ITEMS.map(([path]) => path))
 
 /** Retain valid choices and fill missing positions when saved settings are outdated or damaged. */

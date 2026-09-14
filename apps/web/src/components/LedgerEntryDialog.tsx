@@ -12,6 +12,7 @@ import { journeyStageLabel } from '../lib/workJourney'
 import { SelectField } from '../ui/BeuiControls'
 
 export interface LedgerEntryDraft {
+  kind?: 'manual' | 'accident'
   workStageId?: string
   direction: LedgerDirection
   amount: number
@@ -21,6 +22,7 @@ export interface LedgerEntryDraft {
 }
 
 interface LedgerEntryDialogProps {
+  initialKind?: 'manual' | 'accident'
   open: boolean
   entry: SummaryEntry | null
   initialDate: string
@@ -28,7 +30,8 @@ interface LedgerEntryDialogProps {
   onCancel: () => void
 }
 
-export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }: LedgerEntryDialogProps) {
+export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel, initialKind = 'manual' }: LedgerEntryDialogProps) {
+  const [kind, setKind] = useState<'manual' | 'accident'>(initialKind)
   const profile = useProfile()
   const [workStageId, setWorkStageId] = useState('')
   const [direction, setDirection] = useState<LedgerDirection>('expense')
@@ -41,6 +44,7 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
   useEffect(() => {
     if (!open) return
     setDirection(entry?.direction ?? 'expense')
+    setKind(initialKind)
     setWorkStageId(entry?.workStageId ?? '')
     setAmount(entry ? String(entry.amount) : '')
     setSource(entry?.source ?? '')
@@ -52,7 +56,7 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
       window.clearTimeout(timer)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [open, entry, initialDate, onCancel])
+  }, [open, entry, initialDate, onCancel, initialKind])
 
   if (!open) return null
   const salaryDateLocked = Boolean(entry?.generated || entry?.kind === 'salary_override')
@@ -61,7 +65,7 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
     event.preventDefault()
     const parsedAmount = parseNumberInput(amount)
     if (!event.currentTarget.reportValidity() || !source.trim() || parsedAmount === null || parsedAmount <= 0 || parsedAmount > MAX_MONEY_AMOUNT) return
-    onSave({ direction, amount: parsedAmount, source: source.trim(), occurredAt: toLocalDateTime(date).toISOString(), localDate: date, workStageId: direction === 'income' && !salaryDateLocked ? workStageId || undefined : undefined })
+    onSave({ ...(!entry ? { kind } : {}), direction, amount: parsedAmount, source: source.trim(), occurredAt: toLocalDateTime(date).toISOString(), localDate: date, workStageId: direction === 'income' && !salaryDateLocked ? workStageId || undefined : undefined })
   }
 
   return createPortal(<div className="dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
@@ -69,6 +73,7 @@ export function LedgerEntryDialog({ open, entry, initialDate, onSave, onCancel }
       <div className="ledger-dialog-header"><div><p className="eyebrow">LEDGER DETAIL</p><h2 id="ledger-entry-dialog-title">{entry ? '编辑收支明细' : '记一笔收支'}</h2></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
       <fieldset className="ledger-direction-field"><legend>收支类型</legend><Tabs className="direction-switch" value={direction} onValueChange={value=>setDirection(value as LedgerDirection)}><TabsTrigger value="expense" tone="expense"><ArrowUpRight size={15}/>支出</TabsTrigger><TabsTrigger value="income" tone="income"><ArrowDownLeft size={15}/>收入</TabsTrigger></Tabs></fieldset>
       <div className="ledger-dialog-fields"><Input label="明细名称" required maxLength={50} value={source} onValueChange={setSource} placeholder="例如：午餐、兼职收入"/><Input label="金额" required type="number" inputMode="decimal" min="0.01" max={MAX_MONEY_AMOUNT} step="0.01" value={amount} leftIcon="¥" onKeyDown={preventInvalidNumberKey} onValueChange={value=>setAmount(normalizeDecimalInput(value))} placeholder="0.00"/><Input label="发生日期" required type="date" max={toLocalDateValue()} value={date} disabled={salaryDateLocked} onValueChange={setDate}/></div>
+      {!entry && <details className="simple-details" open={initialKind === 'accident' || undefined}><summary>记录来源 · {kind === 'accident' ? '意外收支' : '普通收支'}</summary><SelectField label="来源" value={kind} onValueChange={value => setKind(value as 'manual' | 'accident')}><option value="manual">普通收支</option><option value="accident">意外收支</option></SelectField></details>}
       {salaryDateLocked && <p className="ledger-dialog-note">工资调整会继续对应原工资，所属日期不可修改；保存后以手工金额为准。</p>}
       {!salaryDateLocked && direction === 'income' && !!profile.workJourney?.stages.length && <><SelectField label="关联工作 · 选填" value={workStageId} onValueChange={setWorkStageId}><option value="">不关联工作</option>{profile.workJourney.stages.map(stage => <option key={stage.id} value={stage.id}>{stage.name}{` · ${journeyStageLabel(stage)}`}</option>)}</SelectField><p className="ledger-dialog-note">可记录未计入账本的补发、奖金等收入，按实际到账日期入账。已自动计算的工资无需重复添加。</p></>}
       <div className="ledger-dialog-actions"><button type="button" className="dialog-cancel" onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm">{entry ? '保存调整' : '添加明细'}</button></div>

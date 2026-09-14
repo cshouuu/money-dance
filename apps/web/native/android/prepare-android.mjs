@@ -16,6 +16,8 @@ const versionName = process.env.ANDROID_VERSION_NAME || '0.1.0-dev'
 const versionCodeRaw = Number.parseInt(process.env.ANDROID_VERSION_CODE || '1', 10)
 const versionCode = Number.isFinite(versionCodeRaw) && versionCodeRaw > 0 ? versionCodeRaw : 1
 const releaseSigning = process.env.ANDROID_RELEASE_SIGNING === 'true'
+const testBuild = process.env.ANDROID_TEST_BUILD === 'true'
+if (testBuild && releaseSigning) throw new Error('Test builds must not use production release signing')
 const pgyerAppShortcut = process.env.PGYER_APP_SHORTCUT || 'moneydance'
 
 if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
@@ -399,4 +401,13 @@ if (releaseSigning) {
 }
 
 await writeFile(gradlePath, gradle)
+if (testBuild) {
+  // Only the test build changes identity; namespace stays aligned with native Java.
+  await writeFile(gradlePath, gradle.replace(/applicationId\s+"[^"]+"/, 'applicationId "com.cshouuu.moneydance.usability"'))
+  const stringsPath = join(appRoot, 'src/main/res/values/strings.xml')
+  const strings = (await readFile(stringsPath, 'utf8'))
+    .replace(/(<string name="(?:app_name|title_activity_main)">)[^<]+/g, '$1MoneyDance 易用性测试')
+    .replace(/(<string name="custom_url_scheme">)[^<]+/, '$1com.cshouuu.moneydance.usability')
+  await writeFile(stringsPath, strings)
+}
 console.log(`Prepared Android project: versionName=${versionName}, versionCode=${versionCode}, releaseSigning=${releaseSigning}, pgyerShortcut=${pgyerAppShortcut}`)
