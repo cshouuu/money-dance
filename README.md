@@ -163,6 +163,12 @@ MoneyDance
 
 ## 本地开发
 
+### Windows 桌面版与桌宠（开发分支）
+
+已增加 Windows 10/11 x64 桌面版，复用全部现有业务功能。支持上传照片在本机提取主体为桌宠，提供工作/摸鱼/加班/休息动作、收入汇报、喝水提醒、加班关怀、心愿庆祝和专注计时。详见 [Windows 使用与开发说明](docs/WINDOWS.md)。
+
+Windows 开发需要 Node.js 22.12+：`npm ci` 后运行 `npm run dev:desktop`；运行 `npm run build:windows` 生成 Windows 安装器。
+
 要求：Node.js 20+。
 
 ~~~bash

@@ -15,5 +15,10 @@ import { Slacking } from './pages/Slacking'
 import { Summary } from './pages/Summary'
 import { Overtime } from './pages/Overtime'
 import { Attendance } from './pages/Attendance'
+import { lazy, Suspense } from 'react'
+import { DesktopController } from './components/DesktopController'
+import { desktop } from './lib/desktop'
 
-export default function App(){return <BrowserRouter>{!TEST_BUILD && <AppUpdatePrompt/>}<WidgetSyncController/><TimerPlanController/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/overtime" element={<Overtime/>}/><Route path="/attendance" element={<Attendance/>}/><Route path="/assets" element={<Assets/>}/><Route path="/roster" element={<Roster/>}/><Route path="/journey" element={<WorkJourney/>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}
+const DesktopPet = lazy(() => import('./pages/DesktopPet').then(module => ({ default: module.DesktopPet })))
+
+export default function App(){return <BrowserRouter>{!TEST_BUILD && !desktop && <AppUpdatePrompt/>}<WidgetSyncController/><TimerPlanController/><DesktopController/><Routes><Route element={<Shell/>}><Route path="/" element={<Dashboard/>}/><Route path="/convert" element={<Converter/>}/><Route path="/summary" element={<Summary/>}/><Route path="/accidents" element={<Accidents/>}/><Route path="/slacking" element={<Slacking/>}/><Route path="/overtime" element={<Overtime/>}/><Route path="/attendance" element={<Attendance/>}/><Route path="/assets" element={<Assets/>}/><Route path="/roster" element={<Roster/>}/><Route path="/journey" element={<WorkJourney/>}/><Route path="/pet" element={<Suspense fallback={<p>正在打开桌宠工作室…</p>}><DesktopPet/></Suspense>}/><Route path="/settings" element={<Settings/>}/></Route></Routes></BrowserRouter>}

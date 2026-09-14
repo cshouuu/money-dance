@@ -17,7 +17,7 @@ function BootSignal() {
 
 createRoot(rootElement).render(<StrictMode><App/><BootSignal/></StrictMode>)
 
-const isNativeShell = 'Capacitor' in window
+const isNativeShell = 'Capacitor' in window || 'moneyDanceDesktop' in window
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 if ('serviceWorker' in navigator && !isNativeShell && !isLocalDev) {
   window.addEventListener('load', () => {

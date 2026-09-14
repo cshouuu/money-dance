@@ -39,3 +39,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Windows desktop companion
+
+- Electron — Electron contributors, MIT. https://github.com/electron/electron
+- ONNX Runtime — Microsoft Corporation, MIT. https://github.com/microsoft/onnxruntime
+- sharp — Lovell Fuller and contributors, Apache-2.0; bundled libvips and related dependency notices are included by their packages. https://github.com/lovell/sharp
+- U²-Net / U²-NetP — Xuebin Qin and contributors, Apache-2.0. https://github.com/xuebinqin/U-2-Net
+  The unmodified U²-NetP ONNX model is distributed from https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx and verified against SHA-256 `309c8469258dda742793dce0ebea8e6dd393174f89934733ecc8b14c76f4ddd8`. Its license is included in `apps/desktop/assets/U2NET-LICENSE.txt` and in the Windows app's assets. Model inference and image decoding run locally. The implementation follows the model's documented ImageNet normalization and foreground-mask output convention.
+- The default pet illustration and companion animations are original MoneyDance assets.

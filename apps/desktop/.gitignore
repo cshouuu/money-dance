@@ -1,0 +1,5 @@
+assets/*.onnx
+assets/icon.png
+assets/THIRD_PARTY_NOTICES.md
+web/
+release/

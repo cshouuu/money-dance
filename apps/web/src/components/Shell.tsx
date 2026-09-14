@@ -1,4 +1,5 @@
-import { Grid2X2, Palette, PanelLeftClose, PanelLeftOpen, SlidersHorizontal } from 'lucide-react'
+import { Grid2X2, Palette, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, PawPrint } from 'lucide-react'
+import { desktop } from '../lib/desktop'
 import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -91,6 +92,7 @@ export function Shell() {
       </nav>
 
       <div className="sidebar-footer">
+        {desktop && <NavLink to="/pet" title="桌边搭子" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}><PawPrint size={18}/><span>桌边搭子</span></NavLink>}
         <button
           type="button"
           className="nav-item theme-switcher-button"
@@ -101,7 +103,7 @@ export function Shell() {
           <span>一键换肤</span>
         </button>
         {renderDesktopItem(settingsItem)}
-        <p className="privacy-note">Local-first · 薪资默认只保存在你的浏览器</p>
+        <p className="privacy-note">Local-first · 薪资默认只保存在{desktop ? '这台电脑' : '你的浏览器'}</p>
       </div>
     </AnimatedSidebar>
 
@@ -134,6 +136,7 @@ export function Shell() {
       <Button variant="secondary" className="mobile-dock-customize" onClick={() => { setMobileOpen(false); setDockSettingsOpen(true) }}><SlidersHorizontal size={17}/>自定义底部栏</Button>
       <nav className="mobile-drawer-grid" aria-label="全部功能">
         {items.map(item => renderMobileItem(item, true))}
+        {desktop && <NavLink to="/pet" className="mobile-drawer-item" onClick={() => setMobileOpen(false)}><PawPrint size={20}/><span>桌边搭子</span></NavLink>}
         <button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
           <Palette size={20}/>
           <span>一键换肤</span>
