@@ -401,6 +401,21 @@ if (releaseSigning) {
   }
 }
 
+if (testBuild && !gradle.includes('moneyDanceStableTestSigning')) {
+  gradle = gradle.replace(/android\s*\{/, `android {
+    // moneyDanceStableTestSigning: test identity only; never production signing.
+    signingConfigs {
+        debug {
+            def testStorePath = System.getenv('ANDROID_TEST_KEYSTORE_PATH')
+            if (!testStorePath) throw new GradleException('ANDROID_TEST_KEYSTORE_PATH is required for the isolated test build')
+            storeFile file(testStorePath)
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }`)
+}
+
 await writeFile(gradlePath, gradle)
 if (testBuild) {
   // Only the test build changes identity; namespace stays aligned with native Java.

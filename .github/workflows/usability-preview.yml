@@ -51,14 +51,19 @@ jobs:
           ANDROID_WISH_TEST_KEYSTORE_BASE64: ${{ secrets.ANDROID_WISH_TEST_KEYSTORE_BASE64 }}
         run: |
           test -n "$ANDROID_WISH_TEST_KEYSTORE_BASE64"
-          mkdir -p "$HOME/.android"
-          printf '%s' "$ANDROID_WISH_TEST_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
-          chmod 600 "$HOME/.android/debug.keystore"
+          test_key_file="$RUNNER_TEMP/money-dance-wish-test.keystore"
+          printf '%s' "$ANDROID_WISH_TEST_KEYSTORE_BASE64" | base64 --decode > "$test_key_file"
+          chmod 600 "$test_key_file"
+          printf 'ANDROID_TEST_KEYSTORE_PATH=%s\n' "$test_key_file" >> "$GITHUB_ENV"
       - name: Build test APK
         working-directory: apps/web/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+          apksigner_path="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -n "$apksigner_path"
+          "$apksigner_path" verify --print-certs app/build/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/wish-test-certificate.txt"
+          grep -Fq 'Signer #1 certificate SHA-256 digest: a3ce39fb1165b8dd26e492b26e0cb046427fa5312ef0d666d831c534e1f9a3fa' "$RUNNER_TEMP/wish-test-certificate.txt"
       - name: Stage preview files
         run: |
           mkdir -p preview-site/test-build
