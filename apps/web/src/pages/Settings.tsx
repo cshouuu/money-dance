@@ -258,10 +258,19 @@ export function Settings() {
     setHistoryConfirmed(false)
   }
 
-  const rateLabelPrefix = profile.includeLivingCost && profile.livingCostMode === 'deduct'
+  const rateLabelPrefix = rateProfile?.includeLivingCost && rateProfile.livingCostMode === 'deduct'
     ? '可支配'
     : monthlyDeductions > 0 ? '预计到手' : ''
   const currentWeekType = alternatingWeekTypeForDate(new Date(), profile)
+
+  const monthlySalary = ['monthly','annual'].includes(profile.salaryType)
+  const conversionSettings = <><ChoiceGroup className="monthly-rate-options" legend={monthlySalary ? '工资如何分摊' : '月收入与扣除如何折算'} value={profile.monthlyRateBasis} onValueChange={value => set('monthlyRateBasis', value as MonthlyRateBasis)}>{([
+      ['actual-calendar', monthlySalary ? '按月工资分摊' : '按本月计薪日', monthlySalary ? '按本月计薪日分摊；正常整月基本工资与填写的月薪一致' : '按本月安排折算月收入及每月扣除项' ],
+      ['average', monthlySalary ? '按固定日单价估算' : '按月平均天数', monthlySalary ? '使用月平均天数折算，账本整月合计可能高于或低于月薪' : '用固定天数折算月收入及每月扣除项，实际工资仍按天或小时计算'],
+    ] as [MonthlyRateBasis, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'actual-calendar' ? '推荐' : undefined}/>)}</ChoiceGroup>
+    {profile.monthlyRateBasis === 'average'
+      ? <div className="form-grid monthly-average-field"><Input label="月平均工作日" required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setMonthlyWorkDaysInput(normalizeDecimalInput(value)) }}/></div>
+      : <p className="work-mode-hint actual-calendar-hint">生效月份按 <b>{rateProfile?.monthlyWorkDays ?? '—'}</b> 个计薪日分摊；扣除、请假与额外收入另行计算。</p>}</>
 
   const salarySection = <div className="settings-section-content" id="salary-profile">
     <p className="work-mode-hint">{settingsWorkStage(profile) ? '正在调整当前或即将开始工作的薪资；已结束的工作保留原有配置。' : profile.workJourney ? '当前没有在职工作。要恢复计薪，请先开启新工作。' : '换工作或暂时休息时，可以把每段经历分别保存。'} <a href="/journey">前往工作旅程 →</a></p>
@@ -277,13 +286,7 @@ export function Settings() {
       ['none', '保持日期', '不根据工作日调整'],
     ] as [PaydayAdjustment, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'previous-workday' ? '推荐' : undefined}/>)}</ChoiceGroup>}
 
-    {!activeRoster && ['monthly','annual'].includes(profile.salaryType) && <><ChoiceGroup className="monthly-rate-options" legend="工资如何分摊" value={profile.monthlyRateBasis} onValueChange={value => set('monthlyRateBasis', value as MonthlyRateBasis)}>{([
-      ['actual-calendar', '按月工资分摊', '按本月计薪日分摊；正常整月基本工资与填写的月薪一致'],
-      ['average', '按固定日单价估算', '使用月平均天数折算，账本整月合计可能高于或低于月薪'],
-    ] as [MonthlyRateBasis, string, string][]).map(([value, title, description]) => <ChoiceCard key={value} value={value} title={title} description={description} badge={value === 'actual-calendar' ? '推荐' : undefined}/>)}</ChoiceGroup>
-    {profile.monthlyRateBasis === 'average'
-      ? <div className="form-grid monthly-average-field"><Input label="月平均工作日" required type="number" inputMode="decimal" min="0.01" max="31" step="0.01" value={monthlyWorkDaysInput} onKeyDown={preventInvalidNumberKey} onValueChange={value => { setSaved(false); setMonthlyWorkDaysInput(normalizeDecimalInput(value)) }}/></div>
-      : <p className="work-mode-hint actual-calendar-hint">生效月份按 <b>{rateProfile?.monthlyWorkDays ?? '—'}</b> 个计薪日分摊；扣除、请假与额外收入另行计算。</p>}</>}
+    {!activeRoster && (monthlySalary ? conversionSettings : <details><summary>月收入估算与扣除折算</summary>{conversionSettings}</details>)}
 
     {activeRoster && <p className="work-mode-hint">{activeRoster.pay.mode === 'salary' ? '当前排班沿用月工资，按自然日分摊基本工资；时薪参考整月排班工时。' : '当前排班按小时或班次计薪，以上工资金额不参与这些日期的排班工资。'} <Link to="/roster">查看排班计薪 →</Link></p>}
   </div>
@@ -383,7 +386,7 @@ export function Settings() {
     <form className="settings-card" noValidate onSubmit={submit}>
       {rates && <section className="settings-rate-overview" aria-label="当前时间单价预览">
         <div className="settings-rate-primary"><span>{rateLabelPrefix || '税前'}参考时薪</span><strong>{activeRoster && rates.hourly === 0 ? '待排班' : `¥${rates.hourly.toFixed(2)}`}</strong><small>{effectiveFrom} 生效当天的折算结果</small></div>
-        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,toLocalDateValue(),rates.daily).toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
+        <div className="settings-rate-details"><div><small>{activeRoster?.pay.mode==='salary'?'自然日日薪':activeRoster?'当日计划工资':`${rateLabelPrefix}日薪`}</small><b>¥{rosterStandardDayAmount(rateProfile??profile,effectiveFrom,rates.daily).toFixed(2)}</b></div><div><small>每分钟</small><b>¥{rates.minute.toFixed(3)}</b></div><div><small>每秒</small><b>¥{rates.second.toFixed(5)}</b></div></div>
       </section>}
       <BouncyAccordion
         className="settings-accordion"
