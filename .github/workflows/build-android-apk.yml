@@ -63,6 +63,7 @@ jobs:
       - name: Build web bundle
         env:
           VITE_API_BASE_URL: https://salary-flow-api.vercel.app
+          VITE_TEST_BUILD: 'false'
         run: |
           npm run build -w @salary-flow/core
           npm run build -w @salary-flow/web
@@ -141,6 +142,7 @@ jobs:
           ANDROID_VERSION_NAME: ${{ steps.version.outputs.version_name }}
           ANDROID_VERSION_CODE: ${{ steps.version.outputs.version_code }}
           ANDROID_RELEASE_SIGNING: 'true'
+          ANDROID_TEST_BUILD: 'false'
           PGYER_APP_SHORTCUT: ${{ vars.PGYER_APP_SHORTCUT || 'moneydance' }}
         shell: bash
         run: |
@@ -181,7 +183,7 @@ jobs:
 
           test -f "$NATIVE_ROOT/AppUpdaterPlugin.java"
           test -f "$JAVA_ROOT/AppUpdaterPlugin.java"
-          for source in AppearancePlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider MoneyDanceWishWidgetProvider; do
+          for source in AppearancePlugin WidgetActionReceiver WidgetBridgePlugin WidgetContract WidgetRenderer WidgetStateStore WidgetTickerService MoneyDanceWidgetProvider MoneyDanceSquareWidgetProvider MoneyDanceWishWidgetProvider WishProgressProjection; do
             test -f "$NATIVE_ROOT/${source}.java"
             test -f "$JAVA_ROOT/${source}.java"
             cmp "$NATIVE_ROOT/${source}.java" "$JAVA_ROOT/${source}.java"
@@ -308,17 +310,30 @@ jobs:
           sha256sum "artifacts/${APK_BASENAME}.apk" > "artifacts/${APK_BASENAME}.apk.sha256"
           echo "apk_name=${APK_BASENAME}.apk" >> "$GITHUB_OUTPUT"
       - name: Verify debug and release APK signatures
+        env:
+          IS_RELEASE: ${{ steps.version.outputs.is_release }}
+          EXPECTED_VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          EXPECTED_VERSION_CODE: ${{ steps.version.outputs.version_code }}
         shell: bash
         run: |
           set -euo pipefail
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
-          test -x "$APKSIGNER"
+          APKSIGNER_JAR="$(find -L "$ANDROID_HOME/build-tools" -type f -name apksigner.jar | sort -V | tail -1)"
+          test -f "$APKSIGNER_JAR"
           DEBUG_APK="apps/web/android/app/build/outputs/apk/debug/app-debug.apk"
           RELEASE_APK="apps/web/android/app/build/outputs/apk/release/app-release.apk"
           test -f "$DEBUG_APK"
           test -f "$RELEASE_APK"
-          "$APKSIGNER" verify --verbose --print-certs "$DEBUG_APK"
-          "$APKSIGNER" verify --verbose --print-certs "$RELEASE_APK"
+          java -jar "$APKSIGNER_JAR" verify --verbose --print-certs "$DEBUG_APK"
+          java -jar "$APKSIGNER_JAR" verify --verbose --print-certs "$RELEASE_APK" | tee "$RUNNER_TEMP/release-certificate.txt"
+          if [[ "$IS_RELEASE" == 'true' ]]; then
+            # Match the permanent certificate used by the published v0.4.0 APK.
+            certificate_sha256="$(sed -n 's/.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/release-certificate.txt" | tr '[:upper:]' '[:lower:]' | sort -u)"
+            test "$certificate_sha256" = '428674bfc2291d225b3a79bade87daf11f4f873d0695ef9eeca27e1524edffe3' || { echo 'Unexpected production signing certificate'; exit 1; }
+          fi
+          AAPT="$(find -L "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)"
+          test -x "$AAPT"
+          "$AAPT" dump badging "$RELEASE_APK" > "$RUNNER_TEMP/release-package.txt"
+          grep -Fq "package: name='com.cshouuu.moneydance' versionCode='${EXPECTED_VERSION_CODE}' versionName='${EXPECTED_VERSION_NAME}'" "$RUNNER_TEMP/release-package.txt"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: money-dance-android-apk
