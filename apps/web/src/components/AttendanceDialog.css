@@ -6,3 +6,6 @@
 .attendance-status-switch{grid-template-columns:repeat(4,1fr)}
 .attendance-leave-period-field{margin-top:15px}.attendance-leave-period-switch{grid-template-columns:repeat(3,1fr)}
 .attendance-automatic-card{display:flex;flex-direction:column;gap:5px;background:var(--accent-faint);border:1px solid var(--accent-border);border-radius:13px;padding:13px 14px}.attendance-automatic-card b{font-size:11px;color:var(--green)}.attendance-automatic-card span{font-size:9px;line-height:1.55;color:var(--muted)}.attendance-save-error{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--negative-soft);color:var(--negative);font-size:10px;line-height:1.45}.attendance-dialog-actions button:disabled{cursor:not-allowed;opacity:.58}
+.attendance-amount-preview { padding:14px; margin:14px 0; border-radius:12px; background:var(--accent-faint); color:var(--green); font-size:14px; }
+.attendance-amount-preview small { display:block; margin-top:6px; color:var(--muted); font-size:12px; line-height:1.7; }
+.attendance-override-confirm { display:flex; align-items:flex-start; gap:10px; padding:12px 0; font-size:12px; line-height:1.7; }

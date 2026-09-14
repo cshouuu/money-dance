@@ -1,9 +1,10 @@
 import { isEmployedOn } from '@salary-flow/core'
+import { originalOvertimeSecondRate } from '../lib/overtime'
 import { useProfile } from '../lib/useProfile'
 import { TimerPlans } from '../components/TimerPlans'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { calculateRates, formatDuration } from '@salary-flow/core'
-import { BriefcaseBusiness, Coffee, Crown, Flame, History, MoonStar, Play, Square, Trash2, Zap } from 'lucide-react'
+import { Pencil, BriefcaseBusiness, Coffee, Crown, Flame, History, MoonStar, Play, Square, Trash2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AchievementPanel } from '../components/AchievementPanel'
@@ -95,6 +96,7 @@ export function Overtime() {
     new Date().toISOString(),
   ))
   const [startDialogOpen, setStartDialogOpen] = useState(false)
+  const [editingSession, setEditingSession] = useState<OvertimeSession | null>(null)
   const [backfillDialogOpen, setBackfillDialogOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   const [finishNotice, setFinishNotice] = useState<{ id: string; message: string } | null>(null)
@@ -132,8 +134,8 @@ export function Overtime() {
 
   const openStartDialog = useCallback(() => setStartDialogOpen(true), [])
   const closeStartDialog = useCallback(() => setStartDialogOpen(false), [])
-  const openBackfillDialog = useCallback(() => setBackfillDialogOpen(true), [])
-  const closeBackfillDialog = useCallback(() => setBackfillDialogOpen(false), [])
+  const openBackfillDialog = useCallback(() => { setEditingSession(null); setBackfillDialogOpen(true) }, [])
+  const closeBackfillDialog = useCallback(() => { setEditingSession(null); setBackfillDialogOpen(false) }, [])
   const cancelDelete = useCallback(() => setPendingDelete(null), [])
   const closeFinishNotice = useCallback(() => setFinishNotice(null), [])
   const start = useCallback((option: ActiveOvertime): string | null => {
@@ -165,6 +167,7 @@ export function Overtime() {
 
   const saveBackfill = useCallback((input: CompletedOvertimeInput): string | null => {
     const nowTime = new Date().toISOString()
+    if (editingSession && JSON.stringify(loadOvertimeSessions().find(item => item.id === editingSession.id)) !== JSON.stringify(editingSession)) return '这条记录已在其他页面修改或删除，请关闭后重新打开。'
     const endAt = new Date(input.endTime).getTime()
     if (!Number.isFinite(endAt)) return '请选择有效的结束时间。'
     if (endAt > new Date(nowTime).getTime()) return '补记的结束时间不能晚于现在。'
@@ -174,8 +177,9 @@ export function Overtime() {
     const otherSessions = storedSessions.filter(session => session.id !== input.id)
     if (hasOverlappingOvertime(otherSessions, input.startTime, input.endTime)) return '这段时间与已有加班记录重叠，请调整后再保存。'
     if (storedActive && overtimeIntervalsOverlap(input.startTime, input.endTime, storedActive.startTime, nowTime)) return '这段时间与正在进行的加班重叠，请调整后再保存。'
-    const sessionRate = calculateRates(salaryProfileForBusinessDate(
-      profile,
+    const previousRate = originalOvertimeSecondRate(editingSession, input.startTime)
+    const sessionRate = previousRate ?? calculateRates(salaryProfileForBusinessDate(
+      loadProfile(),
       toLocalDateValue(new Date(input.startTime)),
       attendanceRecords,
       holidaySettings,
@@ -223,9 +227,9 @@ export function Overtime() {
     setAchievementSaveFailed(false)
     setPage(1)
     setBackfillDialogOpen(false)
-    setFinishNotice({ id: session.id, message: `补记成功：${formatDuration(session.durationSeconds)} · ¥${session.earnedAmount.toFixed(2)}` })
+    setFinishNotice({ id: session.id, message: `${editingSession ? '修改成功' : '补记成功'}：${formatDuration(session.durationSeconds)} · ¥${session.earnedAmount.toFixed(2)}` })
     return null
-  }, [attendanceRecords, holidaySettings, profile, sessions])
+  }, [attendanceRecords, holidaySettings, profile, sessions, editingSession])
 
   const persistCompletedStop = useCallback((expectedStartTime: string): boolean => {
     const latest = prepareOvertimeWebStop(expectedStartTime)
@@ -456,10 +460,10 @@ export function Overtime() {
 
     <AchievementPanel kind="overtime" state={achievementState} activeSeconds={liveSeconds} saveFailed={achievementSaveFailed}/>
 
-    <div className="list-section"><div className="section-title"><h2>加班记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有加班记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const visual = overtimeVisual(overtimeSessionVisualLevel(session.durationSeconds)); return <article className="list-card overtime-record" key={session.id}><div className={`item-avatar overtime-avatar level-${overtimeSessionVisualLevel(session.durationSeconds)}`} role="img" aria-label={`本次状态：${visual.label}`} title={`本次状态：${visual.label}`}><visual.Icon size={19}/></div><div className="item-main"><b>{formatStart(session.startTime)}</b><span>至 {formatStart(session.endTime)} · {formatDuration(session.durationSeconds)} · {overtimePayLabel(session)}</span></div><div className="item-result"><small>本次加班</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div><button className="icon-button overtime-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次加班记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
+    <div className="list-section"><div className="section-title"><h2>加班记录</h2><span>{sessions.length} 次</span></div>{sessions.length === 0 ? <div className="empty">还没有加班记录。</div> : <><div className="item-list">{visibleSessions.map(session => { const visual = overtimeVisual(overtimeSessionVisualLevel(session.durationSeconds)); return <article className="list-card overtime-record" key={session.id}><div className={`item-avatar overtime-avatar level-${overtimeSessionVisualLevel(session.durationSeconds)}`} role="img" aria-label={`本次状态：${visual.label}`} title={`本次状态：${visual.label}`}><visual.Icon size={19}/></div><div className="item-main"><b>{formatStart(session.startTime)}</b><span>至 {formatStart(session.endTime)} · {formatDuration(session.durationSeconds)} · {overtimePayLabel(session)}</span></div><div className="item-result"><small>本次加班</small><strong>¥{session.earnedAmount.toFixed(2)}</strong></div>{!session.segments?.length && <button className="icon-button" type="button" onClick={() => { setEditingSession(session); setBackfillDialogOpen(true) }} aria-label="修改这次加班记录" title="修改时间与金额"><Pencil size={16}/></button>}<button className="icon-button overtime-delete-button" type="button" onClick={() => setPendingDelete({ type: 'session', session })} aria-label="删除这次加班记录" title="删除"><Trash2 size={16}/></button></article> })}</div><Pagination total={sessions.length} page={currentPage} onPageChange={setPage}/></>}</div>
 
     <OvertimeStartDialog open={startDialogOpen} onStart={start} onCancel={closeStartDialog}/>
-    <OvertimeBackfillDialog open={backfillDialogOpen} onSave={saveBackfill} onCancel={closeBackfillDialog}/>
+    <OvertimeBackfillDialog editing={editingSession} open={backfillDialogOpen} onSave={saveBackfill} onCancel={closeBackfillDialog}/>
     <ConfirmDialog open={Boolean(pendingDelete)} title={pendingDelete?.type === 'all' ? '这些加班证据也要全部删掉吗？' : '真的要删掉这次加班记录吗？'} message={pendingDelete ? `${pendingDelete.type === 'session' ? `${formatStart(pendingDelete.session.startTime)} · ${overtimePayLabel(pendingDelete.session)} · ¥${pendingDelete.session.earnedAmount.toFixed(2)}。` : ''}计时记录会被删除，但已点亮勋章和成就累计时长会永久保留。` : undefined} confirmLabel="删掉，当没加过" cancelLabel="留着，都是证据" onConfirm={confirmDelete} onCancel={cancelDelete}/>
     {finishNotice && <FinishToast key={finishNotice.id} message={finishNotice.message} onClose={closeFinishNotice}/>}
   </section>

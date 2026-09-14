@@ -94,7 +94,7 @@ export function Attendance() {
   }, [searchValue, setSearchParams])
 
   const saveRecord = useCallback((record: AttendanceRecord): boolean => {
-    const next = upsertAttendanceRecord(records, record)
+    const next = upsertAttendanceRecord(loadAttendanceRecords(), record)
     if (!saveAttendanceRecords(next)) return false
     setRecords(next)
     closeSelectedDate()
@@ -103,8 +103,9 @@ export function Attendance() {
 
   const resetRecord = useCallback((): boolean => {
     if (!selectedDate) return false
-    const next = records.filter(record => record.date !== selectedDate)
-    if (next.length === records.length) {
+    const current = loadAttendanceRecords()
+    const next = current.filter(record => record.date !== selectedDate)
+    if (next.length === current.length) {
       closeSelectedDate()
       return true
     }
@@ -115,11 +116,11 @@ export function Attendance() {
   }, [closeSelectedDate, selectedDate, records])
 
   return <section className="page attendance-page">
-    <header className="page-header"><div><p className="eyebrow">ATTENDANCE & SALARY</p><h1>薪苦日历</h1><p>上班、请假还是放假，每一天都按真实出勤算钱；正常出勤也可以按倍率或固定金额调整当天工资。</p></div><div className="roster-actions"><Button variant="secondary" onClick={() => navigate('/roster')}><CalendarClock size={16}/>排班设置</Button><VacationSettingsButton/></div></header>
+    <header className="page-header"><div><p className="eyebrow">ATTENDANCE & SALARY</p><h1>薪苦日历</h1><p>上班、请假还是放假，先选日期，再确认这一天的安排和工资。临时变动只需修改当天。</p></div><div className="roster-actions"><Button variant="secondary" onClick={() => navigate('/roster')}><CalendarClock size={16}/>排班设置</Button><VacationSettingsButton/></div></header>
     <section className="attendance-holiday-settings" aria-labelledby="china-holiday-settings-title"><span className="attendance-holiday-settings-icon"><Landmark size={18}/></span><div><strong id="china-holiday-settings-title">自动识别中国大陆节假日</strong><small>识别法定休假与调休补班，不自动设置加班倍率；手工出勤优先，排班用户可在排班设置中选择是否跟随。</small>{holidaySettings.enabled && <em>从 {holidaySettings.effectiveFrom} 起生效，不重算更早的历史工资</em>}{holidaySettingsError && <em id="china-holiday-settings-error" className="attendance-save-error" role="alert">{holidaySettingsError}</em>}</div><Switch checked={holidaySettings.enabled} onCheckedChange={toggleChinaHolidayCalendar} ariaLabel="自动识别中国大陆节假日"/></section>
     <AttendanceCalendar profile={profile} records={records} workRecords={workRecords} holidaySettings={holidaySettings} dimension={dimension} anchor={anchor} onChange={(nextDimension, nextAnchor) => { setDimension(nextDimension); setAnchor(nextAnchor) }} onSelectDate={selectDate}/>
     <div className="attendance-stats"><article><span><CalendarDays size={17}/></span><small>本月手工调整</small><strong>{monthStats.adjusted}<i>天</i></strong></article><article><span><CalendarClock size={17}/></span><small>本月请假 / 特殊出勤</small><strong>{monthStats.leave}<i>天</i></strong></article><article><span><Coffee size={17}/></span><small>本月放假</small><strong>{monthStats.holiday}<i>天</i></strong></article><article><span><CircleOff size={17}/></span><small>本月不计薪</small><strong>{monthStats.unpaid}<i>天</i></strong></article></div>
-    <p className="attendance-help">未启用排班时：手工出勤 ＞ 假期安排 ＞ 中国大陆节假日与补班 ＞ 固定工作周或大小周。启用后按班次安排，是否跟随假期由排班设置决定，临时调班优先于常规排班。半天假按“半日正常工资＋半日请假工资”计算，请假固定金额只作用于请假半日。</p>
+    <p className="attendance-help">平时按已保存的安排计算，有变化时点选日期。请半天假只调整请假半天的工资，保存前可以查看当天金额。</p>
     <AttendanceDialog open={selectedDate !== null} date={selectedDate ?? toLocalDateValue()} record={selectedRecord} onSave={saveRecord} onReset={resetRecord} onCancel={closeSelectedDate}/>
   </section>
 }

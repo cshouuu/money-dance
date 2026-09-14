@@ -1,8 +1,10 @@
 import { rosterRateHours } from './roster'
-import { DEFAULT_PROFILE, vacationForDate, getBreakPeriods, parseClock, workProfileForDate, workStageForDate, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
+import { DEFAULT_PROFILE, rosterForDate, vacationForDate, getBreakPeriods, parseClock, workProfileForDate, workStageForDate, type BreakPeriod, type LivingCostHistoryEvent, type LivingCostHistoryMode, type PaydayAdjustment, type SalaryDeduction, type SalaryProfile } from '@salary-flow/core'
 import { getMonthlyPaidDayCount, getWeekStartDateValue, loadAttendanceRecords, loadChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
+import type { WorkSettingsSnapshot } from '@salary-flow/core'
+import { isSessionLocalDate } from './sessionBusinessDate'
 
 /** Settings edit the active job, or the nearest upcoming job during a gap. */
 export function settingsWorkStage(profile: SalaryProfile, date = toLocalDateValue()) {
@@ -14,8 +16,9 @@ export function settingsWorkStage(profile: SalaryProfile, date = toLocalDateValu
 
 function settingsProfile(profile: SalaryProfile, date: string): SalaryProfile {
   const stage = settingsWorkStage(profile, date)
-  if (!stage?.profile) return profile
-  return { ...profile, ...stage.profile, vacations: profile.vacations, rosters: profile.rosters, workJourney: profile.workJourney,
+  const effective = stage && stage.startDate > date ? stage.startDate : date
+  if (profile.workJourney && !stage?.profile) return profile
+  return { ...profile, ...workProfileForDate(profile, effective), vacations: profile.vacations, rosters: profile.rosters, workJourney: profile.workJourney,
     includeLivingCost: profile.includeLivingCost, monthlyLivingCost: profile.monthlyLivingCost,
     livingCostMode: profile.livingCostMode, livingCostHistory: profile.livingCostHistory }
 }
@@ -24,7 +27,7 @@ function settingsProfile(profile: SalaryProfile, date: string): SalaryProfile {
 export function withSettingsStage(profile: SalaryProfile, date = toLocalDateValue()): SalaryProfile {
   if (!profile.workJourney) return profile
   const stage = settingsWorkStage(profile, date)
-  const { workJourney, vacations: _vacations, rosters: _rosters, calculationHours: _hours, ...snapshot } = profile
+  const { workJourney, workSettingsHistory: _history, vacations: _vacations, rosters: _rosters, calculationHours: _hours, ...snapshot } = profile
   return { ...profile, workJourney: { ...workJourney,
     stages: workJourney.stages.map(item => item.id === stage?.id ? { ...item, profile: snapshot } : item) } }
 }
@@ -169,7 +172,11 @@ export function salaryProfileForBusinessDate(
   const vacationMonth = monthPlans.length > 0
   if (vacationMonth) attendanceRecords = attendanceRecords.filter(record => !vacationForDate(profile, record.date))
   if (datedProfile.monthlyRateBasis !== 'actual-calendar' && !(vacationMonth && (['monthly', 'annual'].includes(profile.salaryType) || monthPlans.some(plan => plan.payMode === 'monthly')))) return datedProfile
-  const paidDays = getMonthlyPaidDayCount({ ...datedProfile, workJourney: undefined }, toLocalDateTime(date), attendanceRecords, holidaySettings)
+  // A full-month denominator, with this job's dated workweek changes, keeps
+  // a normal full month's salary constant when its schedule changes midmonth.
+  const paidDays = getMonthlyPaidDayCount({ ...datedProfile, workJourney: undefined,
+    workSettingsHistory: profile.workSettingsHistory?.filter(item => item.stageId === (stage?.id ?? null)).map(item => ({ ...item, stageId: null })),
+  }, toLocalDateTime(date), attendanceRecords, holidaySettings)
   return paidDays > 0 ? { ...datedProfile, monthlyWorkDays: paidDays } : datedProfile
 }
 
@@ -286,7 +293,7 @@ export function loadProfile(now = new Date()): SalaryProfile {
   return settingsProfile(migrated, toLocalDateValue(now))
 }
 
-export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryProfile | null {
+export function saveProfile(profile: SalaryProfile, now = new Date(), updateStage = true): SalaryProfile | null {
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
   // A stale settings tab may not overwrite a journey edited in another tab.
   if (profileFingerprint(stored.workJourney) !== profileFingerprint(profile.workJourney) || profileFingerprint(stored.vacations) !== profileFingerprint(profile.vacations) || profileFingerprint(stored.rosters) !== profileFingerprint(profile.rosters)) return null
@@ -306,11 +313,61 @@ export function saveProfile(profile: SalaryProfile, now = new Date()): SalaryPro
     monthlyRateBasis: normalizeMonthlyRateBasis(profile.monthlyRateBasis, DEFAULT_PROFILE.monthlyRateBasis),
     salaryDeductions: normalizeSalaryDeductions(profile.salaryDeductions),
   }, now, previousConfiguration)
-  if (next.workJourney) {
+  if (next.workJourney && updateStage) {
     const updated = withSettingsStage(next, toLocalDateValue(now)).workJourney!
     next.workJourney = { ...updated, revision: updated.revision + 1 }
+  } else if (next.workJourney) {
+    const stage = settingsWorkStage(next, toLocalDateValue(now))
+    next.workJourney = { ...next.workJourney, revision: next.workJourney.revision + 1,
+      stages: next.workJourney.stages.map(item => item.id === stage?.id && item.profile
+        ? { ...item, profile: { ...item.profile, salaryEffectiveDate: next.salaryEffectiveDate, salaryHistoryMode: next.salaryHistoryMode } } : item) }
   }
   return saveJSON(keys.profile, next) ? next : null
+}
+
+/** Only job rules are versioned here; personal expenses and ledger start are separate. */
+export function workSettingsSnapshot(profile: SalaryProfile): WorkSettingsSnapshot {
+  const { salary, salaryType, payday, paydayAdjustment, salaryDeductions, monthlyRateBasis, monthlyWorkDays,
+    workDaysPerWeek, workWeekMode, alternatingAnchorDate, alternatingAnchorType, workStartTime, workEndTime,
+    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode } = profile
+  return structuredClone({ salary, salaryType, payday, paydayAdjustment, salaryDeductions, monthlyRateBasis, monthlyWorkDays,
+    workDaysPerWeek, workWeekMode, alternatingAnchorDate, alternatingAnchorType, workStartTime, workEndTime,
+    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode })
+}
+
+/** A revision replaces rules up to the next saved revision, never earlier dates. */
+export function withDatedWorkSettings(previous: SalaryProfile, draft: SalaryProfile, effectiveFrom: string, now = new Date()): SalaryProfile {
+  if (!isSessionLocalDate(effectiveFrom) || effectiveFrom < '1900-01-01') throw new Error('请选择有效的生效日期。')
+  const stage = settingsWorkStage(previous, toLocalDateValue(now))
+  if (previous.workJourney && !stage?.profile) throw new Error('当前没有可调整的工作，请先在工作旅程中建立工作。')
+  if (stage && (effectiveFrom < stage.startDate || (stage.endDate && effectiveFrom > stage.endDate))) throw new Error('生效日期需要在这段工作的任职日期内。')
+  const stageId = stage?.id ?? null
+  const history = structuredClone(previous.workSettingsHistory ?? [])
+  if (!history.some(item => item.stageId === stageId)) {
+    history.push({ stageId, effectiveFrom: '1900-01-01', settings: workSettingsSnapshot(stage?.profile ?? previous) })
+  }
+  const nextHistory = history.filter(item => item.stageId !== stageId || item.effectiveFrom !== effectiveFrom)
+  nextHistory.push({ stageId, effectiveFrom, settings: workSettingsSnapshot(draft) })
+  let next: SalaryProfile = { ...draft, workJourney: previous.workJourney, workSettingsHistory: nextHistory.sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)) }
+  const previousCost = currentLivingCostConfiguration(previous)
+  if (profileFingerprint(previousCost) !== profileFingerprint(currentLivingCostConfiguration(draft))) {
+    if (!next.livingCostHistory.length) next.livingCostHistory = [{ version: 1, effectiveFrom: '1900-01-01', ...previousCost }]
+    next = withLivingCostHistoryEvent(next, now, previousCost)
+  }
+  const dates = new Set([effectiveFrom, ...(next.rosters ?? []).filter(item => item.stageId === stageId && item.effectiveFrom > effectiveFrom).map(item => item.effectiveFrom)])
+  for (const date of dates) {
+    if (rosterForDate(next, date)?.pay.mode === 'salary' && !['monthly', 'annual'].includes(workProfileForDate(next, date).salaryType)) {
+      throw new Error('排班正在沿用月薪或年薪。改为日薪或时薪前，请先在排班中调整基本工资的计薪方式。')
+    }
+  }
+  return next
+}
+
+export function saveDatedProfile(expected: SalaryProfile, draft: SalaryProfile, effectiveFrom: string, now = new Date()): SalaryProfile | null {
+  if (profileFingerprint(loadProfile(now)) !== profileFingerprint(expected)) return null
+  const next = withDatedWorkSettings(expected, draft, effectiveFrom, now)
+  const saved = saveProfile(next, now, false)
+  return saved ? settingsProfile(saved, toLocalDateValue(now)) : null
 }
 
 /** Object key order is not a data change (normalization can reorder fields). */
