@@ -161,7 +161,7 @@ export function salaryProfileForBusinessDate(
     livingCostMode: configuration.mode === 'daily-ledger' ? 'daily-ledger' : 'deduct',
     monthlyLivingCost: configuration.monthlyAmount,
   }
-  const calculationHours = rosterRateHours(datedProfile, date)
+  const calculationHours = rosterRateHours(datedProfile, date, attendanceRecords, holidaySettings)
   if (calculationHours) return { ...datedProfile, calculationHours }
   const monthPlans = profile.vacations?.filter(plan => {
     if (profile.workJourney ? plan.stageId !== stage?.id : plan.stageId !== null) return false

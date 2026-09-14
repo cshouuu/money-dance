@@ -56,7 +56,7 @@ export interface RosterPlan {
   overrides: { date: string; shifts: ShiftTemplate[]; amount?: number; reason: string; keepVacationPay?: boolean }[]
   respectVacations: boolean
   respectHolidays: boolean
-  pay: { mode: 'salary' | 'hourly' | 'shift'; value: number; basis: 'planned' | 'actual'; monthlyHours: number; overtime: 'manual' | 'unpaid' | 'multiplier' | 'fixed'; overtimeValue: number }
+  pay: { mode: 'salary' | 'hourly' | 'shift'; value: number; basis: 'planned' | 'actual'; monthlyHours: number; overtime: 'manual' | 'unpaid' | 'multiplier' | 'fixed'; overtimeValue: number; preserveMonthlySalary?: boolean }
 }
 
 export function rosterForDate(profile: SalaryProfile, date: string): RosterPlan | undefined {
@@ -84,7 +84,7 @@ export interface SalaryProfile {
   workSettingsHistory?: WorkSettingsChange[]
   rosters?: RosterPlan[]
   /** Derived rate inputs; never persisted as a job configuration. */
-  calculationHours?: { day: number; month: number; hourly?: number; monthlyAmount?: number }
+  calculationHours?: { day: number; month: number; hourly?: number; monthlyAmount?: number; salaryDayAmount?: number }
 
   vacations?: VacationPlan[]
   /** Opt-in work history; absent preserves the legacy single-job behavior. */

@@ -32,7 +32,7 @@ function templatePlan(profile: SalaryProfile, stageId: string | null): RosterPla
   return existing ? { ...clone(existing), id: createId(), effectiveFrom: future, overrides: existing.overrides.filter(item => item.date >= future) } : {
     id: createId(), stageId, effectiveFrom: start, enabled: true, mode: 'manual', anchorDate: start,
     templates: [first], cycle: [[first.id], [], [], []], overrides: [], respectVacations: true, respectHolidays: false,
-    pay: { mode: ['monthly','annual'].includes(stage?.profile?.salaryType ?? profile.salaryType) ? 'salary' : 'hourly', value: 0, basis: 'planned', monthlyHours: 0, overtime: 'manual', overtimeValue: 1.5 },
+    pay: { mode: ['monthly','annual'].includes(stage?.profile?.salaryType ?? profile.salaryType) ? 'salary' : 'hourly', value: 0, basis: 'planned', monthlyHours: 0, overtime: 'manual', overtimeValue: 1.5, preserveMonthlySalary: true },
   }
 }
 

@@ -45,7 +45,7 @@ jobs:
           npx cap add android
           npx cap sync android
           node native/android/prepare-android.mjs
-          grep -Fq 'applicationId "com.cshouuu.moneydance.usability"' android/app/build.gradle
+          grep -Fq 'applicationId "com.cshouuu.moneydance.usability.v2"' android/app/build.gradle
       - name: Build test APK
         working-directory: apps/web/android
         run: |
@@ -57,7 +57,7 @@ jobs:
           cp -R apps/web/dist/. preview-site/
           cp apps/web/android/app/build/outputs/apk/debug/app-debug.apk preview-site/test-build/MoneyDance-usability.apk
           cp preview-site/test-build/MoneyDance-usability.apk "preview-site/test-build/MoneyDance-usability-v2-${GITHUB_SHA::7}.apk"
-          node -e "require('node:fs').writeFileSync('preview-site/test-build/build.json', JSON.stringify({commit:process.env.GITHUB_SHA,version:'0.4.0-usability.'+process.env.GITHUB_RUN_NUMBER,appId:'com.cshouuu.moneydance.usability',environment:'usability'}))"
+          node -e "require('node:fs').writeFileSync('preview-site/test-build/build.json', JSON.stringify({commit:process.env.GITHUB_SHA,version:'0.4.0-usability.'+process.env.GITHUB_RUN_NUMBER,appId:'com.cshouuu.moneydance.usability.v2',environment:'usability'}))"
           cd preview-site/test-build
           sha256sum MoneyDance-usability.apk > MoneyDance-usability.apk.sha256
           test "$(stat -c%s MoneyDance-usability.apk)" -lt 25000000
