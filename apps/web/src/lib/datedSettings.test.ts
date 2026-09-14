@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PROFILE, isEmployedOn, workProfileForDate, type SalaryProfile, type WorkStage } from '@salary-flow/core'
-import { loadProfile, saveDatedProfile, salaryProfileForBusinessDate, withDatedWorkSettings } from './profile'
+import { loadProfile, saveDatedProfile, salaryProfileForBusinessDate, withDatedWorkSettings, withSettingsStage } from './profile'
 import { saveChinaHolidaySettings } from './attendance'
 import { getSummaryRange, summarizeLedger } from './ledger'
 import { keys, loadJSON, saveJSON } from './storage'
 import { commitJourney, deleteWorkStage, profileSnapshot, undoWorkStageDeletion } from './workJourney'
 import { calculatePaidTimeEarnings } from './paidTime'
+import { getMonthlyWorkStats } from './monthlyStats'
 import { loadTimerPlans, TIMER_PLANS_KEY } from './timerPlans'
 
 const now = new Date(2026, 8, 30, 23)
@@ -27,6 +28,103 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('dated salary and attendance settings', () => {
+  it.each([false, true])('previews a narrowed salary history exactly as the saved monthly total, journey=%s', journey => {
+    saveJSON(keys.profile, journey ? { ...base, workJourney: { version: 1, revision: 1, stages: [stage] } } : base)
+    vi.setSystemTime(new Date(2026, 8, 14, 14, 30))
+    const before = loadProfile()
+    const original = structuredClone(before)
+    const draft = { ...before, salary: 5000, salaryEffectiveDate: '2026-09-14', salaryHistoryMode: 'none' as const }
+    const preview = withSettingsStage(withDatedWorkSettings(before, draft, '2026-09-14'))
+    expect(before).toEqual(original)
+    const predicted = getMonthlyWorkStats(preview, [], [], [], new Date()).income
+    expect(predicted).toBeCloseTo(4.5 / 8 * 5000 / 22)
+    const saved = saveDatedProfile(before, draft, '2026-09-14')!
+    expect(getMonthlyWorkStats(saved, [], [], [], new Date()).income).toBeCloseTo(predicted)
+    expect(salaryProfileForBusinessDate(saved, '2026-09-11').salary).toBe(4000)
+  })
+  it.each([false, true])('keeps accumulated monthly income when a legacy non-backfilled salary is changed, journey=%s', journey => {
+    const legacy = { ...base, salaryHistoryMode: 'none' as const, salaryEffectiveDate: '2026-09-01' }
+    saveJSON(keys.profile, journey ? { ...legacy, workJourney: { version: 1, revision: 1, stages: [{ ...stage, startDate: '2026-09-01', profile: profileSnapshot(legacy) }] } } : legacy)
+    const editTime = new Date(2026, 8, 14, 14, 30)
+    vi.setSystemTime(editTime)
+    const before = loadProfile()
+    const beforeStats = getMonthlyWorkStats(before, [], [], [], editTime)
+    const previousDays = 9 * 4000 / 22
+    const currentDayFraction = 4.5 / 8
+    expect(beforeStats.income).toBeCloseTo(previousDays + currentDayFraction * 4000 / 22)
+
+    // Saving the default settings form changes the legacy mode to custom,
+    // but its original automatic salary start date must remain unchanged.
+    const saved = saveDatedProfile(before, { ...before, salary: 5000, salaryHistoryMode: 'custom' }, '2026-09-14')!
+    expect(saved.salaryEffectiveDate).toBe('2026-09-01')
+    const afterStats = getMonthlyWorkStats(loadProfile(), [], [], [], editTime)
+    expect(afterStats.income).toBeCloseTo(previousDays + currentDayFraction * 5000 / 22)
+    expect(afterStats.workedSeconds).toBe(beforeStats.workedSeconds)
+    expect(afterStats.progress).toBe(beforeStats.progress)
+    expect(salaryProfileForBusinessDate(saved, '2026-09-11').salary).toBe(4000)
+
+    // Editing again on a later day must not move the start or rewrite the
+    // first raise; all three salary periods contribute to this month's total.
+    const nextDay = new Date(2026, 8, 15, 14, 30)
+    vi.setSystemTime(nextDay)
+    const reloaded = loadProfile()
+    expect(saveDatedProfile(reloaded, { ...reloaded, salary: 6000 }, '2026-09-15')).not.toBeNull()
+    const repeated = loadProfile()
+    expect(repeated.salaryEffectiveDate).toBe('2026-09-01')
+    expect(getMonthlyWorkStats(repeated, [], [], [], nextDay).income).toBeCloseTo(previousDays + 5000 / 22 + currentDayFraction * 6000 / 22)
+    expect(salaryProfileForBusinessDate(repeated, '2026-09-14').salary).toBe(5000)
+  })
+  it('keeps the first-use date when a salary saved without backfill is edited on a later day', () => {
+    data.delete(keys.profile)
+    vi.setSystemTime(new Date(2026, 8, 1, 8))
+    const first = loadProfile()
+    expect(saveDatedProfile(first, { ...first, salary: 4000 }, '2026-09-01')).not.toBeNull()
+    vi.setSystemTime(new Date(2026, 8, 14, 14, 30))
+    const before = loadProfile()
+    expect(before.salaryHistoryMode).toBe('none')
+    expect(before.salaryEffectiveDate).toBe('2026-09-01')
+    expect(saveDatedProfile(before, { ...before, salary: 5000, salaryHistoryMode: 'custom' }, '2026-09-14')).not.toBeNull()
+    expect(loadProfile().salaryEffectiveDate).toBe('2026-09-01')
+    expect(getMonthlyWorkStats(loadProfile(), [], [], [], new Date()).income).toBeCloseTo(9 * 4000 / 22 + 4.5 / 8 * 5000 / 22)
+  })
+  it.each([false, true])('corrects a job salary across its existing dates without restarting monthly income, dated raises=%s', datedRaises => {
+    const legacy = { ...base, salaryHistoryMode: 'none' as const, salaryEffectiveDate: '2026-09-01' }
+    const job = { ...stage, startDate: '2026-09-01', profile: profileSnapshot(legacy) }
+    saveJSON(keys.profile, { ...legacy, workJourney: { version: 1, revision: 1, stages: [job] } })
+    vi.setSystemTime(new Date(2026, 8, 14, 14, 30))
+    if (datedRaises) {
+      const initial = loadProfile()
+      expect(saveDatedProfile(initial, { ...initial, salary: 4500 }, '2026-09-07')).not.toBeNull()
+    }
+    const before = loadProfile()
+    const oldStats = getMonthlyWorkStats(before, [], [], [], new Date())
+    const corrected = { ...before.workJourney!.stages[0]!, profile: { ...job.profile, salary: 5000 } }
+    return commitJourney(before, [corrected]).then(error => {
+      expect(error).toBeNull()
+      const saved = loadProfile()
+      expect(saved.salaryEffectiveDate).toBe('2026-09-01')
+      expect(saved.workJourney!.stages[0]!.startDate).toBe('2026-09-01')
+      expect(salaryProfileForBusinessDate(saved, '2026-09-01').salary).toBe(5000)
+      const stats = getMonthlyWorkStats(saved, [], [], [], new Date())
+      expect(stats.income).toBeCloseTo((9 + 4.5 / 8) * 5000 / 22)
+      expect(stats.workedSeconds).toBe(oldStats.workedSeconds)
+      expect(stats.progress).toBe(oldStats.progress)
+      expect(saved.workSettingsHistory ?? []).toEqual([])
+    })
+  })
+  it('keeps dated salary and monthly income when only job details are edited', async () => {
+    saveJSON(keys.profile, { ...base, workJourney: { version: 1, revision: 1, stages: [stage] } })
+    const before = loadProfile()
+    expect(saveDatedProfile(before, { ...before, salary: 5000 }, '2026-09-16')).not.toBeNull()
+    const raised = loadProfile()
+    const income = getMonthlyWorkStats(raised, [], [], [], now).income
+    const renamed = { ...raised.workJourney!.stages[0]!, name: '改名后的工作', company: '新公司名称', role: '新岗位名称' }
+    expect(await commitJourney(raised, [renamed])).toBeNull()
+    const saved = loadProfile()
+    expect(saved.salaryEffectiveDate).toBe('2026-08-01')
+    expect(saved.workSettingsHistory).toEqual(raised.workSettingsHistory)
+    expect(getMonthlyWorkStats(saved, [], [], [], now).income).toBeCloseTo(income)
+  })
   it.each([false, true])('preserves previous salary in ledger and timed earnings, journey=%s', journey => {
     saveJSON(keys.profile, journey ? { ...base, workJourney: { version: 1, revision: 1, stages: [stage] } } : base)
     const before = loadProfile()
