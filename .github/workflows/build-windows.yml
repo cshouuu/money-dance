@@ -53,6 +53,8 @@ jobs:
     env:
       ONNXRUNTIME_NODE_INSTALL: skip
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Tests temporarily switch TZ; an explicit baseline restores correctly on Windows.
+      TZ: UTC
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -80,7 +82,11 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
           done
       - name: Verify packaged native runtime and restart persistence
+        if: runner.os == 'Windows'
         run: node apps/desktop/scripts/verify-package.cjs
+      - name: Install DMG and verify runtime and restart persistence
+        if: runner.os == 'macOS'
+        run: bash apps/desktop/scripts/verify-mac-dmg.sh
       - name: Desktop integration smoke test
         run: npm run start -w @salary-flow/desktop
         env:

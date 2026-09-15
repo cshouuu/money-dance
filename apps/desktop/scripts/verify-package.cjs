@@ -45,7 +45,7 @@ async function connect(url) {
 }
 async function verify() {
   const appDir = process.platform === 'darwin' ? `mac${process.arch === 'arm64' ? '-arm64' : ''}/MoneyDance.app/Contents/MacOS/MoneyDance` : `win${process.arch === 'arm64' ? '-arm64' : ''}-unpacked/MoneyDance.exe`;
-  const executable = path.resolve(__dirname, '../release', appDir);
+  const executable = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, '../release', appDir);
   await fs.access(executable);
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'moneydance-package-'));
   const fixture = path.join(profile, 'photo.png');

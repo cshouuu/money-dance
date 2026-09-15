@@ -13,6 +13,13 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   const js = code => mainWindow.webContents.executeJavaScript(code);
   const petJS = code => petWindow.webContents.executeJavaScript(code);
   const errors = [];
+  // Hosted desktops can enable Reduce Motion globally. Exercise animation with
+  // a deterministic media preference; the app's reduced-motion setting is tested below.
+  for (const win of [mainWindow, petWindow]) {
+    console.log('Smoke display preferences:', await win.webContents.executeJavaScript("({hidden:document.hidden,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches})"));
+    win.webContents.debugger.attach('1.3');
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+  }
   for (const win of [mainWindow, petWindow]) win.webContents.on('console-message', event => {
     if (event.level === 'error') errors.push(event.message);
   });
@@ -46,6 +53,7 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   await until(() => js("!!document.querySelector('.pet-illustrated image')"), 'illustrated pose atlas renders');
   assert.equal(await js("!!document.querySelector('.pet-prop')"), false, 'no emoji accessories on the character');
   const firstPose = await js("document.querySelector('.pet-character').dataset.pose");
+  console.log('Studio animation state:', await js("window.moneyDanceDesktop.getState().then(s=>({hidden:document.hidden,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,setting:s.settings.reducedMotion,pose:document.querySelector('.pet-character').dataset.pose}))"));
   await until(() => js(`document.querySelector('.pet-character').dataset.pose !== ${JSON.stringify(firstPose)}`), 'work changes its actual artwork frame');
   await js("document.querySelector('.pet-reaction-picker button:nth-child(1)').click()");
   await until(() => js("document.querySelector('.pet-character').dataset.motion === 'love'"), 'petting has its own performance');

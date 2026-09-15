@@ -45,7 +45,8 @@
       "node_modules/onnxruntime-node/**",
       "node_modules/@img/**",
       "node_modules/sharp/**",
-      "node_modules/onnxruntime-web/**"
+      "node_modules/onnxruntime-web/**",
+      "node_modules/onnxruntime-common/**"
     ],
     "win": {
       "target": [
