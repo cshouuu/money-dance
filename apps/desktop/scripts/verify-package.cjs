@@ -105,8 +105,12 @@ async function verify() {
       }
       if (process.platform === 'darwin') {
         assert.equal(await main.evaluate("!!process.mainModule.require('electron').Menu.getApplicationMenu()"), true, 'macOS application menu exists');
+        // The third launch deliberately visits /pet. Identify the actual main
+        // window before hiding it instead of assuming it is still on the home URL.
+        const windowId = await main.evaluate("process.mainModule.require('electron').BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith('moneydance://app/') && !w.webContents.getURL().startsWith('moneydance://app/pet.html')).id");
+        await main.evaluate(`process.mainModule.require('electron').BrowserWindow.fromId(${windowId}).hide()`);
         await main.evaluate("process.mainModule.require('electron').app.emit('activate')");
-        assert.equal(await main.evaluate("process.mainModule.require('electron').BrowserWindow.getAllWindows().some(w=>w.webContents.getURL()==='moneydance://app/' && w.isVisible())"), true, 'Dock activation restores the main window');
+        assert.equal(await main.evaluate(`process.mainModule.require('electron').BrowserWindow.fromId(${windowId}).isVisible()`), true, 'Dock activation restores the main window');
       }
       console.log(`Packaged ${process.platform}-${process.arch} test ${run + 1}/3 passed.`);
       await main.call('Runtime.evaluate', { expression: "setTimeout(() => process.mainModule.require('electron').app.quit(), 100)" });
