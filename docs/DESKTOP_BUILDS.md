@@ -4,10 +4,10 @@
 
 | 设备 | 安装文件 | 标准 GitHub runner |
 | --- | --- | --- |
-| Windows 10/11，Intel / AMD 64 位 | `MoneyDance-0.4.4-windows-x64.exe` | `windows-latest` |
-| Windows 11 ARM，骁龙等 ARM64 电脑 | `MoneyDance-0.4.4-windows-arm64.exe` | `windows-11-arm` |
-| macOS 14+，Apple M 系列 | `MoneyDance-0.4.4-macos-arm64.dmg` | `macos-15` |
-| macOS 14+，Intel Mac | `MoneyDance-0.4.4-macos-x64.dmg` | `macos-15-intel` |
+| Windows 10/11，Intel / AMD 64 位 | `MoneyDance-0.4.5-windows-x64.exe` | `windows-latest` |
+| Windows 11 ARM，骁龙等 ARM64 电脑 | `MoneyDance-0.4.5-windows-arm64.exe` | `windows-11-arm` |
+| macOS 14+，Apple M 系列 | `MoneyDance-0.4.5-macos-arm64.dmg` | `macos-15` |
+| macOS 14+，Intel Mac | `MoneyDance-0.4.5-macos-x64.dmg` | `macos-15-intel` |
 
 每个 Mac 构建同时生成 ZIP，便于传输完整 `.app`。不要将 M 系列版和 Intel 版混用。Windows x64 原有安装与升级方式不变。
 
@@ -15,7 +15,7 @@
 
 工作流为 `.github/workflows/build-windows.yml`，Actions 中显示为 **Build Desktop Installers**。相关 PR、当前 feature 分支的代码推送或手动运行均可触发。使用公开仓库的标准 runner，没有大型付费 runner，也不会自动发布 Release。
 
-四个任务在各自平台和架构上安装依赖、运行测试、构建、启动真正的安装包内应用、验证本地抠图及动作包导入，并退出重启确认数据保留。桌宠集成测试覆盖真实窗口的贴边、气泡、透明像素命中、后台计薪及动作包互动。架构断言防止用 x64 模拟进程冒充 ARM64 验证。
+四个任务在各自平台和架构上安装依赖、运行测试、构建、启动真正的安装包内应用、验证本地抠图、动作包导入和三位内置桌宠，并退出重启确认动作包、角色选择与昵称保留。桌宠集成测试覆盖真实窗口的贴边、气泡、透明像素命中、后台计薪及动作包互动。架构断言防止用 x64 模拟进程冒充 ARM64 验证。
 
 成功后，在该次 Actions 运行页面下载 `money-dance-windows-arm64`、`money-dance-macos-arm64`、`money-dance-macos-x64` 等 artifact；包含安装器、SHA-256 校验文件和集成截图。产物保留 **7 天**，应及时下载。Actions 产物下载通常需要登录 GitHub；长期对外下载应在明确发布版本时将安装器上传到 GitHub Releases。
 
@@ -56,3 +56,12 @@ node apps/desktop/scripts/checksums.cjs
 ```
 
 Windows 可以交叉生成 ARM64 安装包，但不能在 x64 电脑上验证 ARM64 原生运行。Mac DMG 与 ad-hoc 签名由 macOS CI 完成。工作流明确 `publish: never`，不需要 Apple 密钥或发布令牌。
+
+
+## 0.4.5 多平台验证
+
+2026-09-15 已在 Windows ARM64、Apple Silicon 与 Intel Mac 原生 runner 上完成 0.4.5 构建。三个安装包均包含小薪、米粒、缓缓，安装后的三次启动验证和桌宠集成测试全部通过，下载后的 SHA-256 与云端产物一致。
+
+本次构建提交：`1e90867b238cbd1d31e473da6ad0ba43e1c1f379`。构建记录：https://github.com/cshouuu/money-dance/actions/runs/34941485128 。实际文件摘要及来源保存在本地 `apps/desktop/release/BUILD-INFO-0.4.5.json`。
+
+修正了测试程序在访问 `/pet` 后仍用首页 URL 识别 Mac 主窗口的问题。现在通过窗口 ID 验证隐藏后 Dock 能恢复同一窗口；没有跳过 Dock 检查。

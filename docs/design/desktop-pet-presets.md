@@ -34,3 +34,7 @@ Use case: stylized-concept. Create ONE production-ready transparent PNG desktop 
 - 桌面集成测试：三角色预览与确认、六组动作、页面重载、保存状态、昵称保留、原有动作包流程和桌面贴边/透明区点击穿透通过。
 - Windows x64 安装包内程序三次实际启动：照片提取、动作包保存重启、切换米粒再重启、包内 PNG 读取均通过。
 - 本次本机安装包：MoneyDance-0.4.5-windows-x64.exe；其他架构沿用仓库跨平台构建配置，本次未重新构建。
+
+## 后续多平台安装包更新
+
+0.4.5 的 Windows ARM64、Mac M 系列、Mac Intel 安装包已由 GitHub Actions 完成构建，并通过对应原生平台的安装、三次启动和桌宠集成验证。构建与安装说明见 ../DESKTOP_BUILDS.md。
