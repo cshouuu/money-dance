@@ -1,4 +1,12 @@
 export type PetMood = 'working' | 'slacking' | 'overtime' | 'rest'
+export interface PetLayoutMetrics { bodyWidth: number; bodyHeight: number; panelWidth: number; panelHeight: number }
+export interface PetWindowLayout {
+  bounds: { x: number; y: number; width: number; height: number }
+  anchor: { x: number; y: number }
+  body: { x: number; y: number; width: number; height: number }
+  panel: { x: number; y: number; width: number; height: number } | null
+  placement: string
+}
 export type PackState = 'idle' | PetMood | 'love' | 'celebrate'
 export interface PackClip {
   src: string; width: number; height: number; frameWidth: number; frameHeight: number
@@ -42,6 +50,8 @@ export interface DesktopBridge {
   openPage(route: string): Promise<void>
   setInteractive(value: boolean): void
   drag(phase: 'start' | 'move' | 'end'): void
+  layout(metrics: PetLayoutMetrics): Promise<PetWindowLayout>
+  onLayout(callback: (layout: PetWindowLayout) => void): () => void
   onState(callback: (state: Partial<DesktopState>) => void): () => void
   onNavigate(callback: (route: string) => void): () => void
   onProgress(callback: (progress: string) => void): () => void

@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('moneyDanceDesktop', {
   openPage: route => ipcRenderer.invoke('desktop:open', route),
   setInteractive: value => ipcRenderer.send('desktop:interactive', value),
   drag: phase => ipcRenderer.send('desktop:drag', phase),
+  layout: metrics => ipcRenderer.invoke('desktop:layout', metrics),
+  onLayout: callback => subscribe('desktop:layout-changed', callback),
   onState: callback => subscribe('desktop:state-changed', callback),
   onNavigate: callback => subscribe('desktop:navigate', callback),
   onProgress: callback => subscribe('desktop:progress', callback),

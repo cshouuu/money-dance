@@ -1,6 +1,6 @@
 {
   "name": "@salary-flow/desktop",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "MoneyDance Windows app and local desktop companion",
   "author": "MoneyDance",

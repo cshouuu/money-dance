@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { Worker } = require('node:worker_threads');
 const { createHash } = require('node:crypto');
-const { sanitizeSettings, sanitizeSnapshot, ROUTES, clampPosition } = require('./contract.cjs');
+const { sanitizeSettings, sanitizeSnapshot, ROUTES } = require('./contract.cjs');
+const { layoutPet, sanitizeMetrics } = require('./pet-layout.cjs');
 const { nextReminder, report } = require('./reminders.cjs');
 const { publicPack, bindingsFor, LIMIT: PACK_LIMIT } = require('./pet-pack.cjs');
 
@@ -18,12 +19,13 @@ if (!app.isPackaged && process.env.MONEY_DANCE_SMOKE === '1') app.setPath('userD
 let mainWindow, petWindow, tray, quitting = false, settings, saved = {}, snapshot = null, message = null;
 let image = null, candidate = null, worker = null, extracting = false, extractionGeneration = 0, dragStart = null, positionTimer;
 let memory = {}, lastMemorySave = 0;
+let petMetrics = { bodyWidth: 160, bodyHeight: 189, panelWidth: 0, panelHeight: 0 }, petLayout = null;
 let activePack = null, pendingPack = null, pendingPackBytes = null, packWorker = null, importingPack = false, packGeneration = 0;
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-pet.json');
 const imagePath = () => path.join(app.getPath('userData'), 'desktop-pet.png');
 const packPath = () => path.join(app.getPath('userData'), 'desktop-pet-pack.zip');
 function persist() {
-  const data = { settings, position: saved.position, petSource: saved.petSource, packBindings: saved.packBindings, memory: { ...memory, previous: undefined } };
+  const data = { settings, position: saved.position, positionVersion: 2, petSource: saved.petSource, packBindings: saved.packBindings, memory: { ...memory, previous: undefined } };
   fs.writeFileSync(`${settingsPath()}.tmp`, JSON.stringify(data), { mode: 0o600 });
   fs.renameSync(`${settingsPath()}.tmp`, settingsPath());
 }
@@ -88,17 +90,22 @@ function refreshTray() {
   ]));
 }
 function placePet() {
-  const displays = screen.getAllDisplays().map(display => display.workArea);
-  const primary = screen.getPrimaryDisplay().workArea;
-  displays.sort(a => a === primary ? -1 : 0);
-  const pos = clampPosition(saved.position, saved.position ? displays : [primary]);
-  petWindow.setPosition(pos.x, pos.y); saved.position = pos;
+  const primary = screen.getPrimaryDisplay();
+  const displays = screen.getAllDisplays().sort((a, b) => Number(b.id === primary.id) - Number(a.id === primary.id)).map(display => display.workArea);
+  petLayout = layoutPet(saved.position, displays, petMetrics);
+  saved.position = petLayout.anchor;
+  petWindow.setBounds(petLayout.bounds);
+  petWindow.webContents.send('desktop:layout-changed', petLayout);
+  return petLayout;
 }
 function applySettings() {
   if (settings.enabled) petWindow.showInactive(); else petWindow.hide();
   refreshTray(); persist(); broadcast();
 }
 function setupIPC() {
+  ipcMain.handle('desktop:layout', (event, metrics) => {
+    assertSender(event, 'pet'); petMetrics = sanitizeMetrics(metrics); return placePet();
+  });
   ipcMain.handle('desktop:import-pack', async event => {
     assertSender(event, 'main');
     if (extracting || importingPack) throw new Error('请等待当前素材处理完成');
@@ -180,12 +187,13 @@ function setupIPC() {
   });
   ipcMain.on('desktop:drag', (event, phase) => {
     try { assertSender(event, 'pet'); } catch { return; }
-    if (phase === 'start') dragStart = { cursor: screen.getCursorScreenPoint(), position: petWindow.getPosition() };
+    if (phase === 'start') dragStart = { cursor: screen.getCursorScreenPoint(), position: { ...saved.position } };
     if (phase === 'move' && dragStart) {
       const cursor = screen.getCursorScreenPoint();
-      petWindow.setPosition(dragStart.position[0] + cursor.x - dragStart.cursor.x, dragStart.position[1] + cursor.y - dragStart.cursor.y);
+      saved.position = { x: dragStart.position.x + cursor.x - dragStart.cursor.x, y: dragStart.position.y + cursor.y - dragStart.cursor.y };
+      placePet();
     }
-    if (phase === 'end') { dragStart = null; saved.position = { x: petWindow.getPosition()[0], y: petWindow.getPosition()[1] }; placePet(); persist(); }
+    if (phase === 'end') { dragStart = null; placePet(); persist(); }
   });
   ipcMain.handle('desktop:create-pet', async (event, mode) => {
     assertSender(event, 'main');
@@ -241,6 +249,10 @@ function setupIPC() {
 async function boot() {
   try { saved = JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { saved = {}; }
   settings = sanitizeSettings(saved.settings);
+  petMetrics = { bodyWidth: settings.size, bodyHeight: settings.size + 29, panelWidth: 0, panelHeight: 0 };
+  if (saved.positionVersion !== 2 && Number.isFinite(saved.position?.x) && Number.isFinite(saved.position?.y)) {
+    saved.position = { x: saved.position.x + 160, y: saved.position.y + 342 };
+  }
   memory = saved.memory && typeof saved.memory === 'object' ? saved.memory : {};
   memory.previous = undefined;
   if (saved.petSource === 'pack') {
@@ -277,7 +289,7 @@ async function boot() {
   });
   const webPreferences = { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, spellcheck: false };
   mainWindow = new BrowserWindow({ width: 1240, height: 850, minWidth: 850, minHeight: 620, title: 'MoneyDance', show: false, icon: path.join(__dirname, '../assets/icon.png'), webPreferences });
-  petWindow = new BrowserWindow({ width: 320, height: 360, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, maximizable: false, minimizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, show: false, webPreferences });
+  petWindow = new BrowserWindow({ width: settings.size, height: settings.size + 29, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, maximizable: false, minimizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, show: false, webPreferences });
   Menu.setApplicationMenu(null);
   for (const win of [mainWindow, petWindow]) harden(win);
   mainWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

@@ -18,6 +18,7 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   });
   await until(() => js("document.querySelector('h1') !== null && !!window.moneyDanceDesktop"), 'main window boots');
   await until(() => petJS("document.querySelector('.pet-toolbar') !== null"), 'transparent pet boots');
+  await require('./pet-layout-smoke.cjs').verifyLayout({ petWindow, js, petJS, until, output });
   assert.equal(await js('typeof require'), 'undefined');
   assert.equal(await petJS('typeof process'), 'undefined');
   const before = await js('window.moneyDanceDesktop.getState()');
