@@ -37,6 +37,7 @@ export function Shell() {
     key={to}
     to={to}
     end={to === '/'}
+    aria-label={label}
     title={sidebarCollapsed ? label : undefined}
     className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}
   >
@@ -60,7 +61,7 @@ export function Shell() {
     <AnimatedSidebar
       collapsed={sidebarCollapsed}
       expandedWidth={232}
-      collapsedWidth={76}
+      collapsedWidth={72}
       className="sidebar"
       aria-label="MoneyDance 主导航"
     >
@@ -73,6 +74,7 @@ export function Shell() {
           type="button"
           className="sidebar-toggle"
           aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+          title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
           aria-expanded={!sidebarCollapsed}
           onClick={() => setSidebarCollapsed(value => !value)}
         >
@@ -92,10 +94,11 @@ export function Shell() {
       </nav>
 
       <div className="sidebar-footer">
-        {desktop && <NavLink to="/pet" title="桌边搭子" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}><PawPrint size={18}/><span>桌边搭子</span></NavLink>}
+        {desktop && <NavLink to="/pet" aria-label="桌边搭子" title="桌边搭子" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}><PawPrint size={18}/><span>桌边搭子</span></NavLink>}
         <button
           type="button"
           className="nav-item theme-switcher-button"
+          aria-label="一键换肤"
           title={sidebarCollapsed ? '一键换肤' : undefined}
           onClick={() => setThemePickerOpen(true)}
         >

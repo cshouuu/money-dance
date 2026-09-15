@@ -48,20 +48,34 @@
 .app-shell .privacy-note{margin:0;padding:0 10px;color:var(--muted);font-size:9px;line-height:1.55;white-space:normal;transition:opacity .14s ease}
 
 .app-shell .main{margin-left:232px;transition:margin-left .36s cubic-bezier(.22,.8,.24,1)}
-.app-shell.sidebar-collapsed .main{margin-left:76px}
-.app-shell.sidebar-collapsed .sidebar-top{height:116px;flex-basis:116px;flex-direction:column;justify-content:center;gap:8px}
+.app-shell.sidebar-collapsed .main{margin-left:72px}
+.app-shell.sidebar-collapsed .sidebar{padding:0 10px 12px;background:var(--paper)}
+.app-shell.sidebar-collapsed .sidebar-top{height:100px;flex-basis:100px;flex-direction:column;justify-content:center;gap:9px}
 .app-shell.sidebar-collapsed .brand{width:100%;justify-content:center;padding:0}
+.app-shell.sidebar-collapsed .brand-mark{width:36px;height:36px;flex-basis:36px;border-radius:11px;box-shadow:none}
 .app-shell.sidebar-collapsed .brand-copy,
 .app-shell.sidebar-collapsed .nav-group>p,
 .app-shell.sidebar-collapsed .nav-item>span,
-.app-shell.sidebar-collapsed .privacy-note{pointer-events:none;opacity:0;transform:translateX(-4px)}
-.app-shell.sidebar-collapsed .sidebar-toggle{position:static;flex:0 0 34px;transform:none}
+.app-shell.sidebar-collapsed .privacy-note{display:none}
+.app-shell.sidebar-collapsed .sidebar-toggle{position:static;width:28px;height:28px;flex:0 0 28px;border-color:transparent;border-radius:8px;background:transparent;transform:none}
+.app-shell.sidebar-collapsed .sidebar-toggle:hover{background:var(--control-bg);color:var(--green)}
 .app-shell.sidebar-collapsed .sidebar-toggle:active{transform:scale(.96)}
-.app-shell.sidebar-collapsed .sidebar-navigation{gap:8px}
-.app-shell.sidebar-collapsed .nav-group{gap:5px}
-.app-shell.sidebar-collapsed .nav-item{justify-content:center;gap:0;padding:9px}
-.app-shell.sidebar-collapsed .nav-item.active::after{right:2px}
-.app-shell.sidebar-collapsed .sidebar-footer .nav-item{margin-bottom:0}
+.app-shell.sidebar-collapsed .sidebar-navigation{gap:10px;padding:2px 0 10px;scrollbar-width:none}
+.app-shell.sidebar-collapsed .sidebar-navigation::-webkit-scrollbar{display:none}
+.app-shell.sidebar-collapsed .nav-group{align-items:center;flex-shrink:0;gap:2px}
+.app-shell.sidebar-collapsed .nav-group+.nav-group{padding-top:10px;border-top:1px solid var(--line)}
+.app-shell.sidebar-collapsed .nav-item{width:42px;height:40px;min-height:40px;flex-shrink:0;justify-content:center;gap:0;padding:0;border-radius:11px}
+.app-shell.sidebar-collapsed .nav-item>svg{width:19px;height:19px;flex-basis:19px;transform:none}
+.app-shell.sidebar-collapsed .nav-item:hover{background:var(--accent-faint);color:var(--green)}
+.app-shell.sidebar-collapsed .nav-item.active{box-shadow:inset 0 0 0 1px var(--accent-border)}
+.app-shell.sidebar-collapsed .nav-item.active::after{left:-5px;right:auto;top:13px;bottom:13px;width:3px;height:auto;border-radius:3px}
+.app-shell.sidebar-collapsed .sidebar-footer{align-items:center;flex-shrink:0;gap:2px;padding-top:10px}
+/* Keep every icon reachable at shorter window heights, without a native scrollbar
+ * taking up half of the icon rail. Keyboard focus still scrolls the navigation. */
+@media(min-width:901px) and (max-height:640px){
+  .app-shell.sidebar-collapsed .sidebar-top{height:88px;flex-basis:88px;gap:5px}
+  .app-shell.sidebar-collapsed .nav-item{height:36px;min-height:36px}
+}
 
 .sidebar-toggle:focus-visible,
 .app-shell .nav-item:focus-visible,
