@@ -237,9 +237,13 @@ function setupIPC() {
     activePack = null; saved.petSource = 'photo'; saved.packBindings = undefined;
     settings.enabled = true; applySettings(); return state();
   });
-  ipcMain.handle('desktop:reset-pet', event => {
+  ipcMain.handle('desktop:reset-pet', (event, presetId = 'xiaoxin') => {
     assertSender(event, 'main');
     if (extracting || importingPack) throw new Error('请先取消当前导入');
+    const names = { xiaoxin: '小薪', mili: '米粒', huanhuan: '缓缓' };
+    if (!Object.hasOwn(names, presetId)) throw new Error('请选择一个内置桌宠');
+    if (Object.values(names).includes(settings.name)) settings.name = names[presetId];
+    settings.presetId = presetId;
     saved.petSource = 'default'; saved.packBindings = undefined; persist();
     image = null; candidate = null; activePack = null; pendingPack = null; pendingPackBytes = null;
     fs.rmSync(imagePath(), { force: true }); fs.rmSync(packPath(), { force: true });
@@ -260,7 +264,7 @@ async function boot() {
       if (fs.statSync(packPath()).size > PACK_LIMIT) throw new Error('Stored pack exceeds size limit');
       activePack = await decodePack(fs.readFileSync(packPath()));
       try { activePack.bindings = bindingsFor(activePack.clips, saved.packBindings); } catch { /* Keep manifest bindings if a saved mapping is stale. */ }
-    } catch { message = { id: `pack-error-${Date.now()}`, text: '动作包无法读取，暂时由小薪陪伴。请在我的桌宠中重新导入。', kind: 'rest', at: Date.now(), automatic: false }; }
+    } catch { message = { id: `pack-error-${Date.now()}`, text: '动作包无法读取，暂时由内置桌宠陪伴。请在我的桌宠中重新导入。', kind: 'rest', at: Date.now(), automatic: false }; }
   } else if (saved.petSource !== 'default') {
     try { const bytes = fs.readFileSync(imagePath()); if (bytes.length < 5 * 1024 * 1024) image = `data:image/png;base64,${bytes.toString('base64')}`; } catch {}
   }

@@ -1,4 +1,5 @@
 export type PetMood = 'working' | 'slacking' | 'overtime' | 'rest'
+export type PetPresetId = 'xiaoxin' | 'mili' | 'huanhuan'
 export interface PetLayoutMetrics { bodyWidth: number; bodyHeight: number; panelWidth: number; panelHeight: number }
 export interface PetWindowLayout {
   bounds: { x: number; y: number; width: number; height: number }
@@ -17,6 +18,7 @@ export interface PetPack {
   clips: Record<string, PackClip>; bindings: Record<PackState, string>
 }
 export interface PetSettings {
+  presetId?: PetPresetId
   enabled: boolean; name: string; size: number; reducedMotion: boolean
   reportMinutes: number; breakMinutes: number; warmth: boolean; milestones: boolean
   quietEnabled: boolean; quietStart: string; quietEnd: string
@@ -39,7 +41,7 @@ export interface DesktopBridge {
   saveSettings(settings: PetSettings): Promise<DesktopState>
   createPet(mode: 'extract' | 'transparent'): Promise<string | null>
   usePet(): Promise<DesktopState>
-  resetPet(): Promise<DesktopState>
+  resetPet(presetId?: PetPresetId): Promise<DesktopState>
   cancelExtraction(): Promise<void>
   importPack(): Promise<PetPack | null>
   usePack(id: string, bindings: PetPack['bindings']): Promise<DesktopState>

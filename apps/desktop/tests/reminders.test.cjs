@@ -6,6 +6,9 @@ const settings = sanitizeSettings({ quietEnabled: false });
 const now = new Date(2026, 8, 14, 10).getTime();
 const snapshot = { updatedAt: now, businessDate: '2026-09-14', state: 'working', workAmount: 80, overtimeAmount: 0, overtimeSeconds: 0, overtimeId: '', wish: null };
 test('settings and snapshots reject unsafe/invalid payloads', () => {
+  assert.equal(sanitizeSettings({}).presetId, 'xiaoxin');
+  assert.equal(sanitizeSettings({ presetId: '../invalid' }).presetId, 'xiaoxin');
+  for (const presetId of ['xiaoxin', 'mili', 'huanhuan']) assert.equal(sanitizeSettings({ presetId }).presetId, presetId);
   assert.equal(sanitizeSettings({ name: ' ', size: 999, reportMinutes: -1 }).name, '小薪');
   assert.equal(sanitizeSettings({ quietStart: '24:00' }).quietStart, '23:00');
   assert.equal(sanitizeSnapshot({ ...snapshot, workAmount: NaN }), null);

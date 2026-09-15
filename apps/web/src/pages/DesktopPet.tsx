@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Bell, Check, Coffee, Eye, Heart, Monitor, MousePointer2, PawPrint, ShieldCheck, Sparkles, Upload, Volume2 } from 'lucide-react'
-import { desktop, type PackState, type PetPack, type PetMood, type PetSettings } from '../lib/desktop'
+import { desktop, type PackState, type PetPack, type PetMood, type PetPresetId, type PetSettings } from '../lib/desktop'
 import { useDesktopState } from '../lib/useDesktopState'
-import { PetCharacter, moodLabels } from '../pet/PetCharacter'
+import { PetCharacter } from '../pet/PetCharacter'
 import { type PetReaction } from '../pet/motion'
 import { packStateLabels, reactionDuration } from '../pet/pack-motion'
+import { PET_PRESETS, getPetPreset } from '../pet/presets'
 import './DesktopPet.css'
 
 const moods: PetMood[] = ['working', 'slacking', 'overtime', 'rest']
-const storyboards: Record<PetMood, string[]> = {
-  working: ['看一眼屏幕', '两只爪爪交替敲键盘', '眨眼，停下来想一想'],
-  slacking: ['左右偷偷看', '拿起小鱼，抱住蹭蹭', '躺下来安心放松'],
-  overtime: ['困困地揉眼睛', '捧起热饮递给你', '喝一口，安静陪着'],
-  rest: ['打哈欠，垂下脑袋', '收好爪爪，尾巴圈住身体', '蜷起来好好睡觉'],
-}
 const previewCopy: Record<PetMood, string> = {
   working: '每一点积累，都在让心愿更近。今天也陪你慢慢来。',
   slacking: '给脑袋放个小假，偶尔发呆也没关系。',
@@ -22,6 +17,7 @@ const previewCopy: Record<PetMood, string> = {
 }
 export function DesktopPet() {
   const { state, setState, error: connectionError } = useDesktopState()
+  const [presetCandidate, setPresetCandidate] = useState<PetPresetId | null>(null)
   const [mood, setMood] = useState<PetMood>('working')
   const [candidate, setCandidate] = useState<string | null>(null)
   const [packCandidate, setPackCandidate] = useState<PetPack | null>(null)
@@ -32,7 +28,7 @@ export function DesktopPet() {
   const [name, setName] = useState('小薪')
   const [reaction, setReaction] = useState<{ kind: PetReaction; id: number } | null>(null)
   const [replay, setReplay] = useState(0)
-  const basePack = candidate ? null : packCandidate || state?.pack
+  const basePack = candidate || presetCandidate ? null : packCandidate || state?.pack
   const previewPack = basePack ? { ...basePack, bindings: bindings || basePack.bindings } : null
   const interact = (kind: PetReaction) => { setIdlePreview(false); setReaction({ kind, id: performance.now() }) }
   const reactionMs = reaction ? reactionDuration(previewPack, reaction.kind) : 0
@@ -44,6 +40,11 @@ export function DesktopPet() {
   }, [])
   useEffect(() => { if (!reaction) return; const timer = setTimeout(() => setReaction(null), reactionMs); return () => clearTimeout(timer) }, [reaction, reactionMs])
   const settings = state?.settings
+  const preset = getPetPreset(presetCandidate ?? settings?.presetId)
+  const previewImage = presetCandidate ? null : candidate || state?.image
+  function previewPreset(id: PetPresetId) {
+    setPresetCandidate(id); setCandidate(null); setPackCandidate(null); setBindings(null); setIdlePreview(false); setReaction(null); setReplay(value => value + 1); setNotice(''); setError('')
+  }
   async function update(changes: Partial<PetSettings>) {
     if (!desktop || !settings || saving) return
     setSaving(true); setError(''); setNotice('')
@@ -53,7 +54,7 @@ export function DesktopPet() {
   }
   async function selectImage(mode: 'extract' | 'transparent') {
     if (!desktop) return
-    setBusy(true); setProgress('请选择一张照片…'); setError(''); setNotice(''); setCandidate(null); setPackCandidate(null); setIdlePreview(false); setReaction(null)
+    setPresetCandidate(null); setBusy(true); setProgress('请选择一张照片…'); setError(''); setNotice(''); setCandidate(null); setPackCandidate(null); setIdlePreview(false); setReaction(null)
     setBindings(state?.pack?.bindings || null)
     try { const result = await desktop.createPet(mode); if (result) { setCandidate(result); setNotice('主体准备好了，切换下面的状态看看动作。') } }
     catch (error) { setError(String(error instanceof Error ? error.message : error).replace(/^Error invoking remote method '[^']+': Error: /, '')) }
@@ -61,7 +62,7 @@ export function DesktopPet() {
   }
   async function selectPack() {
     if (!desktop) return
-    setBusy(true); setError(''); setNotice(''); setProgress('请选择 ZIP 动作包…'); setCandidate(null); setPackCandidate(null); setReaction(null); setIdlePreview(false)
+    setPresetCandidate(null); setBusy(true); setError(''); setNotice(''); setProgress('请选择 ZIP 动作包…'); setCandidate(null); setPackCandidate(null); setReaction(null); setIdlePreview(false)
     try {
       const pack = await desktop.importPack()
       if (pack) { setPackCandidate(pack); setBindings(pack.bindings); setNotice('动作包已准备好。预览各个动作，确认后再放到桌面。') }
@@ -79,6 +80,7 @@ export function DesktopPet() {
     finally { setSaving(false) }
   }
   async function discard() {
+    setPresetCandidate(null)
     setCandidate(null); setPackCandidate(null); setBindings(state?.pack?.bindings || null); setIdlePreview(false); setReaction(null)
     try { await desktop?.cancelExtraction() } catch { setError('取消未完成，请重试。') }
   }
@@ -93,10 +95,14 @@ export function DesktopPet() {
     catch { setError('桌宠没有保存成功，请重新选择图片。') }
     finally { setSaving(false) }
   }
-  async function reset() {
-    if (!desktop || !window.confirm('换回小薪？当前自定义桌宠会被替换，你导入的原始素材不会删除。')) return
-    setSaving(true)
-    try { setState(await desktop.resetPet()); setCandidate(null); setPackCandidate(null); setBindings(null); setNotice('小薪回来啦。') } catch { setError('替换失败，请重试。') }
+  async function adoptPreset() {
+    if (!desktop || !presetCandidate || saving || busy) return
+    setSaving(true); setError(''); setNotice('')
+    try {
+      const next = await desktop.resetPet(presetCandidate)
+      setState(next); setPresetCandidate(null); setCandidate(null); setPackCandidate(null); setBindings(null)
+      setNotice(preset.name + '来陪你啦。角色选择已保存。'); interact('love')
+    } catch { setError('角色没有保存成功，请重试。') }
     finally { setSaving(false) }
   }
   return <div className="pet-page">
@@ -106,15 +112,24 @@ export function DesktopPet() {
     {notice && <p className="pet-save-notice" role="status"><Check size={15}/> {notice}</p>}
     <div className="pet-page-grid">
       <section className="pet-studio" aria-label="桌宠制作与动作预览">
-        <div className="pet-section-title"><span className="pet-number">01</span><div><h2>认识你的桌边搭子</h2><p>导入现成动作，让喜欢的角色来陪你</p></div></div>
+        <div className="pet-section-title"><span className="pet-number">01</span><div><h2>认识你的桌边搭子</h2><p>选一位内置伙伴，或导入你自己的动作包</p></div></div>
+        <div className="pet-preset-picker" role="group" aria-label="选择内置桌宠">{PET_PRESETS.map(item => {
+          const selected = !previewPack && !previewImage && preset.id === item.id
+          return <button key={item.id} className="pet-preset-card" style={{ background: item.color }} aria-pressed={selected} disabled={busy || saving} onClick={() => previewPreset(item.id)}>
+            <PetCharacter presetId={item.id} mood="working" reaction="love" size={94} reducedMotion/>
+            <b>{item.name}<small>{item.species}</small></b><span>{item.personality}</span>
+            <em>{selected ? presetCandidate ? '预览中' : '正在陪伴' : '看看它'}</em>
+          </button>
+        })}</div>
+        {presetCandidate && <div className="pet-preset-adopt"><p>{preset.name} · 6 组动作，离线陪伴{state?.pack || state?.image ? '。确认后替换当前自定义桌宠，原始导入文件保留。' : ''}</p><div className="pet-button-row"><button className="pet-primary" disabled={!desktop || saving || busy} onClick={() => void adoptPreset()}>就选{preset.name}</button><button className="pet-text-button" disabled={saving || busy} onClick={() => void discard()}>取消预览</button></div></div>}
         <div className={`pet-preview-stage stage-${mood}`}>
-          <span className="pet-stage-label">{candidate || packCandidate ? '新桌宠 · 待确认' : previewPack ? previewPack.name : '动作预览'}</span>
+          <span className="pet-stage-label">{candidate || packCandidate || presetCandidate ? '新桌宠 · 待确认' : previewPack ? previewPack.name : preset.name + ' · 动作预览'}</span>
           <div className="pet-preview-bubble">{reaction?.kind === 'love' ? '是你呀。把脸颊凑过来，蹭蹭你。' : reaction?.kind === 'celebrate' ? '这个小进步，值得举起两只爪爪庆祝！' : previewCopy[mood]}</div>
-          <button className="pet-preview-touch" onClick={() => interact('love')} aria-label="摸摸桌宠，预览互动动作"><PetCharacter pack={previewPack} idlePreview={idlePreview} image={candidate || state?.image} mood={mood} size={210} reducedMotion={settings?.reducedMotion} reaction={reaction?.kind} replayKey={reaction?.id ?? replay} showCue/></button>
+          <button className="pet-preview-touch" onClick={() => interact('love')} aria-label="摸摸桌宠，预览互动动作"><PetCharacter key={preset.id} presetId={preset.id} pack={previewPack} idlePreview={idlePreview} image={previewImage} mood={mood} size={210} reducedMotion={settings?.reducedMotion} reaction={reaction?.kind} replayKey={reaction?.id ?? replay} showCue/></button>
           <div className="pet-stage-ground"/><span className="pet-stage-caption"><MousePointer2 size={13}/> 点一下，给它一个摸摸</span>
         </div>
-        <div className="pet-mood-picker" aria-label="预览动作">{moods.map(value => <button key={value} aria-pressed={mood === value && !reaction && !idlePreview} onClick={() => { setMood(value); setIdlePreview(false); setReaction(null); setReplay(value => value + 1) }}>{previewPack ? packStateLabels[value] : moodLabels[value]}</button>)}</div>
-        <div className="pet-storyboard"><span className="pet-storyboard-label">{previewPack ? '你的素材，你的角色' : candidate || state?.image ? '照片场景模式' : '一段完整的小动作'}</span><p>{previewPack ? '播放动作包中的原有姿势，按计薪状态自动切换。摸摸和庆祝播完一次后返回；未提供的动作使用待机。' : candidate || state?.image ? '保留照片主体，搭配电脑、热饮、抱枕和小毯子的场景演出。想要完整肢体动作，请导入动作包。' : storyboards[mood].join(' → ')}</p>
+        <div className="pet-mood-picker" aria-label="预览动作">{moods.map(value => <button key={value} aria-pressed={mood === value && !reaction && !idlePreview} onClick={() => { setMood(value); setIdlePreview(false); setReaction(null); setReplay(value => value + 1) }}>{previewPack ? packStateLabels[value] : preset.labels[value]}</button>)}</div>
+        <div className="pet-storyboard"><span className="pet-storyboard-label">{previewPack ? '你的素材，你的角色' : previewImage ? '照片场景模式' : '一段完整的小动作'}</span><p>{previewPack ? '播放动作包中的原有姿势，按计薪状态自动切换。摸摸和庆祝播完一次后返回；未提供的动作使用待机。' : previewImage ? '保留照片主体，搭配电脑、热饮、抱枕和小毯子的场景演出。想要完整肢体动作，请导入动作包。' : preset.stories[mood]}</p>
           <div className="pet-reaction-picker"><button aria-pressed={reaction?.kind === 'love'} onClick={() => interact('love')}>试试蹭蹭</button><button aria-pressed={reaction?.kind === 'celebrate'} onClick={() => interact('celebrate')}>庆祝一下</button><button onClick={() => { setReaction(null); setReplay(value => value + 1) }}>从头播放</button></div>
         </div>
         {previewPack && <section className="pet-pack-bindings" aria-label="动作包状态绑定"><div className="pet-pack-heading"><div><h3>{previewPack.name}</h3><p>{Object.keys(previewPack.clips).length} 组素材{previewPack.author ? ` · 作者 ${previewPack.author}` : ''}</p></div><button className="pet-secondary" aria-pressed={idlePreview} onClick={() => { setIdlePreview(true); setReaction(null); setReplay(value => value + 1) }}>预览待机</button></div>
@@ -126,7 +141,7 @@ export function DesktopPet() {
           <div className="pet-button-row"><button className="pet-primary pet-import-pack" disabled={!desktop || busy || saving} onClick={() => void selectPack()}><Upload size={15}/> 选择 ZIP 动作包</button>{desktop ? <button className="pet-secondary" disabled={busy || saving} onClick={() => void template()}>保存示例模板</button> : <a className="pet-secondary" href="/pet-pack-template.zip" download>下载示例模板</a>}</div>
           {busy && <div className="pet-processing" role="status"><span className="pet-spinner"/>{progress}<button onClick={() => void desktop?.cancelExtraction()}>取消</button></div>}
           {(packCandidate || candidate) && <div className="pet-candidate-actions"><button className="pet-primary" disabled={saving || busy} onClick={() => void (packCandidate ? savePack() : adopt())}>就用它，放到桌面</button><button className="pet-text-button" disabled={saving || busy} onClick={() => void discard()}>放弃这次预览</button></div>}
-          {(state?.image || state?.pack) && !candidate && !packCandidate && <button className="pet-text-button" disabled={busy || saving} onClick={() => void reset()}>换回默认小薪</button>}
+          {(state?.image || state?.pack) && !candidate && !packCandidate && !presetCandidate && <button className="pet-text-button" disabled={busy || saving} onClick={() => previewPreset(settings?.presetId ?? 'xiaoxin')}>选择内置伙伴</button>}
           <details className="pet-photo-option"><summary>只有一张图片？使用简易照片陪伴</summary><p>单张图片只提供场景互动，不生成新姿势。PNG / JPG / WebP · 最大 15 MB</p><div className="pet-button-row"><button className="pet-secondary" disabled={!desktop || busy || saving} onClick={() => void selectImage('extract')}>选图并本地提取主体</button><button className="pet-secondary" disabled={!desktop || busy || saving} onClick={() => void selectImage('transparent')}>已有透明图片</button></div></details>
         </div>
         <div className="pet-how"><ShieldCheck size={18}/><p>导入、校验、播放都在本机完成，不上传素材、不调用 AI 生成服务。请使用你有权使用的素材。只需提供待机动作，就能开始陪伴；完整制作规范在模板内的说明文件中。</p></div>

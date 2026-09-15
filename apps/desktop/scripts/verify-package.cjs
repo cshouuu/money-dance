@@ -51,7 +51,7 @@ async function verify() {
   const fixture = path.join(profile, 'photo.png');
   await require('sharp')(path.resolve(__dirname, '../tests/fixtures/sample-cat.svg')).flatten({ background: '#eeddcc' }).png().toFile(fixture);
   let expectedImage, expectedPack;
-  for (let run = 0; run < 2; run++) {
+  for (let run = 0; run < 3; run++) {
     const rendererPort = await port(), mainPort = await port();
     const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE; delete env.MONEY_DANCE_SMOKE;
     const child = spawn(executable, [`--user-data-dir=${profile}`, `--remote-debugging-port=${rendererPort}`, `--inspect=127.0.0.1:${mainPort}`, '--hidden'], { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] });
@@ -80,7 +80,7 @@ async function verify() {
         expectedPack = await renderer.evaluate('window.moneyDanceDesktop.importPack()');
         expectedPack.bindings.working = 'idle';
         await renderer.evaluate(`window.moneyDanceDesktop.usePack(${JSON.stringify(expectedPack.id)},${JSON.stringify(expectedPack.bindings)})`);
-      } else {
+      } else if (run === 1) {
         assert.equal(state.image, null, 'pack replaces legacy photo across process restarts');
         assert.equal(state.pack.id, expectedPack.id, 'ZIP and decoded assets survive actual process restart');
         assert.equal(state.pack.bindings.working, 'idle', 'edited bindings persist');
@@ -88,19 +88,33 @@ async function verify() {
         assert.equal(await renderer.evaluate(`fetch(${JSON.stringify(src)}).then(r => r.ok && r.headers.get('content-type'))`), 'image/png');
         assert.equal(state.settings.name, '打包验证');
         assert.equal(state.settings.hideAmounts, true);
+        await renderer.evaluate("window.moneyDanceDesktop.resetPet('mili')");
+      } else {
+        assert.equal(state.pack, null, 'preset replaces imported pack across process restarts');
+        assert.equal(state.image, null);
+        assert.equal(state.settings.presetId, 'mili', 'built-in preset survives a full process restart');
+        assert.equal(state.settings.name, '打包验证', 'switching preserves custom name');
+        await renderer.evaluate("window.moneyDanceDesktop.openPage('/pet')");
+        let source;
+        for (let attempt = 0; attempt < 100 && !source; attempt++) {
+          source = await renderer.evaluate("document.querySelector('.pet-preview-stage [data-preset=mili] image')?.getAttribute('href')");
+          if (!source) await delay(100);
+        }
+        assert.ok(source, 'saved preset rendered in packaged app');
+        assert.equal(await renderer.evaluate(`fetch(${JSON.stringify(source)}).then(r=>r.ok && r.headers.get('content-type'))`), 'image/png', 'preset image included in ASAR');
       }
       if (process.platform === 'darwin') {
         assert.equal(await main.evaluate("!!process.mainModule.require('electron').Menu.getApplicationMenu()"), true, 'macOS application menu exists');
         await main.evaluate("process.mainModule.require('electron').app.emit('activate')");
         assert.equal(await main.evaluate("process.mainModule.require('electron').BrowserWindow.getAllWindows().some(w=>w.webContents.getURL()==='moneydance://app/' && w.isVisible())"), true, 'Dock activation restores the main window');
       }
-      console.log(`Packaged ${process.platform}-${process.arch} test ${run + 1}/2 passed.`);
+      console.log(`Packaged ${process.platform}-${process.arch} test ${run + 1}/3 passed.`);
       await main.call('Runtime.evaluate', { expression: "setTimeout(() => process.mainModule.require('electron').app.quit(), 100)" });
       main.close(); renderer.close();
       await new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('App did not exit')), 8000); child.once('exit', () => { clearTimeout(timeout); resolve(); }); });
     } catch (error) { console.error(stderr); throw error; }
     finally { main?.close(); renderer?.close(); if (child.exitCode === null) child.kill(); }
   }
-  console.log(`PACKAGED ${process.platform}-${process.arch} PASSED: local model inference, native dependencies, imported pack assets and bindings persist after restart.`);
+  console.log(`PACKAGED ${process.platform}-${process.arch} PASSED: local inference, imported packs and built-in preset selection persist after restart.`);
 }
 verify().catch(error => { console.error(error); process.exitCode = 1; });

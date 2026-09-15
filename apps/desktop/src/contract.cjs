@@ -1,5 +1,5 @@
 const DEFAULT_SETTINGS = Object.freeze({
-  enabled: true, name: '小薪', size: 160, reducedMotion: false,
+  enabled: true, name: '小薪', presetId: 'xiaoxin', size: 160, reducedMotion: false,
   reportMinutes: 60, breakMinutes: 50, warmth: true, milestones: true,
   quietEnabled: true, quietStart: '23:00', quietEnd: '08:00',
   hideAmounts: false, speech: false, notifications: false, launchAtLogin: false,
@@ -12,6 +12,7 @@ function sanitizeSettings(input = {}) {
     if (typeof result[key] === 'boolean' && typeof input[key] === 'boolean') result[key] = input[key];
   }
   if (typeof input.name === 'string' && input.name.trim()) result.name = input.name.trim().slice(0, 20);
+  if (['xiaoxin', 'mili', 'huanhuan'].includes(input.presetId)) result.presetId = input.presetId;
   if ([120, 160, 200].includes(input.size)) result.size = input.size;
   if ([0, 15, 30, 60, 120].includes(input.reportMinutes)) result.reportMinutes = input.reportMinutes;
   if ([0, 30, 50, 60, 90].includes(input.breakMinutes)) result.breakMinutes = input.breakMinutes;

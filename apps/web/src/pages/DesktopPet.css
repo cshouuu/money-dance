@@ -23,3 +23,11 @@
 .pet-pack-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.pet-pack-heading h3{font-size:14px;margin:0;overflow-wrap:anywhere}.pet-pack-heading p{font-size:11px;color:#86927b;overflow-wrap:anywhere}
 .pet-pack-binding{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 0;border-top:1px solid #e4e9dc;font-size:12px}.pet-pack-binding small{display:block;color:#8f9b83;font-size:10px;margin-top:3px}.pet-pack-binding select{max-width:65%;font:inherit;color:#556c48;background:#fffef9;border:1px solid #d9e2cf;border-radius:8px;padding:9px}
 .pet-pack-warning{font-size:11px;color:#947446;line-height:1.6}.pet-pack-bindings>.pet-primary{margin-top:12px}.pet-photo-option{border-top:1px solid #e1e6d9;margin-top:20px;padding-top:16px}.pet-photo-option summary{cursor:pointer;font-size:11px;color:#7c8970}.pet-upload-area a{text-decoration:none}
+.pet-preset-picker{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 18px 18px}
+.pet-preset-card{position:relative;display:flex;flex-direction:column;align-items:center;min-width:0;padding:12px 6px;border:1px solid #dedfd5;border-radius:16px;color:#4d6045;font:inherit;cursor:pointer}
+.pet-preset-card[aria-pressed=true]{border:2px solid #718b63;padding:11px 5px;box-shadow:0 0 0 3px #718b6312}
+.pet-preset-card:focus-visible{outline:3px solid #71945f;outline-offset:3px}
+.pet-preset-card b{font-size:14px;margin:4px 0 6px}.pet-preset-card b small{font-size:10px;font-weight:400;margin-left:5px;color:#7f8874}
+.pet-preset-card>span{font-size:10px;line-height:1.7;text-align:center;color:#7a846f}.pet-preset-card em{font-size:10px;font-style:normal;margin-top:9px;color:#627854}
+.pet-preset-adopt{margin:0 18px 18px;padding:12px 16px;border:1px solid #e0e5d8;border-radius:12px;background:#fafbf5}.pet-preset-adopt p{font-size:11px;line-height:1.8;color:#758369;margin:0}.pet-preset-adopt .pet-button-row{margin-top:8px;justify-content:flex-start}
+@media(max-width:480px){.pet-preset-picker{gap:6px;margin:0 10px 14px}.pet-preset-card b small{display:block;margin:3px 0 0}.pet-preset-card .pet-character{width:78px;height:78px}.pet-preset-card>span{font-size:9px}}

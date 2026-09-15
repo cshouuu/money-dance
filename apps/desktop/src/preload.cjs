@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('moneyDanceDesktop', {
   saveSettings: settings => ipcRenderer.invoke('desktop:settings', settings),
   createPet: mode => ipcRenderer.invoke('desktop:create-pet', mode),
   usePet: () => ipcRenderer.invoke('desktop:use-pet'),
-  resetPet: () => ipcRenderer.invoke('desktop:reset-pet'),
+  resetPet: presetId => ipcRenderer.invoke('desktop:reset-pet', presetId),
   cancelExtraction: () => ipcRenderer.invoke('desktop:cancel-extraction'),
   importPack: () => ipcRenderer.invoke('desktop:import-pack'),
   usePack: (id, bindings) => ipcRenderer.invoke('desktop:use-pack', id, bindings),

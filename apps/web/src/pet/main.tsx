@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 
 import { createRoot } from 'react-dom/client'
 import { desktop, type PetAction, type PetWindowLayout } from '../lib/desktop'
 import { useDesktopState } from '../lib/useDesktopState'
-import { PetCharacter, moodLabels } from './PetCharacter'
+import { PetCharacter } from './PetCharacter'
+import { getPetPreset } from './presets'
 import { type PetReaction } from './motion'
 import { reactionDuration, packStateLabels } from './pack-motion'
 import { petPixelAt } from './hit-test'
@@ -112,10 +113,10 @@ function PetWindow() {
     </div>}
     <div ref={bodyRef} className="pet-floating-body" style={{ left: layout?.body.x ?? 0, top: layout?.body.y ?? 0 }}>
       <button className="pet-drag-target" data-interactive aria-label={`摸摸${settings.name}，按住拖动位置`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void action('pet') } }} onContextMenu={event => { event.preventDefault(); setMenu(value => !value) }}>
-        <PetCharacter pack={state.pack} image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
+        <PetCharacter key={settings.presetId} presetId={settings.presetId} pack={state.pack} image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
       </button>
       <div className="pet-toolbar" data-interactive>
-        <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? state.pack ? packStateLabels[mood] : moodLabels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>
+        <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? state.pack ? packStateLabels[mood] : getPetPreset(settings.presetId).labels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>
         <button onClick={() => setMenu(value => !value)} aria-label="桌宠菜单" aria-expanded={menu}>•••</button>
       </div>
       {(focusSeconds > 0 || snoozed) && <div className="pet-mini-status">{focusSeconds > 0 ? `专注 ${Math.floor(focusSeconds / 60)}:${String(focusSeconds % 60).padStart(2, '0')}` : '安静陪伴中'}</div>}
