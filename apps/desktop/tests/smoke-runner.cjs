@@ -72,6 +72,9 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   await delay(250);
   assert.doesNotMatch(await petJS("document.querySelector('.pet-live-bubble').textContent"), /¥/);
   await js("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,reducedMotion:true}))");
+  // IPC returns before React consumes the broadcast and applies its still frame.
+  await until(() => petJS("!!document.querySelector('.pet-character.pet-still')"), 'pet receives reduced-motion setting');
+  await petJS("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))");
   const stillPose = await petJS("document.querySelector('.pet-character').dataset.pose");
   await delay(400);
   assert.equal(await petJS("document.querySelector('.pet-character').dataset.pose"), stillPose, 'reduced motion stops frame scheduling');
