@@ -121,11 +121,13 @@ async function run({ app, mainWindow, petWindow, openPage }) {
     const packState = await js('window.moneyDanceDesktop.getState()');
     assert.equal(packState.image, null);
     assert.equal(await petJS(`window.moneyDanceDesktop.savePackBindings(${JSON.stringify(packState.pack.id)},{}).then(()=>false,()=>true)`), true, 'pet window cannot mutate pack bindings');
-    const mapped = { ...packState.pack.bindings, love: 'idle', working: 'idle' };
+    // The one-frame idle lasts only 100 ms, shorter than this test's polling
+    // interval. Map to a multi-frame clip so the transition is observable.
+    const mapped = { ...packState.pack.bindings, love: 'working', working: 'idle' };
     await js(`window.moneyDanceDesktop.savePackBindings(${JSON.stringify(packState.pack.id)},${JSON.stringify(mapped)})`);
     await petJS("window.moneyDanceDesktop.action('pet')");
     await until(() => petJS("document.querySelector('.pet-imported').dataset.motion === 'love'"), 'mapped interaction starts');
-    assert.equal(await petJS("document.querySelector('.pet-imported').dataset.clip"), 'idle');
+    assert.equal(await petJS("document.querySelector('.pet-imported').dataset.clip"), 'working');
     await until(() => petJS("document.querySelector('.pet-imported').dataset.motion !== 'love'"), 'interaction returns after imported duration');
     await js(`window.moneyDanceDesktop.savePackBindings(${JSON.stringify(packState.pack.id)},${JSON.stringify(packState.pack.bindings)})`);
     await js("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,reducedMotion:true}))");
