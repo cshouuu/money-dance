@@ -3,9 +3,16 @@ import { Bell, Check, Coffee, Eye, Heart, Monitor, MousePointer2, PawPrint, Shie
 import { desktop, type PetMood, type PetSettings } from '../lib/desktop'
 import { useDesktopState } from '../lib/useDesktopState'
 import { PetCharacter, moodLabels } from '../pet/PetCharacter'
+import { clipDuration, type PetReaction } from '../pet/motion'
 import './DesktopPet.css'
 
 const moods: PetMood[] = ['working', 'slacking', 'overtime', 'rest']
+const storyboards: Record<PetMood, string[]> = {
+  working: ['看一眼屏幕', '两只爪爪交替敲键盘', '眨眼，停下来想一想'],
+  slacking: ['左右偷偷看', '拿起小鱼，抱住蹭蹭', '躺下来安心放松'],
+  overtime: ['困困地揉眼睛', '捧起热饮递给你', '喝一口，安静陪着'],
+  rest: ['打哈欠，垂下脑袋', '收好爪爪，尾巴圈住身体', '蜷起来好好睡觉'],
+}
 const previewCopy: Record<PetMood, string> = {
   working: '每一点积累，都在让心愿更近。今天也陪你慢慢来。',
   slacking: '给脑袋放个小假，偶尔发呆也没关系。',
@@ -18,13 +25,16 @@ export function DesktopPet() {
   const [candidate, setCandidate] = useState<string | null>(null)
   const [busy, setBusy] = useState(false), [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState('')
-  const [name, setName] = useState('小薪'), [happy, setHappy] = useState(false)
+  const [name, setName] = useState('小薪')
+  const [reaction, setReaction] = useState<{ kind: PetReaction; id: number } | null>(null)
+  const [replay, setReplay] = useState(0)
+  const interact = (kind: PetReaction) => setReaction({ kind, id: performance.now() })
   useEffect(() => { if (state) setName(state.settings.name) }, [state?.settings.name])
   useEffect(() => {
     const off = desktop?.onProgress(setProgress)
     return () => { off?.(); void desktop?.cancelExtraction().catch(() => undefined) }
   }, [])
-  useEffect(() => { if (!happy) return; const timer = setTimeout(() => setHappy(false), 1800); return () => clearTimeout(timer) }, [happy])
+  useEffect(() => { if (!reaction) return; const timer = setTimeout(() => setReaction(null), clipDuration(reaction.kind)); return () => clearTimeout(timer) }, [reaction])
   const settings = state?.settings
   async function update(changes: Partial<PetSettings>) {
     if (!desktop || !settings || saving) return
@@ -43,7 +53,7 @@ export function DesktopPet() {
   async function adopt() {
     if (!desktop) return
     setSaving(true); setError('')
-    try { setState(await desktop.usePet()); setCandidate(null); setNotice('你的专属桌宠已经来到桌面啦！'); setHappy(true) }
+    try { setState(await desktop.usePet()); setCandidate(null); setNotice('你的专属桌宠已经来到桌面啦！'); interact('love') }
     catch { setError('桌宠没有保存成功，请重新选择图片。') }
     finally { setSaving(false) }
   }
@@ -61,18 +71,21 @@ export function DesktopPet() {
         <div className="pet-section-title"><span className="pet-number">01</span><div><h2>认识你的桌边搭子</h2><p>一张照片，就能开始一段陪伴</p></div></div>
         <div className={`pet-preview-stage stage-${mood}`}>
           <span className="pet-stage-label">{candidate ? '新桌宠 · 待确认' : '动作预览'}</span>
-          <div className="pet-preview-bubble">{happy ? '收到你的摸摸啦，今天也一起慢慢来。' : previewCopy[mood]}</div>
-          <button className="pet-preview-touch" onClick={() => setHappy(true)} aria-label="摸摸桌宠，预览开心动作"><PetCharacter image={candidate || state?.image} mood={mood} size={200} reducedMotion={settings?.reducedMotion} happy={happy}/></button>
+          <div className="pet-preview-bubble">{reaction?.kind === 'love' ? '是你呀。把脸颊凑过来，蹭蹭你。' : reaction?.kind === 'celebrate' ? '这个小进步，值得举起两只爪爪庆祝！' : previewCopy[mood]}</div>
+          <button className="pet-preview-touch" onClick={() => interact('love')} aria-label="摸摸桌宠，预览蹭蹭动作"><PetCharacter image={candidate || state?.image} mood={mood} size={210} reducedMotion={settings?.reducedMotion} reaction={reaction?.kind} replayKey={reaction?.id ?? replay} showCue/></button>
           <div className="pet-stage-ground"/><span className="pet-stage-caption"><MousePointer2 size={13}/> 点一下，给它一个摸摸</span>
         </div>
-        <div className="pet-mood-picker" aria-label="预览动作">{moods.map(value => <button key={value} aria-pressed={mood === value} onClick={() => setMood(value)}>{moodLabels[value]}</button>)}</div>
+        <div className="pet-mood-picker" aria-label="预览动作">{moods.map(value => <button key={value} aria-pressed={mood === value && !reaction} onClick={() => { setMood(value); setReaction(null); setReplay(value => value + 1) }}>{moodLabels[value]}</button>)}</div>
+        <div className="pet-storyboard"><span className="pet-storyboard-label">{candidate || state?.image ? '照片场景模式' : '一段完整的小动作'}</span><p>{candidate || state?.image ? '保留照片主体，搭配电脑、热饮、抱枕和小毯子的场景演出。单张照片不会自动获得小薪的肢体姿势。' : storyboards[mood].join(' → ')}</p>
+          <div className="pet-reaction-picker"><button aria-pressed={reaction?.kind === 'love'} onClick={() => interact('love')}>试试蹭蹭</button><button aria-pressed={reaction?.kind === 'celebrate'} onClick={() => interact('celebrate')}>庆祝一下</button><button onClick={() => { setReaction(null); setReplay(value => value + 1) }}>从头播放</button></div>
+        </div>
         <div className="pet-upload-area"><Upload size={22}/><h3>{state?.image ? '想换一位新搭子？' : '用你喜欢的照片制作桌宠'}</h3><p>宠物、玩偶、手绘角色都可以。单一主体、清晰背景效果更好。<br/>PNG / JPG / WebP · 最大 15 MB</p>
           <div className="pet-button-row"><button className="pet-primary" disabled={!desktop || busy || saving} onClick={() => void selectImage('extract')}><Sparkles size={15}/> 选图并自动提取主体</button><button className="pet-secondary" disabled={!desktop || busy || saving} onClick={() => void selectImage('transparent')}>已有透明图片</button></div>
           {busy && <div className="pet-processing" role="status"><span className="pet-spinner"/>{progress}<button onClick={() => void desktop?.cancelExtraction()}>取消</button></div>}
           {candidate && <div className="pet-candidate-actions"><button className="pet-primary" disabled={saving} onClick={() => void adopt()}>就用它，放到桌面</button><button className="pet-text-button" disabled={saving} onClick={() => setCandidate(null)}>放弃这次预览</button></div>}
           {state?.image && !candidate && <button className="pet-text-button" disabled={busy || saving} onClick={() => void reset()}>换回默认小薪</button>}
         </div>
-        <div className="pet-how"><ShieldCheck size={18}/><p>安装包已包含主体识别模型，全程离线。动作通过轻摆、呼吸、点头和跳跃实现；复杂背景的抠图效果可能有差异，可以换图或使用透明 PNG。</p></div>
+        <div className="pet-how"><ShieldCheck size={18}/><p>默认小薪使用 48 张角色姿势帧，包含表情、肢体和道具变化。上传照片使用场景陪伴；抠图全程在本机完成，复杂背景可换图重试。</p></div>
       </section>
       <div className="pet-settings-column">
         <section className="pet-settings-card"><div className="pet-section-title"><span className="pet-number">02</span><div><h2>按你的节奏陪伴</h2><p>设置自动保存，随时都能调整</p></div></div>

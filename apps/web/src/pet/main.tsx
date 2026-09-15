@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { desktop, type PetAction } from '../lib/desktop'
 import { useDesktopState } from '../lib/useDesktopState'
 import { PetCharacter, moodLabels } from './PetCharacter'
+import { clipDuration, type PetReaction } from './motion'
 import './pet-window.css'
 
 function PetWindow() {
@@ -30,7 +31,7 @@ function PetWindow() {
   if (!state || !settings) return <div className="pet-fallback">{error || '小薪正在过来…'}</div>
   const snapshot = state.snapshot, fresh = snapshot && now - snapshot.updatedAt < 15_000
   const mood = fresh ? snapshot.state : 'rest'
-  const happy = !!message && ['love', 'celebrate'].includes(message.kind) && now - message.at < 4000
+  const reaction: PetReaction | null = message && (message.kind === 'love' || message.kind === 'celebrate') && now - message.at < clipDuration(message.kind) ? message.kind : null
   const showMessage = !!message && now - message.at < 12_000
   const focusSeconds = Math.max(0, Math.ceil((state.focusEndsAt - now) / 1000))
   const snoozed = state.snoozedUntil > now
@@ -66,7 +67,7 @@ function PetWindow() {
     </div>}
     <div className="pet-floating-body">
       <button className="pet-drag-target" data-interactive aria-label={`摸摸${settings.name}，按住拖动位置`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void action('pet') } }} onContextMenu={event => { event.preventDefault(); setMenu(value => !value) }}>
-        <PetCharacter image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} happy={happy}/>
+        <PetCharacter image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
       </button>
       <div className="pet-toolbar" data-interactive>
         <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? moodLabels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>

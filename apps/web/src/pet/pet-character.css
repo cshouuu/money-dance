@@ -1,18 +1,22 @@
 .pet-character{position:relative;width:var(--pet-size);height:var(--pet-size);display:grid;place-items:center;isolation:isolate;user-select:none}
-.pet-body{width:100%;height:100%;object-fit:contain;transform-origin:50% 90%;filter:drop-shadow(0 5px 3px #243e2c18);animation:pet-breathe 3s ease-in-out infinite;z-index:1;pointer-events:none}
-.pet-shadow{position:absolute;bottom:0;left:23%;width:54%;height:7%;border-radius:50%;background:#38534022;filter:blur(3px);z-index:0}
-.pet-spark{position:absolute;z-index:2;color:#729b7d;font-size:calc(var(--pet-size)*.17);animation:pet-sparkle 3s ease-in-out infinite;pointer-events:none}
-.pet-spark-one{top:6%;right:1%}.pet-spark-two{top:22%;left:4%;animation-delay:1.2s}
-.pet-prop{position:absolute;bottom:9%;right:0;font-size:calc(var(--pet-size)*.21);z-index:2;transform:rotate(8deg)}
-.pet-slacking .pet-body{animation:pet-sway 2.6s ease-in-out infinite}.pet-slacking .pet-spark{color:#669ca9}
-.pet-overtime .pet-body{animation:pet-nod 4.2s ease-in-out infinite}.pet-overtime .pet-spark{color:#c19a60}
-.pet-rest .pet-body{animation:pet-sleep 4.8s ease-in-out infinite}.pet-rest .pet-spark{color:#9993b4}
-.pet-happy .pet-body{animation:pet-hop .65s ease-in-out infinite}.pet-happy .pet-spark{color:#d88891}
+.pet-sprite{display:block;width:100%;height:100%;overflow:hidden;pointer-events:none}
+.pet-motion-cue{position:absolute;bottom:-16px;left:-30px;right:-30px;font-size:11px;color:#748369;letter-spacing:.3px;text-align:center;white-space:nowrap;pointer-events:none}
+.pet-photo-body{width:90%;height:84%;align-self:start;margin-top:4%;object-fit:contain;filter:drop-shadow(0 5px 3px #243e2c18);pointer-events:none}
+.photo-scene{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.scene-laptop{transform-origin:120px 228px;animation:laptop-arrive .8s ease-out both}
+.scene-keystroke{animation:typing-tap .36s ease-in-out infinite}.key-right{animation-delay:.18s}
+.scene-fish{transform-origin:120px 215px;animation:fish-cuddle 9s ease-in-out infinite}
+.scene-mug{transform-origin:124px 230px;animation:offer-mug 10s ease-in-out infinite}
+.scene-steam{animation:mug-steam 3s ease-out infinite}.steam-two{animation-delay:1.3s}
+.scene-blanket{transform-origin:120px 226px;animation:blanket-tuck 1.8s cubic-bezier(.2,.7,.2,1) both}
+.scene-coin{animation:coin-catch 3.8s cubic-bezier(.2,.7,.2,1) both;transform-origin:center;transform-box:fill-box}
+.coin-1{animation-delay:.1s}.coin-2{animation-delay:.2s}.coin-3{animation-delay:.3s}.coin-4{animation-delay:.4s}
 .pet-still *{animation:none!important}
-@keyframes pet-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-3px) scaleY(1.025)}}
-@keyframes pet-sway{0%,100%{transform:rotate(-6deg) translateX(-3px)}50%{transform:rotate(6deg) translateX(3px)}}
-@keyframes pet-nod{0%,100%{transform:rotate(-2deg)}45%{transform:translateY(3px) rotate(3deg)}65%{transform:translateY(0) rotate(0)}}
-@keyframes pet-sleep{0%,100%{transform:translateY(4px) scaleY(.94)}50%{transform:translateY(2px) scaleY(.98)}}
-@keyframes pet-hop{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-12px) rotate(3deg)}}
-@keyframes pet-sparkle{0%,100%{opacity:.4;transform:translateY(0)}50%{opacity:1;transform:translateY(-5px)}}
+@keyframes laptop-arrive{from{opacity:0;transform:translateY(35px)}to{opacity:1;transform:translateY(0)}}
+@keyframes typing-tap{0%,55%,100%{opacity:0}20%,40%{opacity:1}}
+@keyframes fish-cuddle{0%,12%{opacity:0;transform:translate(65px,10px) rotate(18deg)}25%,45%{opacity:1;transform:translate(0,-20px) rotate(-12deg)}55%,82%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(65px,10px) rotate(18deg)}}
+@keyframes offer-mug{0%{opacity:0;transform:translate(45px,15px) scale(.8)}12%,28%{opacity:1;transform:translate(0,0) scale(.9)}40%,70%{opacity:1;transform:translate(0,-15px) scale(1.12)}85%,100%{opacity:1;transform:translate(0,0) scale(.9)}}
+@keyframes mug-steam{0%{opacity:0;transform:translateY(8px)}25%,60%{opacity:.7}100%{opacity:0;transform:translateY(-14px)}}
+@keyframes blanket-tuck{from{opacity:0;transform:translateY(45px) scaleX(.5)}to{opacity:1;transform:translateY(0) scaleX(1)}}
+@keyframes coin-catch{0%{opacity:0;transform:translateY(100px) scale(.2) rotate(-60deg)}25%{opacity:1;transform:translateY(-15px) scale(1) rotate(0)}60%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(130px) scale(.6) rotate(70deg)}}
 @media(prefers-reduced-motion:reduce){.pet-character *{animation:none!important}}

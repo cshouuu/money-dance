@@ -48,7 +48,7 @@ async function verify() {
   await fs.access(executable);
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'moneydance-package-'));
   const fixture = path.join(profile, 'photo.png');
-  await require('sharp')(path.resolve(__dirname, '../../web/public/pet-default.svg')).flatten({ background: '#eeddcc' }).png().toFile(fixture);
+  await require('sharp')(path.resolve(__dirname, '../tests/fixtures/sample-cat.svg')).flatten({ background: '#eeddcc' }).png().toFile(fixture);
   let expectedImage;
   for (let run = 0; run < 2; run++) {
     const rendererPort = await port(), mainPort = await port();

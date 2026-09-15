@@ -1,10 +1,12 @@
 {
   "name": "@salary-flow/desktop",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "MoneyDance Windows app and local desktop companion",
   "author": "MoneyDance",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "src/main.cjs",
   "scripts": {
     "prepare:assets": "node scripts/prepare-assets.cjs",
@@ -25,10 +27,35 @@
   "build": {
     "appId": "com.moneydance.desktop",
     "productName": "MoneyDance",
-    "directories": { "output": "release" },
-    "files": ["src/**", "web/**", "assets/**", "package.json", "!node_modules/onnxruntime-node/bin/napi-v6/{linux,darwin}/**", "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"],
-    "asarUnpack": ["node_modules/onnxruntime-node/**", "node_modules/@img/**", "node_modules/sharp/**"],
-    "win": { "target": ["nsis"], "icon": "assets/icon.png", "artifactName": "MoneyDance-${version}-windows-${arch}.${ext}" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "deleteAppDataOnUninstall": false }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**",
+      "web/**",
+      "assets/**",
+      "package.json",
+      "!node_modules/onnxruntime-node/bin/napi-v6/{linux,darwin}/**",
+      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
+    ],
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**",
+      "node_modules/@img/**",
+      "node_modules/sharp/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "MoneyDance-${version}-windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

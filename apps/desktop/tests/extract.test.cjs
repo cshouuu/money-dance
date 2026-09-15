@@ -15,7 +15,7 @@ test('transparent PNG preserves alpha and crops empty space', async () => {
 });
 const model = path.resolve(__dirname, '../assets/u2netp.onnx');
 test('real model removes an opaque background while preserving the subject', { skip: !fs.existsSync(model) }, async () => {
-  const photo = await sharp(path.resolve(__dirname, '../../web/public/pet-default.svg')).flatten({ background: '#ddddee' }).png().toBuffer();
+  const photo = await sharp(path.resolve(__dirname, 'fixtures/sample-cat.svg')).flatten({ background: '#ddddee' }).png().toBuffer();
   const result = await extract(photo, 'extract', model);
   const { data, info } = await sharp(result).raw().toBuffer({ resolveWithObject: true });
   assert.equal(info.channels, 4);
