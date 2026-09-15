@@ -115,7 +115,7 @@ export function DesktopPet() {
         <div className="pet-section-title"><span className="pet-number">01</span><div><h2>认识你的桌边搭子</h2><p>选一位内置伙伴，或导入你自己的动作包</p></div></div>
         <div className="pet-preset-picker" role="group" aria-label="选择内置桌宠">{PET_PRESETS.map(item => {
           const selected = !previewPack && !previewImage && preset.id === item.id
-          return <button key={item.id} className="pet-preset-card" style={{ background: item.color }} aria-pressed={selected} disabled={busy || saving} onClick={() => previewPreset(item.id)}>
+          return <button key={item.id} className="pet-preset-card" aria-pressed={selected} disabled={busy || saving} onClick={() => previewPreset(item.id)}>
             <PetCharacter presetId={item.id} mood="working" reaction="love" size={94} reducedMotion/>
             <b>{item.name}<small>{item.species}</small></b><span>{item.personality}</span>
             <em>{selected ? presetCandidate ? '预览中' : '正在陪伴' : '看看它'}</em>

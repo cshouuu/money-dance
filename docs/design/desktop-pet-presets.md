@@ -38,3 +38,9 @@ Use case: stylized-concept. Create ONE production-ready transparent PNG desktop 
 ## 后续多平台安装包更新
 
 0.4.5 的 Windows ARM64、Mac M 系列、Mac Intel 安装包已由 GitHub Actions 完成构建，并通过对应原生平台的安装、三次启动和桌宠集成验证。构建与安装说明见 ../DESKTOP_BUILDS.md。
+
+## 0.4.6 换肤修复
+
+桌边搭子页面原先使用固定奶油绿颜色，角色卡片又通过内联背景覆盖 CSS。现已统一使用应用的 paper、control、accent、line、ink 等主题变量，覆盖卡片、预览场景、气泡、动作按钮、导入区域、开关、表单和状态提示；删除预制角色数据中的界面背景色。角色 PNG 素材保持原样。
+
+在独立临时用户目录中通过真实换肤面板逐个选择全部 12 套主题，核对卡片、主按钮、选中角色、开关、背景渐变的实际计算颜色，以及刷新后的主题保留；全部通过。主题、可读性与角色相关测试 189 项通过，Web 构建与 PWA 校验通过。本次提供 Windows x64 0.4.6 修复安装包，其他架构的现有安装包仍为 0.4.5。
