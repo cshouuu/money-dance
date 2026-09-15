@@ -31,3 +31,16 @@ test('invalid, all-transparent, and opaque input produce actionable errors', asy
   const opaque = await sharp({ create: { width: 20, height: 20, channels: 4, background: '#ffffff' } }).png().toBuffer();
   await assert.rejects(extract(opaque, 'transparent', 'unused'), /背景并不透明/);
 });
+test('Intel Mac WASM backend extracts the bundled model with networking disabled', { skip: !fs.existsSync(model), timeout: 90000 }, async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('Inference must never access the network'); };
+  try {
+    const photo = await sharp(path.resolve(__dirname, 'fixtures/sample-cat.svg')).flatten({ background: '#ddddee' }).png().toBuffer();
+    const png = await extract(photo, 'extract', model, () => {}, 'wasm');
+    const { data, info } = await sharp(png).raw().toBuffer({ resolveWithObject: true });
+    assert.equal(info.channels, 4);
+    assert.ok(info.width < 240 && info.height < 240);
+    assert.ok(data[(15 * info.width + 15) * 4 + 3] < 20);
+    assert.ok(data[(Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * 4 + 3] > 230);
+  } finally { globalThis.fetch = originalFetch; }
+});

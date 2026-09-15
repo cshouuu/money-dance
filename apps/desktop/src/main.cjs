@@ -149,7 +149,7 @@ function setupIPC() {
     assertSender(event, 'main');
     const next = sanitizeSettings(input);
     if (next.launchAtLogin !== settings.launchAtLogin) {
-      if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.launchAtLogin, args: ['--hidden'] });
+      if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.launchAtLogin, ...(process.platform === 'win32' ? { args: ['--hidden'] } : {}) });
       else next.launchAtLogin = false;
     }
     settings = next;
@@ -290,7 +290,12 @@ async function boot() {
   const webPreferences = { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, spellcheck: false };
   mainWindow = new BrowserWindow({ width: 1240, height: 850, minWidth: 850, minHeight: 620, title: 'MoneyDance', show: false, icon: path.join(__dirname, '../assets/icon.png'), webPreferences });
   petWindow = new BrowserWindow({ width: settings.size, height: settings.size + 29, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false, resizable: false, maximizable: false, minimizable: false, fullscreenable: false, skipTaskbar: true, alwaysOnTop: true, show: false, webPreferences });
-  Menu.setApplicationMenu(null);
+  Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([
+    { label: 'MoneyDance', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
+    { role: 'editMenu' },
+    { label: '窗口', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { label: '打开 MoneyDance', click: () => openPage('/') }] },
+  ]) : null);
+  if (process.platform === 'darwin') petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   for (const win of [mainWindow, petWindow]) harden(win);
   mainWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   mainWindow.webContents.session.setPermissionCheckHandler(() => false);
@@ -298,7 +303,7 @@ async function boot() {
   petWindow.on('close', event => { if (!quitting) { event.preventDefault(); settings.enabled = false; applySettings(); } });
   mainWindow.webContents.on('render-process-gone', () => { snapshot = null; broadcast(); if (!quitting) void mainWindow.reload(); });
   petWindow.webContents.on('render-process-gone', () => { if (!quitting) void petWindow.reload(); });
-  tray = new Tray(path.join(__dirname, '../assets/icon.png'));
+  tray = new Tray(path.join(__dirname, process.platform === 'darwin' ? '../assets/trayTemplate.png' : '../assets/icon.png'));
   tray.setToolTip('MoneyDance · 桌宠陪你，时间变成钱');
   tray.on('double-click', () => openPage('/'));
   setupIPC(); placePet(); refreshTray();
@@ -306,7 +311,8 @@ async function boot() {
   screen.on('display-removed', reposition); screen.on('display-metrics-changed', reposition);
   powerMonitor.on('resume', () => { memory.lastReport = Date.now(); memory.lastBreak = Date.now(); });
   await Promise.all([mainWindow.loadURL(`${ORIGIN}/`), petWindow.loadURL(`${ORIGIN}/pet.html`)]);
-  if (!process.argv.includes('--hidden')) mainWindow.show();
+  const loginLaunch = process.platform === 'darwin' && app.isPackaged && app.getLoginItemSettings().wasOpenedAtLogin;
+  if (!process.argv.includes('--hidden') && !loginLaunch) mainWindow.show();
   if (settings.enabled) petWindow.showInactive();
   // Integration smoke runner is opt-in, never active in installed builds.
   if (!app.isPackaged && process.env.MONEY_DANCE_SMOKE === '1') {
@@ -316,6 +322,7 @@ async function boot() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow) openPage('/'); });
+  app.on('activate', () => { if (mainWindow && !quitting) openPage('/'); });
   app.on('before-quit', () => { quitting = true; if (settings) persist(); if (worker) void worker.terminate(); if (packWorker) void packWorker.terminate(); });
   app.whenReady().then(boot).catch(error => { dialog.showErrorBox('MoneyDance 启动失败', String(error.message)); app.quit(); });
 }

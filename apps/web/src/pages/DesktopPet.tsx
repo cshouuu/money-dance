@@ -101,7 +101,7 @@ export function DesktopPet() {
   }
   return <div className="pet-page">
     <header className="pet-page-header"><div><div className="pet-eyebrow"><PawPrint size={15}/> A LITTLE COMPANY</div><h1>把喜欢的它，放在桌边。</h1><p>带上它的动作，陪你认真，也陪你放松。</p></div><span className="pet-local-badge"><ShieldCheck size={15}/> 本地播放 · 无生成费用</span></header>
-    {!desktop && <div className="pet-notice"><Monitor size={18}/> 这是桌宠功能预览。请在 MoneyDance Windows 版中导入动作包并开启桌面陪伴。</div>}
+    {!desktop && <div className="pet-notice"><Monitor size={18}/> 这是桌宠功能预览。请在 MoneyDance 桌面版（Windows / macOS）中导入动作包并开启桌面陪伴。</div>}
     {(error || connectionError) && <div className="pet-error" role="alert">{error || connectionError}</div>}
     {notice && <p className="pet-save-notice" role="status"><Check size={15}/> {notice}</p>}
     <div className="pet-page-grid">
@@ -147,9 +147,9 @@ export function DesktopPet() {
             {settings?.quietEnabled && <div className="pet-form-row"><label>开始时间<input type="time" value={settings.quietStart} onChange={event => void update({ quietStart: event.target.value })}/></label><label>结束时间<input type="time" value={settings.quietEnd} onChange={event => void update({ quietEnd: event.target.value })}/></label></div>}
             <label className="pet-toggle-row"><span><b><Eye size={15}/> 隐藏收入金额</b><small>共享屏幕时，桌宠和提醒不展示具体数额</small></span><input type="checkbox" checked={settings?.hideAmounts ?? false} onChange={event => void update({ hideAmounts: event.target.checked })}/></label>
             <label className="pet-toggle-row"><span><b><Volume2 size={15}/> 语音读出提醒</b><small>使用系统语音，默认关闭</small></span><input type="checkbox" checked={settings?.speech ?? false} onChange={event => void update({ speech: event.target.checked })}/></label>
-            <label className="pet-toggle-row"><span><b>Windows 系统通知</b><small>默认只用桌宠气泡；系统通知遵循 Windows 设置</small></span><input type="checkbox" checked={settings?.notifications ?? false} onChange={event => void update({ notifications: event.target.checked })}/></label>
+            <label className="pet-toggle-row"><span><b>系统通知</b><small>默认只用桌宠气泡；系统通知遵循系统设置</small></span><input type="checkbox" checked={settings?.notifications ?? false} onChange={event => void update({ notifications: event.target.checked })}/></label>
             <label className="pet-toggle-row"><span><b>减少动作</b><small>保留陪伴，停止循环动画</small></span><input type="checkbox" checked={settings?.reducedMotion ?? false} onChange={event => void update({ reducedMotion: event.target.checked })}/></label>
-            <label className="pet-toggle-row"><span><b>登录 Windows 后启动</b><small>安装版生效，默认关闭</small></span><input type="checkbox" checked={settings?.launchAtLogin ?? false} onChange={event => void update({ launchAtLogin: event.target.checked })}/></label>
+            <label className="pet-toggle-row"><span><b>登录电脑后启动</b><small>安装版生效，默认关闭</small></span><input type="checkbox" checked={settings?.launchAtLogin ?? false} onChange={event => void update({ launchAtLogin: event.target.checked })}/></label>
           </fieldset>
         </section>
         <div className="pet-tip"><Coffee size={21}/><div><b>一点陪伴，很多种回应</b><p>拖动桌宠调整位置；点击摸摸、查看收入，或开始 25 分钟专注。摸鱼与加班入口会打开原有记录页面。</p></div></div>

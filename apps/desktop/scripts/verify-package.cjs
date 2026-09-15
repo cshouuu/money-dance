@@ -44,7 +44,8 @@ async function connect(url) {
   } };
 }
 async function verify() {
-  const executable = path.resolve(__dirname, '../release/win-unpacked/MoneyDance.exe');
+  const appDir = process.platform === 'darwin' ? `mac${process.arch === 'arm64' ? '-arm64' : ''}/MoneyDance.app/Contents/MacOS/MoneyDance` : `win${process.arch === 'arm64' ? '-arm64' : ''}-unpacked/MoneyDance.exe`;
+  const executable = path.resolve(__dirname, '../release', appDir);
   await fs.access(executable);
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'moneydance-package-'));
   const fixture = path.join(profile, 'photo.png');
@@ -54,9 +55,11 @@ async function verify() {
     const rendererPort = await port(), mainPort = await port();
     const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE; delete env.MONEY_DANCE_SMOKE;
     const child = spawn(executable, [`--user-data-dir=${profile}`, `--remote-debugging-port=${rendererPort}`, `--inspect=127.0.0.1:${mainPort}`, '--hidden'], { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] });
-    let main, renderer;
+    let main, renderer, stderr = '';
+    child.stderr.on('data', bytes => { stderr = (stderr + bytes.toString()).slice(-12000); });
     try {
       main = await connect(await debuggerTarget(mainPort, () => true));
+      assert.deepEqual(await main.evaluate('({platform:process.platform,arch:process.arch})'), { platform: process.platform, arch: process.arch }, 'packaged executable runs natively on the target architecture');
       renderer = await connect(await debuggerTarget(rendererPort, target => target.url === 'moneydance://app/'));
       let ready = false;
       for (let i = 0; i < 100 && !ready; i++) {
@@ -86,12 +89,18 @@ async function verify() {
         assert.equal(state.settings.name, '打包验证');
         assert.equal(state.settings.hideAmounts, true);
       }
-      console.log(`Packaged Windows test ${run + 1}/2 passed.`);
+      if (process.platform === 'darwin') {
+        assert.equal(await main.evaluate("!!process.mainModule.require('electron').Menu.getApplicationMenu()"), true, 'macOS application menu exists');
+        await main.evaluate("process.mainModule.require('electron').app.emit('activate')");
+        assert.equal(await main.evaluate("process.mainModule.require('electron').BrowserWindow.getAllWindows().some(w=>w.webContents.getURL()==='moneydance://app/' && w.isVisible())"), true, 'Dock activation restores the main window');
+      }
+      console.log(`Packaged ${process.platform}-${process.arch} test ${run + 1}/2 passed.`);
       await main.call('Runtime.evaluate', { expression: "setTimeout(() => process.mainModule.require('electron').app.quit(), 100)" });
       main.close(); renderer.close();
       await new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('App did not exit')), 8000); child.once('exit', () => { clearTimeout(timeout); resolve(); }); });
-    } finally { main?.close(); renderer?.close(); if (child.exitCode === null) child.kill(); }
+    } catch (error) { console.error(stderr); throw error; }
+    finally { main?.close(); renderer?.close(); if (child.exitCode === null) child.kill(); }
   }
-  console.log('PACKAGED WINDOWS PASSED: local model inference, native dependencies, imported pack assets and bindings persist after restart.');
+  console.log(`PACKAGED ${process.platform}-${process.arch} PASSED: local model inference, native dependencies, imported pack assets and bindings persist after restart.`);
 }
 verify().catch(error => { console.error(error); process.exitCode = 1; });

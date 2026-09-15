@@ -1,8 +1,8 @@
 {
   "name": "@salary-flow/desktop",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "private": true,
-  "description": "MoneyDance Windows app and local desktop companion",
+  "description": "MoneyDance desktop app and local desktop companion",
   "author": "MoneyDance",
   "engines": {
     "node": ">=22.12.0"
@@ -13,12 +13,16 @@
     "start": "electron .",
     "build": "node scripts/prepare-assets.cjs --copy-web",
     "pack": "electron-builder --win --x64 --dir",
-    "dist:win": "electron-builder --win nsis --x64",
-    "test": "node --test tests/*.test.cjs"
+    "dist:win": "node scripts/build-installer.cjs win32 x64",
+    "test": "node --test tests/*.test.cjs",
+    "dist:win:arm64": "node scripts/build-installer.cjs win32 arm64",
+    "dist:mac:arm64": "node scripts/build-installer.cjs darwin arm64",
+    "dist:mac:x64": "node scripts/build-installer.cjs darwin x64"
   },
   "dependencies": {
     "fflate": "0.8.3",
     "onnxruntime-node": "1.29.0",
+    "onnxruntime-web": "1.29.0",
     "sharp": "0.35.4"
   },
   "devDependencies": {
@@ -35,14 +39,13 @@
       "src/**",
       "web/**",
       "assets/**",
-      "package.json",
-      "!node_modules/onnxruntime-node/bin/napi-v6/{linux,darwin}/**",
-      "!node_modules/onnxruntime-node/bin/napi-v6/win32/arm64/**"
+      "package.json"
     ],
     "asarUnpack": [
       "node_modules/onnxruntime-node/**",
       "node_modules/@img/**",
-      "node_modules/sharp/**"
+      "node_modules/sharp/**",
+      "node_modules/onnxruntime-web/**"
     ],
     "win": {
       "target": [

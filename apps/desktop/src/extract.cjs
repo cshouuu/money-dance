@@ -1,6 +1,7 @@
 const sharp = require('sharp');
+const { loadInference } = require('./inference.cjs');
 /** Local U²-NetP salient-object extraction. User images never leave this process. */
-async function extract(bytes, mode, modelPath, progress = () => {}) {
+async function extract(bytes, mode, modelPath, progress = () => {}, backend) {
   sharp.cache(false); sharp.concurrency(2);
   progress('正在读取图片…');
   const input = sharp(bytes, { limitInputPixels: 25_000_000, animated: false });
@@ -12,7 +13,7 @@ async function extract(bytes, mode, modelPath, progress = () => {}) {
   let rgba = Buffer.from(data);
   if (mode === 'extract') {
     progress('正在识别主体，第一次可能需要稍等…');
-    const ort = require('onnxruntime-node');
+    const { ort, options } = loadInference(backend);
     const rgb = await sharp(rgba, { raw: { width, height, channels: 4 } }).removeAlpha().resize(320, 320, { fit: 'fill' }).raw().toBuffer();
     const tensor = new Float32Array(3 * 320 * 320);
     let max = 1;
@@ -21,7 +22,7 @@ async function extract(bytes, mode, modelPath, progress = () => {}) {
     for (let i = 0; i < 320 * 320; i++) for (let c = 0; c < 3; c++) tensor[c * 320 * 320 + i] = (rgb[i * 3 + c] / max - mean[c]) / std[c];
     // Electron's fs reads ASAR assets; native ONNX fopen cannot open paths inside ASAR.
     const model = await require('node:fs/promises').readFile(modelPath);
-    const session = await ort.InferenceSession.create(model, { executionProviders: ['cpu'], intraOpNumThreads: 2, interOpNumThreads: 1 });
+    const session = await ort.InferenceSession.create(model, options);
     try {
       const output = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', tensor, [1, 3, 320, 320]) });
       const mask = output[session.outputNames[0]].data;
