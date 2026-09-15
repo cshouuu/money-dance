@@ -6,6 +6,7 @@ const { Worker } = require('node:worker_threads');
 const { createHash } = require('node:crypto');
 const { sanitizeSettings, sanitizeSnapshot, ROUTES, clampPosition } = require('./contract.cjs');
 const { nextReminder, report } = require('./reminders.cjs');
+const { publicPack, bindingsFor, LIMIT: PACK_LIMIT } = require('./pet-pack.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'moneydance', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 const ORIGIN = 'moneydance://app';
@@ -17,14 +18,30 @@ if (!app.isPackaged && process.env.MONEY_DANCE_SMOKE === '1') app.setPath('userD
 let mainWindow, petWindow, tray, quitting = false, settings, saved = {}, snapshot = null, message = null;
 let image = null, candidate = null, worker = null, extracting = false, extractionGeneration = 0, dragStart = null, positionTimer;
 let memory = {}, lastMemorySave = 0;
+let activePack = null, pendingPack = null, pendingPackBytes = null, packWorker = null, importingPack = false, packGeneration = 0;
 const settingsPath = () => path.join(app.getPath('userData'), 'desktop-pet.json');
 const imagePath = () => path.join(app.getPath('userData'), 'desktop-pet.png');
+const packPath = () => path.join(app.getPath('userData'), 'desktop-pet-pack.zip');
 function persist() {
-  const data = { settings, position: saved.position, memory: { ...memory, previous: undefined } };
+  const data = { settings, position: saved.position, petSource: saved.petSource, packBindings: saved.packBindings, memory: { ...memory, previous: undefined } };
   fs.writeFileSync(`${settingsPath()}.tmp`, JSON.stringify(data), { mode: 0o600 });
   fs.renameSync(`${settingsPath()}.tmp`, settingsPath());
 }
-function state() { return { settings, image, snapshot, message, focusEndsAt: memory.focusEndsAt || 0, snoozedUntil: memory.snoozedUntil || 0 }; }
+function state() { return { settings, image: activePack ? null : image, pack: activePack ? publicPack(activePack) : null, snapshot, message, focusEndsAt: memory.focusEndsAt || 0, snoozedUntil: memory.snoozedUntil || 0 }; }
+function decodePack(bytes, sender) {
+  return new Promise((resolve, reject) => {
+    const task = new Worker(path.join(__dirname, 'pet-pack-worker.cjs'), { workerData: { bytes }, resourceLimits: { maxOldGenerationSizeMb: 256 } });
+    packWorker = task;
+    const timer = setTimeout(() => { void task.terminate(); reject(new Error('动作包处理超时，请减少帧数后重试。')); }, 90_000);
+    let settled = false;
+    task.on('message', data => {
+      if (data.progress) { if (sender && !sender.isDestroyed()) sender.send('desktop:progress', data.progress); }
+      else { settled = true; clearTimeout(timer); if (data.error) reject(new Error(data.error)); else resolve(data.pack); }
+    });
+    task.once('error', () => reject(new Error('动作包处理失败，请检查素材。')));
+    task.once('exit', () => { clearTimeout(timer); if (packWorker === task) packWorker = null; if (!settled) reject(new Error('动作包导入已取消。')); });
+  });
+}
 function broadcast(snapshotOnly = false) {
   const update = snapshotOnly ? { snapshot, focusEndsAt: memory.focusEndsAt || 0, snoozedUntil: memory.snoozedUntil || 0 } : state();
   for (const win of [mainWindow, petWindow]) if (win && !win.isDestroyed()) win.webContents.send('desktop:state-changed', update);
@@ -82,6 +99,44 @@ function applySettings() {
   refreshTray(); persist(); broadcast();
 }
 function setupIPC() {
+  ipcMain.handle('desktop:import-pack', async event => {
+    assertSender(event, 'main');
+    if (extracting || importingPack) throw new Error('请等待当前素材处理完成');
+    importingPack = true; pendingPack = null; pendingPackBytes = null; candidate = null;
+    const generation = ++packGeneration;
+    try {
+      const chosen = await dialog.showOpenDialog(mainWindow, { title: '导入桌宠动作包', properties: ['openFile'], filters: [{ name: 'MoneyDance 动作包（ZIP，最多 25 MB）', extensions: ['zip'] }] });
+      if (chosen.canceled || generation !== packGeneration) return null;
+      if (fs.statSync(chosen.filePaths[0]).size > PACK_LIMIT) throw new Error('动作包不能超过 25 MB');
+      const bytes = fs.readFileSync(chosen.filePaths[0]);
+      const pack = await decodePack(bytes, event.sender);
+      if (generation !== packGeneration) return null;
+      pendingPack = pack; pendingPackBytes = bytes;
+      return publicPack(pack);
+    } finally { importingPack = false; }
+  });
+  ipcMain.handle('desktop:use-pack', (event, id, bindings) => {
+    assertSender(event, 'main');
+    if (importingPack || !pendingPack || pendingPack.id !== id) throw new Error('请先导入并预览动作包');
+    const validated = bindingsFor(pendingPack.clips, bindings);
+    fs.writeFileSync(`${packPath()}.tmp`, pendingPackBytes); fs.renameSync(`${packPath()}.tmp`, packPath());
+    activePack = { ...pendingPack, bindings: validated }; pendingPack = null; pendingPackBytes = null;
+    saved.petSource = 'pack'; saved.packBindings = validated; settings.enabled = true;
+    applySettings(); return state();
+  });
+  ipcMain.handle('desktop:pack-bindings', (event, id, bindings) => {
+    assertSender(event, 'main');
+    if (!activePack || activePack.id !== id) throw new Error('当前动作包已变更，请重试');
+    activePack.bindings = bindingsFor(activePack.clips, bindings); saved.packBindings = activePack.bindings;
+    persist(); broadcast(); return state();
+  });
+  ipcMain.handle('desktop:pack-template', async event => {
+    assertSender(event, 'main');
+    const result = await dialog.showSaveDialog(mainWindow, { title: '保存桌宠动作包模板', defaultPath: 'MoneyDance-动作包模板.zip', filters: [{ name: 'ZIP 动作包', extensions: ['zip'] }] });
+    if (result.canceled || !result.filePath) return false;
+    await fs.promises.copyFile(path.join(__dirname, '../web/pet-pack-template.zip'), result.filePath);
+    return true;
+  });
   ipcMain.handle('desktop:state', event => { assertSender(event); return state(); });
   ipcMain.handle('desktop:settings', (event, input) => {
     assertSender(event, 'main');
@@ -135,12 +190,12 @@ function setupIPC() {
   ipcMain.handle('desktop:create-pet', async (event, mode) => {
     assertSender(event, 'main');
     if (!['extract', 'transparent'].includes(mode)) throw new Error('请选择抠图或透明图片');
-    if (extracting) throw new Error('已有图片正在处理中');
-    extracting = true; candidate = null;
+    if (extracting || importingPack) throw new Error('已有素材正在处理中');
+    extracting = true; candidate = null; pendingPack = null; pendingPackBytes = null;
     const generation = ++extractionGeneration;
     try {
       const result = await dialog.showOpenDialog(mainWindow, { title: '选择桌宠照片', properties: ['openFile'], filters: [{ name: '图片（最多 15 MB）', extensions: ['png', 'jpg', 'jpeg', 'webp'] }] });
-      if (result.canceled) return null;
+      if (result.canceled || generation !== extractionGeneration) return null;
       const selectedPath = result.filePaths[0];
       if (fs.statSync(selectedPath).size > 15 * 1024 * 1024) throw new Error('图片太大，请选择 15 MB 以内的图片');
       const bytes = fs.readFileSync(selectedPath);
@@ -163,16 +218,24 @@ function setupIPC() {
   });
   ipcMain.handle('desktop:cancel-extraction', async event => {
     assertSender(event, 'main'); extractionGeneration++; candidate = null;
+    packGeneration++; pendingPack = null; pendingPackBytes = null;
+    if (packWorker) await packWorker.terminate();
     if (worker) await worker.terminate();
   });
   ipcMain.handle('desktop:use-pet', event => {
     assertSender(event, 'main'); if (!candidate) throw new Error('请先选择图片并完成预览');
     fs.writeFileSync(`${imagePath()}.tmp`, candidate); fs.renameSync(`${imagePath()}.tmp`, imagePath());
     image = `data:image/png;base64,${candidate.toString('base64')}`; candidate = null;
+    activePack = null; saved.petSource = 'photo'; saved.packBindings = undefined;
     settings.enabled = true; applySettings(); return state();
   });
   ipcMain.handle('desktop:reset-pet', event => {
-    assertSender(event, 'main'); fs.rmSync(imagePath(), { force: true }); image = null; candidate = null; broadcast(); return state();
+    assertSender(event, 'main');
+    if (extracting || importingPack) throw new Error('请先取消当前导入');
+    saved.petSource = 'default'; saved.packBindings = undefined; persist();
+    image = null; candidate = null; activePack = null; pendingPack = null; pendingPackBytes = null;
+    fs.rmSync(imagePath(), { force: true }); fs.rmSync(packPath(), { force: true });
+    broadcast(); return state();
   });
 }
 async function boot() {
@@ -180,13 +243,27 @@ async function boot() {
   settings = sanitizeSettings(saved.settings);
   memory = saved.memory && typeof saved.memory === 'object' ? saved.memory : {};
   memory.previous = undefined;
-  try { const bytes = fs.readFileSync(imagePath()); if (bytes.length < 5 * 1024 * 1024) image = `data:image/png;base64,${bytes.toString('base64')}`; } catch {}
+  if (saved.petSource === 'pack') {
+    try {
+      if (fs.statSync(packPath()).size > PACK_LIMIT) throw new Error('Stored pack exceeds size limit');
+      activePack = await decodePack(fs.readFileSync(packPath()));
+      try { activePack.bindings = bindingsFor(activePack.clips, saved.packBindings); } catch { /* Keep manifest bindings if a saved mapping is stale. */ }
+    } catch { message = { id: `pack-error-${Date.now()}`, text: '动作包无法读取，暂时由小薪陪伴。请在我的桌宠中重新导入。', kind: 'rest', at: Date.now(), automatic: false }; }
+  } else if (saved.petSource !== 'default') {
+    try { const bytes = fs.readFileSync(imagePath()); if (bytes.length < 5 * 1024 * 1024) image = `data:image/png;base64,${bytes.toString('base64')}`; } catch {}
+  }
   const webRoot = path.resolve(__dirname, '../web');
   const inlineHashes = [...fs.readFileSync(path.join(webRoot, 'index.html'), 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(match => `'sha256-${createHash('sha256').update(match[1].replace(/\r\n?/g, '\n')).digest('base64')}'`).join(' ');
   protocol.handle('moneydance', async request => {
     const url = new URL(request.url);
     if (url.host !== 'app' || request.method !== 'GET') return new Response('', { status: 403 });
+    if (url.pathname.startsWith('/pet-pack/')) {
+      const match = /^\/pet-pack\/([a-f0-9]{64})\/([a-z][a-z0-9_-]{0,23})\.png$/.exec(url.pathname);
+      const pack = match && [pendingPack, activePack].find(item => item?.id === match[1]);
+      const bytes = pack && Object.hasOwn(pack.sheets, match[2]) && pack.sheets[match[2]];
+      return bytes ? new Response(Buffer.from(bytes), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' } }) : new Response('', { status: 404 });
+    }
     let relative;
     try { relative = decodeURIComponent(url.pathname); } catch { return new Response('', { status: 400 }); }
     if (relative === '/' || ROUTES.includes(relative)) relative = '/index.html';
@@ -227,6 +304,6 @@ async function boot() {
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on('second-instance', () => { if (mainWindow) openPage('/'); });
-  app.on('before-quit', () => { quitting = true; if (settings) persist(); if (worker) void worker.terminate(); });
+  app.on('before-quit', () => { quitting = true; if (settings) persist(); if (worker) void worker.terminate(); if (packWorker) void packWorker.terminate(); });
   app.whenReady().then(boot).catch(error => { dialog.showErrorBox('MoneyDance 启动失败', String(error.message)); app.quit(); });
 }

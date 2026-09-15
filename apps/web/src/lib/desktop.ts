@@ -1,4 +1,13 @@
 export type PetMood = 'working' | 'slacking' | 'overtime' | 'rest'
+export type PackState = 'idle' | PetMood | 'love' | 'celebrate'
+export interface PackClip {
+  src: string; width: number; height: number; frameWidth: number; frameHeight: number
+  columns: number; durations: number[]; stillFrame: number
+}
+export interface PetPack {
+  id: string; name: string; author: string; warnings: string[]
+  clips: Record<string, PackClip>; bindings: Record<PackState, string>
+}
 export interface PetSettings {
   enabled: boolean; name: string; size: number; reducedMotion: boolean
   reportMinutes: number; breakMinutes: number; warmth: boolean; milestones: boolean
@@ -11,7 +20,7 @@ export interface PetSnapshot {
   wish: { id: string; name: string; progress: number } | null
 }
 export interface DesktopState {
-  settings: PetSettings; image: string | null; snapshot: PetSnapshot | null
+  settings: PetSettings; image: string | null; pack: PetPack | null; snapshot: PetSnapshot | null
   message: { id: string; text: string; kind: string; automatic: boolean; at: number } | null
   focusEndsAt: number; snoozedUntil: number
 }
@@ -24,6 +33,10 @@ export interface DesktopBridge {
   usePet(): Promise<DesktopState>
   resetPet(): Promise<DesktopState>
   cancelExtraction(): Promise<void>
+  importPack(): Promise<PetPack | null>
+  usePack(id: string, bindings: PetPack['bindings']): Promise<DesktopState>
+  savePackBindings(id: string, bindings: PetPack['bindings']): Promise<DesktopState>
+  savePackTemplate(): Promise<boolean>
   publish(snapshot: PetSnapshot): void
   action(action: PetAction): Promise<DesktopState>
   openPage(route: string): Promise<void>

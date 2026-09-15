@@ -19,3 +19,7 @@
 .pet-reaction-picker button{border:1px solid #dbe2d2;background:#fbfcf5;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:11px;color:#738367;cursor:pointer}
 .pet-reaction-picker button[aria-pressed=true]{background:#e9f0dd;border-color:#aec497;color:#455c39}
 .pet-reaction-picker button:last-child{margin-left:auto;background:transparent;border-color:transparent;text-decoration:underline;text-underline-offset:3px}
+.pet-pack-bindings{margin:0 18px 22px;padding:18px;background:#f6f8ef;border:1px solid #e0e7d4;border-radius:14px}
+.pet-pack-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.pet-pack-heading h3{font-size:14px;margin:0;overflow-wrap:anywhere}.pet-pack-heading p{font-size:11px;color:#86927b;overflow-wrap:anywhere}
+.pet-pack-binding{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:9px 0;border-top:1px solid #e4e9dc;font-size:12px}.pet-pack-binding small{display:block;color:#8f9b83;font-size:10px;margin-top:3px}.pet-pack-binding select{max-width:65%;font:inherit;color:#556c48;background:#fffef9;border:1px solid #d9e2cf;border-radius:8px;padding:9px}
+.pet-pack-warning{font-size:11px;color:#947446;line-height:1.6}.pet-pack-bindings>.pet-primary{margin-top:12px}.pet-photo-option{border-top:1px solid #e1e6d9;margin-top:20px;padding-top:16px}.pet-photo-option summary{cursor:pointer;font-size:11px;color:#7c8970}.pet-upload-area a{text-decoration:none}

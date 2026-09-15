@@ -49,7 +49,7 @@ async function verify() {
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'moneydance-package-'));
   const fixture = path.join(profile, 'photo.png');
   await require('sharp')(path.resolve(__dirname, '../tests/fixtures/sample-cat.svg')).flatten({ background: '#eeddcc' }).png().toFile(fixture);
-  let expectedImage;
+  let expectedImage, expectedPack;
   for (let run = 0; run < 2; run++) {
     const rendererPort = await port(), mainPort = await port();
     const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE; delete env.MONEY_DANCE_SMOKE;
@@ -72,8 +72,17 @@ async function verify() {
         assert.match(expectedImage, /^data:image\/png;base64,/, 'native worker loads packaged model and ONNX/sharp libraries');
         await renderer.evaluate('window.moneyDanceDesktop.usePet()');
         await renderer.evaluate("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,name:'打包验证',hideAmounts:true}))");
+        const packFile = path.resolve(__dirname, '../../web/public/pet-pack-template.zip');
+        await main.evaluate(`process.mainModule.require('electron').dialog.showOpenDialog = async () => ({ canceled:false, filePaths:[${JSON.stringify(packFile)}] })`);
+        expectedPack = await renderer.evaluate('window.moneyDanceDesktop.importPack()');
+        expectedPack.bindings.working = 'idle';
+        await renderer.evaluate(`window.moneyDanceDesktop.usePack(${JSON.stringify(expectedPack.id)},${JSON.stringify(expectedPack.bindings)})`);
       } else {
-        assert.equal(state.image, expectedImage, 'chosen image persists across process restarts');
+        assert.equal(state.image, null, 'pack replaces legacy photo across process restarts');
+        assert.equal(state.pack.id, expectedPack.id, 'ZIP and decoded assets survive actual process restart');
+        assert.equal(state.pack.bindings.working, 'idle', 'edited bindings persist');
+        const src = state.pack.clips.love.src;
+        assert.equal(await renderer.evaluate(`fetch(${JSON.stringify(src)}).then(r => r.ok && r.headers.get('content-type'))`), 'image/png');
         assert.equal(state.settings.name, '打包验证');
         assert.equal(state.settings.hideAmounts, true);
       }
@@ -83,6 +92,6 @@ async function verify() {
       await new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('App did not exit')), 8000); child.once('exit', () => { clearTimeout(timeout); resolve(); }); });
     } finally { main?.close(); renderer?.close(); if (child.exitCode === null) child.kill(); }
   }
-  console.log('PACKAGED WINDOWS PASSED: local model inference, native dependencies, image and settings persistence after restart.');
+  console.log('PACKAGED WINDOWS PASSED: local model inference, native dependencies, imported pack assets and bindings persist after restart.');
 }
 verify().catch(error => { console.error(error); process.exitCode = 1; });

@@ -3,12 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { desktop, type PetAction } from '../lib/desktop'
 import { useDesktopState } from '../lib/useDesktopState'
 import { PetCharacter, moodLabels } from './PetCharacter'
-import { clipDuration, type PetReaction } from './motion'
+import { type PetReaction } from './motion'
+import { reactionDuration, packStateLabels } from './pack-motion'
 import './pet-window.css'
 
 function PetWindow() {
   const { state, error } = useDesktopState()
   const [now, setNow] = useState(Date.now()), [menu, setMenu] = useState(false), [actionError, setActionError] = useState('')
+  const [reaction, setReaction] = useState<PetReaction | null>(null)
   const pointer = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const spoken = useRef<string | null>(null)
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
@@ -18,6 +20,15 @@ function PetWindow() {
     return () => { document.removeEventListener('mousemove', hitTest); window.speechSynthesis?.cancel() }
   }, [])
   const message = state?.message, settings = state?.settings
+  const reactionKind = message?.kind === 'love' || message?.kind === 'celebrate' ? message.kind : null
+  const reactionMs = reactionKind ? reactionDuration(state?.pack, reactionKind) : 0
+  useEffect(() => {
+    const remaining = message ? reactionMs - (Date.now() - message.at) : 0
+    if (!reactionKind || remaining <= 0) { setReaction(null); return }
+    setReaction(reactionKind)
+    const timer = setTimeout(() => setReaction(null), remaining)
+    return () => clearTimeout(timer)
+  }, [message?.id, state?.pack?.id, reactionMs, reactionKind])
   useEffect(() => {
     if (!settings?.speech || settings.hideAmounts) { window.speechSynthesis?.cancel(); return }
     if (!message || message.id === spoken.current || Date.now() - message.at > 15_000 || !window.speechSynthesis) return
@@ -31,7 +42,6 @@ function PetWindow() {
   if (!state || !settings) return <div className="pet-fallback">{error || '小薪正在过来…'}</div>
   const snapshot = state.snapshot, fresh = snapshot && now - snapshot.updatedAt < 15_000
   const mood = fresh ? snapshot.state : 'rest'
-  const reaction: PetReaction | null = message && (message.kind === 'love' || message.kind === 'celebrate') && now - message.at < clipDuration(message.kind) ? message.kind : null
   const showMessage = !!message && now - message.at < 12_000
   const focusSeconds = Math.max(0, Math.ceil((state.focusEndsAt - now) / 1000))
   const snoozed = state.snoozedUntil > now
@@ -67,10 +77,10 @@ function PetWindow() {
     </div>}
     <div className="pet-floating-body">
       <button className="pet-drag-target" data-interactive aria-label={`摸摸${settings.name}，按住拖动位置`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void action('pet') } }} onContextMenu={event => { event.preventDefault(); setMenu(value => !value) }}>
-        <PetCharacter image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
+        <PetCharacter pack={state.pack} image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
       </button>
       <div className="pet-toolbar" data-interactive>
-        <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? moodLabels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>
+        <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? state.pack ? packStateLabels[mood] : moodLabels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>
         <button onClick={() => setMenu(value => !value)} aria-label="桌宠菜单" aria-expanded={menu}>•••</button>
       </div>
       {(focusSeconds > 0 || snoozed) && <div className="pet-mini-status">{focusSeconds > 0 ? `专注 ${Math.floor(focusSeconds / 60)}:${String(focusSeconds % 60).padStart(2, '0')}` : '安静陪伴中'}</div>}
