@@ -47,6 +47,10 @@ async function verify() {
   const appDir = process.platform === 'darwin' ? `mac${process.arch === 'arm64' ? '-arm64' : ''}/MoneyDance.app/Contents/MacOS/MoneyDance` : `win${process.arch === 'arm64' ? '-arm64' : ''}-unpacked/MoneyDance.exe`;
   const executable = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, '../release', appDir);
   await fs.access(executable);
+  // Optional previous release: seed its data, then launch the new release with
+  // the same isolated profile, without touching the user's installed application.
+  const previousExecutable = process.argv[3] ? path.resolve(process.argv[3]) : executable;
+  await fs.access(previousExecutable);
   const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'moneydance-package-'));
   const fixture = path.join(profile, 'photo.png');
   await require('sharp')(path.resolve(__dirname, '../tests/fixtures/sample-cat.svg')).flatten({ background: '#eeddcc' }).png().toFile(fixture);
@@ -54,7 +58,7 @@ async function verify() {
   for (let run = 0; run < 3; run++) {
     const rendererPort = await port(), mainPort = await port();
     const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE; delete env.MONEY_DANCE_SMOKE;
-    const child = spawn(executable, [`--user-data-dir=${profile}`, `--remote-debugging-port=${rendererPort}`, `--inspect=127.0.0.1:${mainPort}`, '--hidden'], { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] });
+    const child = spawn(run === 0 ? previousExecutable : executable, [`--user-data-dir=${profile}`, `--remote-debugging-port=${rendererPort}`, `--inspect=127.0.0.1:${mainPort}`, '--hidden'], { windowsHide: true, env, stdio: ['ignore', 'ignore', 'pipe'] });
     let main, renderer, stderr = '';
     child.stderr.on('data', bytes => { stderr = (stderr + bytes.toString()).slice(-12000); });
     try {
@@ -69,6 +73,11 @@ async function verify() {
       assert.ok(ready, 'packaged renderer becomes ready');
       const state = await renderer.evaluate('window.moneyDanceDesktop.getState()');
       assert.ok(state.snapshot, 'packaged app publishes salary');
+      if (run) {
+        const profile = await renderer.evaluate("JSON.parse(localStorage.getItem('salary-flow.profile.v1'))");
+        assert.equal(profile.salary, 19000, 'salary survives a full process restart / release change');
+        assert.equal(profile.payday, 10, 'payday survives a full process restart / release change');
+      }
       if (!run) {
         await main.evaluate(`process.mainModule.require('electron').dialog.showOpenDialog = async () => ({ canceled:false, filePaths:[${JSON.stringify(fixture)}] })`);
         expectedImage = await renderer.evaluate("window.moneyDanceDesktop.createPet('extract')");
@@ -112,13 +121,22 @@ async function verify() {
         await main.evaluate("process.mainModule.require('electron').app.emit('activate')");
         assert.equal(await main.evaluate(`process.mainModule.require('electron').BrowserWindow.fromId(${windowId}).isVisible()`), true, 'Dock activation restores the main window');
       }
-      console.log(`Packaged ${process.platform}-${process.arch} test ${run + 1}/3 passed.`);
+      if (!run) {
+        await renderer.evaluate(`(() => {
+          const key = 'salary-flow.profile.v1';
+          const profile = JSON.parse(localStorage.getItem(key));
+          if (!profile) throw new Error('Salary profile was not initialized');
+          localStorage.setItem(key, JSON.stringify({ ...profile, salary: 19000, payday: 10 }));
+        })()`);
+      }
+      const version = await main.evaluate("process.mainModule.require('electron').app.getVersion()");
+      console.log(`Packaged ${process.platform}-${process.arch} ${version} test ${run + 1}/3 passed.`);
       await main.call('Runtime.evaluate', { expression: "setTimeout(() => process.mainModule.require('electron').app.quit(), 100)" });
       main.close(); renderer.close();
       await new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('App did not exit')), 8000); child.once('exit', () => { clearTimeout(timeout); resolve(); }); });
     } catch (error) { console.error(stderr); throw error; }
     finally { main?.close(); renderer?.close(); if (child.exitCode === null) child.kill(); }
   }
-  console.log(`PACKAGED ${process.platform}-${process.arch} PASSED: local inference, imported packs and built-in preset selection persist after restart.`);
+  console.log(`PACKAGED ${process.platform}-${process.arch} PASSED: salary, payday, imported packs and built-in preset selection persist after restart / release change.`);
 }
 verify().catch(error => { console.error(error); process.exitCode = 1; });

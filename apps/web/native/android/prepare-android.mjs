@@ -27,6 +27,7 @@ if (!/^[A-Za-z0-9_-]{4,64}$/.test(pgyerAppShortcut)) {
 const nativeJavaFiles = [
   'WishProgressProjection.java',
   'AppearancePlugin.java',
+  'DataBackupPlugin.java',
   'AppUpdaterPlugin.java',
   'WidgetActionReceiver.java',
   'WidgetBridgePlugin.java',
@@ -151,6 +152,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdaterPlugin.class);
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(AppearancePlugin.class);
+        registerPlugin(DataBackupPlugin.class);
         captureWidgetLaunchTarget(getIntent());
         super.onCreate(savedInstanceState);
         AppearancePlugin.applySaved(this, getBridge().getWebView());

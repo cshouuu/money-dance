@@ -31,6 +31,7 @@ import { ALTERNATING_MONTHLY_WORK_DAYS, loadProfile, recommendedMonthlyWorkDays,
 import { plannedIncomeForDate } from '../lib/monthlyStats'
 import { isSessionLocalDate } from '../lib/sessionBusinessDate'
 import { MobileDockSettings } from '../components/MobileDockSettings'
+import { DataBackupCard } from '../components/DataBackupCard'
 import './Settings.css'
 
 function validDeductions(deductions: readonly SalaryDeduction[]): boolean {
@@ -413,6 +414,7 @@ export function Settings() {
     </form>
     <section className="settings-dock-card"><div><h2>移动端底部栏</h2><p>选择并排列四个常用功能，其余功能随时从「全部」进入。</p></div><Button variant="secondary" onClick={() => setDockSettingsOpen(true)}>自定义底部栏</Button></section>
     <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
+    <DataBackupCard/>
     {!TEST_BUILD && <div className="settings-update-card"><AppUpdateCard/></div>}
   </section>
 }
