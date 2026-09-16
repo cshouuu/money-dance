@@ -31,10 +31,9 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | 平台 | 下载 |
 | --- | --- |
 | Android | [蒲公英下载](https://www.pgyer.com/moneydance) |
-| Windows x64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-x64.exe) |
-| Windows ARM64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-arm64.exe) |
-| Mac M 系列 | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-arm64.dmg) |
-| Mac Intel | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-x64.dmg) |
+
+
+桌面版（Windows x64 / ARM64、Mac M 系列 / Intel）通过购买后的交付渠道提供，公开 Releases 仅保留安卓安装包。
 
 ## 当前功能
 
