@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@salary-flow/core": "0.1.0",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.39.0",
     "motion": "^11.15.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
