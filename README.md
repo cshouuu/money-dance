@@ -24,7 +24,17 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.3.2**
+**当前稳定版：v0.6.0**
+
+网页、安卓和桌面端统一支持「设置 → 数据备份与迁移」，可导出 JSON 文件后在另一台设备导入。
+
+| 平台 | 下载 |
+| --- | --- |
+| Android | [蒲公英下载](https://www.pgyer.com/moneydance) |
+| Windows x64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-x64.exe) |
+| Windows ARM64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-arm64.exe) |
+| Mac M 系列 | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-arm64.dmg) |
+| Mac Intel | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-x64.dmg) |
 
 ## 当前功能
 
@@ -39,11 +49,11 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | 📅 薪苦日历 | 自动识别内置的 2025–2026 年中国大陆法定节假日与调休补班（不自动套用加班倍率）；支持正常上班、半天 / 全天请假和放假调整，并同步重算工资 |
 | ⚡ 意外收支 | 记录不会改变工资速度、但需要进入账本统计的临时收入或花费 |
 | 📦 我的好物 | 记录已购买物品及持有时间，持续观察每小时使用成本 |
-| 📱 多端使用 | 支持 Web、iPhone / iPad PWA 和 Android APK |
+| 📱 多端使用 | 支持 Web、iPhone / iPad PWA、Android APK、Windows x64 / ARM64 和 Mac M 系列 / Intel |
 | 🔄 Android 更新 | 应用内通过蒲公英检查新版并打开公开下载页，由 Android 系统确认覆盖安装 |
 | 🧩 Android 桌面组件 | 收益组件提供摸鱼 / 加班操作；4×2 心愿组件支持指定 3 个心愿、切换饼图和小时刷新 |
 
-v0.3.2 更新说明见 [版本说明](docs/releases/v0.3.2.md)。
+v0.6.0 更新说明见 [版本说明](docs/releases/v0.6.0.md)。
 
 ## 关键业务规则
 
