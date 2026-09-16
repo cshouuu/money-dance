@@ -110,6 +110,14 @@ function queueWidgetSync(): Promise<WidgetSyncOutcome> {
   return currentSync
 }
 
+// Drain Android widget actions before taking a migration snapshot. Otherwise a
+// timer stopped on the launcher could be missing from the exported Web data.
+export async function synchronizeWidgetsForBackup(): Promise<void> {
+  if (!isWidgetBridgeAvailable()) return
+  await queueWidgetSync()
+  if ((await getPendingWidgetActions()).length) throw new Error('桌面组件还有未同步的操作，请稍候再试。')
+}
+
 export function WidgetSyncController() {
   const navigate = useNavigate()
   const debounceRef = useRef<number | null>(null)

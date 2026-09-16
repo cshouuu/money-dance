@@ -163,6 +163,12 @@ MoneyDance
 
 ## 本地开发
 
+### Windows 桌面版与桌宠（开发分支）
+
+已增加 Windows 10/11 x64 桌面版，复用全部现有业务功能。支持上传照片在本机提取主体为桌宠，提供工作/摸鱼/加班/休息动作、收入汇报、喝水提醒、加班关怀、心愿庆祝和专注计时。详见 [Windows 使用与开发说明](docs/WINDOWS.md)。
+
+Windows 开发需要 Node.js 22.12+：`npm ci` 后运行 `npm run dev:desktop`；运行 `npm run build:windows` 生成 Windows 安装器。
+
 要求：Node.js 20+。
 
 ~~~bash
@@ -315,7 +321,7 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 - [x] Android 4×1 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作
 - [x] 中国大陆节假日 / 调休补班识别与半天请假
 - [x] 摸鱼 / 加班遗漏时段补记与弹性工时分段结算
-- [ ] 数据导入 / 导出
+- [x] 数据导入 / 导出：网页、安卓和桌面端共用 JSON 备份，支持覆盖导入及失败恢复，见 [迁移说明](docs/DATA_BACKUP.md)
 - [ ] 可选云同步
 - [ ] 更完整的 iOS 原生能力
 

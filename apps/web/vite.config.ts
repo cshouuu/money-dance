@@ -36,5 +36,6 @@ function serviceWorkerPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), serviceWorkerPlugin()],
+  build: { rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), pet: fileURLToPath(new URL('./pet.html', import.meta.url)) } } },
   server: { port: 5173 },
 })

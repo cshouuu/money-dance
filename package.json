@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
+    "dev:desktop": "npm run build -w @salary-flow/core && npm run build -w @salary-flow/web && npm run build -w @salary-flow/desktop && npm run start -w @salary-flow/desktop",
+    "build:windows": "npm run build -w @salary-flow/core && npm run build -w @salary-flow/web && npm run build -w @salary-flow/desktop && npm run dist:win -w @salary-flow/desktop",
     "dev:web": "npm run build -w @salary-flow/core && npm run dev -w @salary-flow/web",
     "dev:api": "npm run build -w @salary-flow/core && npm run dev -w @salary-flow/api",
     "build": "npm run build -w @salary-flow/core && npm run build -w @salary-flow/web && npm run build -w @salary-flow/api",
