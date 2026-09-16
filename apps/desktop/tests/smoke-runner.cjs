@@ -1,3 +1,4 @@
+const { capturePage } = require('./capture-page.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -64,10 +65,10 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   assert.equal(await js("!!document.querySelector('.stage-overtime')"), true);
   await until(() => js("document.querySelector('.pet-preview-stage .pet-character').dataset.pose === '5'"), 'overtime raises a drink');
   await delay(180);
-  await fs.writeFile(path.join(output, 'windows-pet-studio.png'), (await mainWindow.webContents.capturePage()).toPNG());
+  await fs.writeFile(path.join(output, 'windows-pet-studio.png'), (await capturePage(mainWindow)).toPNG());
   await petJS("window.moneyDanceDesktop.action('pet')");
   await delay(1750);
-  await fs.writeFile(path.join(output, 'windows-pet-floating.png'), (await petWindow.webContents.capturePage()).toPNG());
+  await fs.writeFile(path.join(output, 'windows-pet-floating.png'), (await capturePage(petWindow)).toPNG());
   await js("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings, hideAmounts:true, name:'测试搭子'}))");
   await petJS("window.moneyDanceDesktop.action('report')");
   await delay(250);
@@ -137,10 +138,10 @@ async function run({ app, mainWindow, petWindow, openPage }) {
     await delay(450);
     assert.equal(await petJS("document.querySelector('.pet-imported').dataset.pose"), packStill);
     await js("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,reducedMotion:false}))");
-    await fs.writeFile(path.join(output, 'windows-pet-pack-studio.png'), (await mainWindow.webContents.capturePage()).toPNG());
+    await fs.writeFile(path.join(output, 'windows-pet-pack-studio.png'), (await capturePage(mainWindow)).toPNG());
     await petJS("window.moneyDanceDesktop.action('pet')");
     await delay(1800);
-    await fs.writeFile(path.join(output, 'windows-pet-pack-floating.png'), (await petWindow.webContents.capturePage()).toPNG());
+    await fs.writeFile(path.join(output, 'windows-pet-pack-floating.png'), (await capturePage(petWindow)).toPNG());
     await js("window.moneyDanceDesktop.importPack()");
     await js("window.moneyDanceDesktop.cancelExtraction()");
     assert.equal(await js(`window.moneyDanceDesktop.usePack(${JSON.stringify(packState.pack.id)},{}).then(()=>false,()=>true)`), true, 'discarded pack cannot be adopted');

@@ -1,3 +1,4 @@
+const { capturePage } = require('./capture-page.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -41,7 +42,7 @@ async function verifyLayout({ petWindow, js, petJS, until, output }) {
     const area = screen.getDisplayMatching(bounds).workArea;
     assert.equal(bounds.x + b.x, area.x, 'pet body reaches left work-area edge');
     assert.equal(bounds.y + b.y, area.y, 'pet body reaches top work-area edge');
-    await fs.writeFile(path.join(output, 'windows-pet-edge-top.png'), (await petWindow.webContents.capturePage()).toPNG());
+    await fs.writeFile(path.join(output, 'windows-pet-edge-top.png'), (await capturePage(petWindow)).toPNG());
     cursor = { x: 0, y: 0 };
     await petJS("window.moneyDanceDesktop.drag('start')");
     cursor = { x: 10000, y: 10000 };
@@ -52,7 +53,7 @@ async function verifyLayout({ petWindow, js, petJS, until, output }) {
     const bottomBounds = petWindow.getBounds(), bottomBody = await body(), bottomArea = screen.getDisplayMatching(bottomBounds).workArea;
     assert.equal(bottomBounds.x + bottomBody.x + bottomBody.width, bottomArea.x + bottomArea.width);
     assert.equal(bottomBounds.y + bottomBody.y + bottomBody.height, bottomArea.y + bottomArea.height);
-    await fs.writeFile(path.join(output, 'windows-pet-edge-bottom.png'), (await petWindow.webContents.capturePage()).toPNG());
+    await fs.writeFile(path.join(output, 'windows-pet-edge-bottom.png'), (await capturePage(petWindow)).toPNG());
     await petJS("(() => {const r=document.querySelector('.pet-drag-target').getBoundingClientRect();document.dispatchEvent(new MouseEvent('mousemove',{clientX:r.left+1,clientY:r.top+1}))})()");
     await until(() => ignoring === true, 'transparent image corner passes mouse through');
     await petJS("(() => {const s=document.querySelector('.pet-sprite > svg'),r=s.viewBox.baseVal,p=new DOMPoint(r.x+r.width/2,r.y+r.height*.45).matrixTransform(s.getScreenCTM());document.dispatchEvent(new MouseEvent('mousemove',{clientX:p.x,clientY:p.y}))})()");

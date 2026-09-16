@@ -1,3 +1,4 @@
+const { capturePage } = require('./capture-page.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -30,7 +31,7 @@ async function verifyPresets({ app, mainWindow, js, petJS, until, output }) {
   await until(() => js("document.querySelector('.pet-preview-stage .pet-character')?.dataset.preset === 'huanhuan'"), 'preset survives reload');
   await js("document.querySelector('.pet-mood-picker button:nth-child(2)').click()");
   await until(() => js("document.querySelector('.pet-preview-stage .pet-character')?.dataset.pose === '5'"), 'capybara orange pose');
-  await fs.writeFile(path.join(output, 'windows-pet-three-presets.png'), (await mainWindow.webContents.capturePage()).toPNG());
+  await fs.writeFile(path.join(output, 'windows-pet-three-presets.png'), (await capturePage(mainWindow)).toPNG());
   await js("window.moneyDanceDesktop.getState().then(s=>window.moneyDanceDesktop.saveSettings({...s.settings,name:'我的搭子'}))");
   const result = await js("window.moneyDanceDesktop.resetPet('mili')");
   assert.equal(result.settings.name, '我的搭子', 'custom nickname survives switching');
