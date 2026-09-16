@@ -24,7 +24,17 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 
 项目不要求注册账号。薪资设置、计时记录、心愿、物品、出勤和账本数据默认保存在当前设备本地。
 
-**当前稳定版：v0.3.2**
+**当前稳定版：v0.6.0**
+
+网页、安卓和桌面端统一支持「设置 → 数据备份与迁移」，可导出 JSON 文件后在另一台设备导入。
+
+| 平台 | 下载 |
+| --- | --- |
+| Android | [蒲公英下载](https://www.pgyer.com/moneydance) |
+| Windows x64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-x64.exe) |
+| Windows ARM64 | [安装包](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-windows-arm64.exe) |
+| Mac M 系列 | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-arm64.dmg) |
+| Mac Intel | [DMG](https://github.com/cshouuu/money-dance/releases/download/v0.6.0/MoneyDance-0.6.0-macos-x64.dmg) |
 
 ## 当前功能
 
@@ -39,11 +49,11 @@ MoneyDance 是一个围绕「时间 × 工资 × 消费」构建的 local-first 
 | 📅 薪苦日历 | 自动识别内置的 2025–2026 年中国大陆法定节假日与调休补班（不自动套用加班倍率）；支持正常上班、半天 / 全天请假和放假调整，并同步重算工资 |
 | ⚡ 意外收支 | 记录不会改变工资速度、但需要进入账本统计的临时收入或花费 |
 | 📦 我的好物 | 记录已购买物品及持有时间，持续观察每小时使用成本 |
-| 📱 多端使用 | 支持 Web、iPhone / iPad PWA 和 Android APK |
+| 📱 多端使用 | 支持 Web、iPhone / iPad PWA、Android APK、Windows x64 / ARM64 和 Mac M 系列 / Intel |
 | 🔄 Android 更新 | 应用内通过蒲公英检查新版并打开公开下载页，由 Android 系统确认覆盖安装 |
 | 🧩 Android 桌面组件 | 收益组件提供摸鱼 / 加班操作；4×2 心愿组件支持指定 3 个心愿、切换饼图和小时刷新 |
 
-v0.3.2 更新说明见 [版本说明](docs/releases/v0.3.2.md)。
+v0.6.0 更新说明见 [版本说明](docs/releases/v0.6.0.md)。
 
 ## 关键业务规则
 
@@ -162,6 +172,12 @@ MoneyDance
 - GitHub Actions
 
 ## 本地开发
+
+### Windows 桌面版与桌宠（开发分支）
+
+已增加 Windows 10/11 x64 桌面版，复用全部现有业务功能。支持上传照片在本机提取主体为桌宠，提供工作/摸鱼/加班/休息动作、收入汇报、喝水提醒、加班关怀、心愿庆祝和专注计时。详见 [Windows 使用与开发说明](docs/WINDOWS.md)。
+
+Windows 开发需要 Node.js 22.12+：`npm ci` 后运行 `npm run dev:desktop`；运行 `npm run build:windows` 生成 Windows 安装器。
 
 要求：Node.js 20+。
 
@@ -315,7 +331,7 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 - [x] Android 4×1 主屏幕组件、按需实时金额与摸鱼 / 加班快捷操作
 - [x] 中国大陆节假日 / 调休补班识别与半天请假
 - [x] 摸鱼 / 加班遗漏时段补记与弹性工时分段结算
-- [ ] 数据导入 / 导出
+- [x] 数据导入 / 导出：网页、安卓和桌面端共用 JSON 备份，支持覆盖导入及失败恢复，见 [迁移说明](docs/DATA_BACKUP.md)
 - [ ] 可选云同步
 - [ ] 更完整的 iOS 原生能力
 

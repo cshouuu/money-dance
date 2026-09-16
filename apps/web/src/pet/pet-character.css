@@ -1,0 +1,22 @@
+.pet-character{position:relative;width:var(--pet-size);height:var(--pet-size);display:grid;place-items:center;isolation:isolate;user-select:none}
+.pet-sprite{display:block;width:100%;height:100%;overflow:hidden;pointer-events:none}
+.pet-motion-cue{position:absolute;bottom:-16px;left:-30px;right:-30px;font-size:11px;color:#748369;letter-spacing:.3px;text-align:center;white-space:nowrap;pointer-events:none}
+.pet-photo-body{width:90%;height:84%;align-self:start;margin-top:4%;object-fit:contain;filter:drop-shadow(0 5px 3px #243e2c18);pointer-events:none}
+.photo-scene{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.scene-laptop{transform-origin:120px 228px;animation:laptop-arrive .8s ease-out both}
+.scene-keystroke{animation:typing-tap .36s ease-in-out infinite}.key-right{animation-delay:.18s}
+.scene-fish{transform-origin:120px 215px;animation:fish-cuddle 9s ease-in-out infinite}
+.scene-mug{transform-origin:124px 230px;animation:offer-mug 10s ease-in-out infinite}
+.scene-steam{animation:mug-steam 3s ease-out infinite}.steam-two{animation-delay:1.3s}
+.scene-blanket{transform-origin:120px 226px;animation:blanket-tuck 1.8s cubic-bezier(.2,.7,.2,1) both}
+.scene-coin{animation:coin-catch 3.8s cubic-bezier(.2,.7,.2,1) both;transform-origin:center;transform-box:fill-box}
+.coin-1{animation-delay:.1s}.coin-2{animation-delay:.2s}.coin-3{animation-delay:.3s}.coin-4{animation-delay:.4s}
+.pet-still *{animation:none!important}
+@keyframes laptop-arrive{from{opacity:0;transform:translateY(35px)}to{opacity:1;transform:translateY(0)}}
+@keyframes typing-tap{0%,55%,100%{opacity:0}20%,40%{opacity:1}}
+@keyframes fish-cuddle{0%,12%{opacity:0;transform:translate(65px,10px) rotate(18deg)}25%,45%{opacity:1;transform:translate(0,-20px) rotate(-12deg)}55%,82%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(65px,10px) rotate(18deg)}}
+@keyframes offer-mug{0%{opacity:0;transform:translate(45px,15px) scale(.8)}12%,28%{opacity:1;transform:translate(0,0) scale(.9)}40%,70%{opacity:1;transform:translate(0,-15px) scale(1.12)}85%,100%{opacity:1;transform:translate(0,0) scale(.9)}}
+@keyframes mug-steam{0%{opacity:0;transform:translateY(8px)}25%,60%{opacity:.7}100%{opacity:0;transform:translateY(-14px)}}
+@keyframes blanket-tuck{from{opacity:0;transform:translateY(45px) scaleX(.5)}to{opacity:1;transform:translateY(0) scaleX(1)}}
+@keyframes coin-catch{0%{opacity:0;transform:translateY(100px) scale(.2) rotate(-60deg)}25%{opacity:1;transform:translateY(-15px) scale(1) rotate(0)}60%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(130px) scale(.6) rotate(70deg)}}
+@media(prefers-reduced-motion:reduce){.pet-character *{animation:none!important}}

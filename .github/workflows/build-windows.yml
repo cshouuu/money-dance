@@ -1,0 +1,155 @@
+name: Build Desktop Installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/feature-windows-desktop-pet']
+    tags: ['v*']
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - 'package*.json'
+      - '.github/workflows/build-windows.yml'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/web/**'
+      - 'packages/core/**'
+      - 'package*.json'
+      - '.github/workflows/build-windows.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            arch: x64
+            script: dist:win
+          - name: windows-arm64
+            os: windows-11-arm
+            arch: arm64
+            script: dist:win:arm64
+          - name: macos-arm64
+            os: macos-15
+            arch: arm64
+            script: dist:mac:arm64
+          - name: macos-x64
+            os: macos-15-intel
+            arch: x64
+            script: dist:mac:x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      ONNXRUNTIME_NODE_INSTALL: skip
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Tests temporarily switch TZ; an explicit baseline restores correctly on Windows.
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          architecture: ${{ matrix.arch }}
+          cache: npm
+      - name: Check native runner architecture
+        run: node -e "require('node:assert/strict').equal(process.arch, '${{ matrix.arch }}')"
+      - run: npm ci
+      - run: npm run prepare:assets -w @salary-flow/desktop
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build -w @salary-flow/core
+      - run: npm run build -w @salary-flow/web
+      - run: npm run build -w @salary-flow/desktop
+      - run: npm run ${{ matrix.script }} -w @salary-flow/desktop
+        env:
+          # mac.identity is explicitly ad-hoc ("-"); no signing secrets are supplied.
+          # electron-builder otherwise skips even ad-hoc signatures on PR builds.
+          CSC_FOR_PULL_REQUEST: 'true'
+      - name: Verify macOS bundle signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          for app in apps/desktop/release/mac*/MoneyDance.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+          done
+      - name: Verify packaged native runtime and restart persistence
+        if: runner.os == 'Windows'
+        run: node apps/desktop/scripts/verify-package.cjs
+      - name: Install DMG and verify runtime and restart persistence
+        if: runner.os == 'macOS'
+        run: bash apps/desktop/scripts/verify-mac-dmg.sh
+      - name: Desktop integration smoke test
+        run: npm run start -w @salary-flow/desktop
+        env:
+          MONEY_DANCE_SMOKE: '1'
+      - name: Calculate SHA-256
+        run: node apps/desktop/scripts/checksums.cjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: money-dance-${{ matrix.name }}
+          retention-days: 7
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.sha256
+            output/windows-pet-*.png
+          if-no-files-found: error
+
+  publish:
+    name: Publish verified desktop installers
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download all four verified builds
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'money-dance-*' --dir release
+      - name: Check expected installers and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir upload
+          VERSION="${GITHUB_REF_NAME#v}"
+          for target in windows-x64.exe windows-arm64.exe macos-arm64.dmg macos-arm64.zip macos-x64.dmg macos-x64.zip; do
+            FILE="MoneyDance-${VERSION}-${target}"
+            mapfile -t MATCHES < <(find release -type f -name "$FILE")
+            test "${#MATCHES[@]}" -eq 1
+            test -f "${MATCHES[0]}.sha256"
+            cp "${MATCHES[0]}" "${MATCHES[0]}.sha256" upload/
+          done
+          cd upload
+          sha256sum --check *.sha256
+      - name: Wait for verified Android release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..90}; do
+            if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null | grep -Fxq "money-dance-${GITHUB_REF_NAME}.apk"; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Android release archive not ready; desktop artifacts remain available for retry." >&2
+          exit 1
+      - name: Attach desktop downloads to the same release
+        run: gh release upload "$GITHUB_REF_NAME" upload/* --repo "$GITHUB_REPOSITORY" --clobber

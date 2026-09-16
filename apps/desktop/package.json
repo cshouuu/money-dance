@@ -1,0 +1,66 @@
+{
+  "name": "@salary-flow/desktop",
+  "version": "0.6.0",
+  "private": true,
+  "description": "MoneyDance desktop app and local desktop companion",
+  "author": "MoneyDance",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "main": "src/main.cjs",
+  "scripts": {
+    "prepare:assets": "node scripts/prepare-assets.cjs",
+    "start": "electron .",
+    "build": "node scripts/prepare-assets.cjs --copy-web",
+    "pack": "electron-builder --win --x64 --dir",
+    "dist:win": "node scripts/build-installer.cjs win32 x64",
+    "test": "node --test tests/*.test.cjs",
+    "dist:win:arm64": "node scripts/build-installer.cjs win32 arm64",
+    "dist:mac:arm64": "node scripts/build-installer.cjs darwin arm64",
+    "dist:mac:x64": "node scripts/build-installer.cjs darwin x64"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "onnxruntime-node": "1.29.0",
+    "onnxruntime-web": "1.29.0",
+    "sharp": "0.35.4"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.moneydance.desktop",
+    "productName": "MoneyDance",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**",
+      "web/**",
+      "assets/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**",
+      "node_modules/@img/**",
+      "node_modules/sharp/**",
+      "node_modules/onnxruntime-web/**",
+      "node_modules/onnxruntime-common/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "MoneyDance-${version}-windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
