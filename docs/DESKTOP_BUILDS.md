@@ -4,10 +4,10 @@
 
 | 设备 | 安装文件 | 标准 GitHub runner |
 | --- | --- | --- |
-| Windows 10/11，Intel / AMD 64 位 | `MoneyDance-0.4.5-windows-x64.exe` | `windows-latest` |
-| Windows 11 ARM，骁龙等 ARM64 电脑 | `MoneyDance-0.4.5-windows-arm64.exe` | `windows-11-arm` |
-| macOS 14+，Apple M 系列 | `MoneyDance-0.4.5-macos-arm64.dmg` | `macos-15` |
-| macOS 14+，Intel Mac | `MoneyDance-0.4.5-macos-x64.dmg` | `macos-15-intel` |
+| Windows 10/11，Intel / AMD 64 位 | `MoneyDance-0.4.7-windows-x64.exe` | `windows-latest` |
+| Windows 11 ARM，骁龙等 ARM64 电脑 | `MoneyDance-0.4.7-windows-arm64.exe` | `windows-11-arm` |
+| macOS 14+，Apple M 系列 | `MoneyDance-0.4.7-macos-arm64.dmg` | `macos-15` |
+| macOS 14+，Intel Mac | `MoneyDance-0.4.7-macos-x64.dmg` | `macos-15-intel` |
 
 每个 Mac 构建同时生成 ZIP，便于传输完整 `.app`。不要将 M 系列版和 Intel 版混用。Windows x64 原有安装与升级方式不变。
 
@@ -65,3 +65,10 @@ Windows 可以交叉生成 ARM64 安装包，但不能在 x64 电脑上验证 AR
 本次构建提交：`1e90867b238cbd1d31e473da6ad0ba43e1c1f379`。构建记录：https://github.com/cshouuu/money-dance/actions/runs/34941485128 。实际文件摘要及来源保存在本地 `apps/desktop/release/BUILD-INFO-0.4.5.json`。
 
 修正了测试程序在访问 `/pet` 后仍用首页 URL 识别 Mac 主窗口的问题。现在通过窗口 ID 验证隐藏后 Dock 能恢复同一窗口；没有跳过 Dock 检查。
+
+
+## 0.4.7 多平台同步
+
+2026-09-16 已将 Windows ARM64、Mac M 系列和 Mac Intel 同步到 0.4.7，包含桌边搭子页面主题同步修复及 72px 收起侧栏调整。四个平台的原生构建、包内运行、三次启动和桌宠集成测试均通过。
+
+构建提交：`1e2c526c396a4d2c5b7f6e32095ca15fd8a24110`。构建记录：https://github.com/cshouuu/money-dance/actions/runs/35045660460 。安装包与校验文件保存于 `apps/desktop/release/`，来源摘要见 `BUILD-INFO-0.4.7.json`。
