@@ -75,6 +75,10 @@ jobs:
       - run: npm run build -w @salary-flow/web
       - run: npm run build -w @salary-flow/desktop
       - run: npm run ${{ matrix.script }} -w @salary-flow/desktop
+        env:
+          # mac.identity is explicitly ad-hoc ("-"); no signing secrets are supplied.
+          # electron-builder otherwise skips even ad-hoc signatures on PR builds.
+          CSC_FOR_PULL_REQUEST: 'true'
       - name: Verify macOS bundle signature
         if: runner.os == 'macOS'
         shell: bash
