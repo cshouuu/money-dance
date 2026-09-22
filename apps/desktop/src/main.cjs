@@ -7,6 +7,7 @@ const { createHash } = require('node:crypto');
 const { sanitizeSettings, sanitizeSnapshot, ROUTES } = require('./contract.cjs');
 const { layoutPet, sanitizeMetrics } = require('./pet-layout.cjs');
 const { nextReminder, report } = require('./reminders.cjs');
+const { bubbleText } = require('./pet-copy.cjs');
 const { publicPack, bindingsFor, LIMIT: PACK_LIMIT } = require('./pet-pack.cjs');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'moneydance', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
@@ -171,7 +172,7 @@ function setupIPC() {
     assertSender(event);
     switch (action) {
       case 'report': notify(snapshot && Date.now() - snapshot.updatedAt < 15_000 ? report(snapshot, settings) : '计薪数据正在刷新，打开 MoneyDance 看看吧。'); break;
-      case 'pet': notify(['收到你的摸摸啦，今天也一起慢慢来。', '你值得被好好照顾，不用每一分钟都很厉害。', '我在呢。先呼吸一下，再做下一件小事。'][Math.floor(Math.random() * 3)], 'love'); break;
+      case 'pet': notify(bubbleText(settings, 'love', ['收到你的摸摸啦，今天也一起慢慢来。', '你值得被好好照顾，不用每一分钟都很厉害。', '我在呢。先呼吸一下，再做下一件小事。'][Math.floor(Math.random() * 3)]), 'love'); break;
       case 'focus': memory.focusEndsAt = Date.now() + 25 * 60_000; notify('陪你专注 25 分钟。到点一起休息，不改变你的计薪或摸鱼记录。', 'focus'); break;
       case 'cancel-focus': memory.focusEndsAt = 0; notify('专注计时已结束，按自己的节奏来就好。', 'rest'); break;
       case 'snooze': memory.snoozedUntil = Date.now() + 30 * 60_000; notify('我会安静陪你 30 分钟，需要我时摸摸就好。', 'rest'); break;

@@ -53,6 +53,9 @@ async function run({ app, mainWindow, petWindow, openPage }) {
   await until(() => js("!!document.querySelector('.pet-preview-stage')"), 'pet studio opens');
   await until(() => js("!!document.querySelector('.pet-illustrated image')"), 'illustrated pose atlas renders');
   await require('./preset-smoke.cjs').verifyPresets({ app, mainWindow, js, petJS, until, output });
+  await require('./customization-smoke.cjs').verifyCustomization({ app, mainWindow, js, petJS, until });
+  // Remaining legacy checks explicitly exercise state-bound animation.
+  await js('window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings, randomActions: false}))');
   assert.equal(await js("!!document.querySelector('.pet-prop')"), false, 'no emoji accessories on the character');
   const firstPose = await js("document.querySelector('.pet-preview-stage .pet-character').dataset.pose");
   console.log('Studio animation state:', await js("window.moneyDanceDesktop.getState().then(s=>({hidden:document.hidden,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches,setting:s.settings.reducedMotion,pose:document.querySelector('.pet-preview-stage .pet-character').dataset.pose}))"));

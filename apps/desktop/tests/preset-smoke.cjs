@@ -28,6 +28,7 @@ async function verifyPresets({ app, mainWindow, js, petJS, until, output }) {
     }
   }
   await mainWindow.webContents.reload();
+  mainWindow.show(); mainWindow.focus();
   await until(() => js("document.querySelector('.pet-preview-stage .pet-character')?.dataset.preset === 'huanhuan'"), 'preset survives reload');
   await js("document.querySelector('.pet-mood-picker button:nth-child(2)').click()");
   await until(() => js("document.querySelector('.pet-preview-stage .pet-character')?.dataset.pose === '5'"), 'capybara orange pose');

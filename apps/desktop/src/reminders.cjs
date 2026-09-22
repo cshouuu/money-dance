@@ -1,3 +1,4 @@
+const { bubbleText } = require('./pet-copy.cjs');
 const MINUTE = 60_000;
 function isQuiet(settings, now) {
   if (!settings.quietEnabled) return false;
@@ -59,6 +60,7 @@ function nextReminder(snapshot, settings, memory, now = Date.now()) {
     }
   }
   // Discard lower priority messages, so resuming never unleashes a backlog.
-  return candidates.find(Boolean) || null;
+  const reminder = candidates.find(Boolean);
+  return reminder ? { ...reminder, text: bubbleText(settings, reminder.kind, reminder.text) } : null;
 }
 module.exports = { isQuiet, report, nextReminder };

@@ -98,5 +98,13 @@ jobs:
           MONEY_DANCE_SMOKE: '1'
       - name: Calculate SHA-256
         run: node apps/desktop/scripts/checksums.cjs
-      # Paid desktop builds must not be uploaded to this public repository.
-      # Release delivery belongs in a separately configured private channel.
+      # Temporary v0.6.1 delivery, explicitly requested; remove after local retrieval.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: money-dance-${{ matrix.name }}
+          retention-days: 1
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.sha256

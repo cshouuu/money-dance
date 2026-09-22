@@ -36,3 +36,4 @@
 .pet-preset-card:hover:not(:disabled),.pet-secondary:hover:not(:disabled){border-color:var(--green);background:var(--accent-faint)}
 .pet-primary:hover:not(:disabled){background:var(--dark-hover);border-color:var(--dark-hover)}
 .pet-page .pet-motion-cue{color:var(--muted)}
+.pet-copy-settings label{display:flex;flex-direction:column;gap:8px}.pet-copy-settings textarea,.pet-copy-settings select{font:inherit;color:var(--ink);background:var(--control-bg);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%;box-sizing:border-box}.pet-copy-settings textarea{resize:vertical;min-height:120px}.pet-copy-preview{padding:14px;border-radius:14px;background:var(--accent-faint);line-height:1.75;overflow-wrap:anywhere;white-space:pre-wrap}.pet-copy-settings small{color:var(--muted);line-height:1.7}

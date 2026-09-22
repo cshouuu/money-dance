@@ -2,10 +2,11 @@ import { useEffect, useState, type CSSProperties } from 'react'
 import type { PackState, PetPack } from '../lib/desktop'
 import { packStateLabels, resolvePackClip, samplePackClip } from './pack-motion'
 
-export function PackCharacter({ pack, motion, size, reducedMotion, replayKey, showCue }: {
+export function PackCharacter({ pack, motion, size, reducedMotion, replayKey, showCue, clipKey }: {
+  clipKey?: string
   pack: PetPack; motion: PackState; size: number; reducedMotion: boolean; replayKey: number | string; showCue: boolean
 }) {
-  const { key, clip } = resolvePackClip(pack, motion)
+  const { key, clip } = clipKey && pack.clips[clipKey] ? { key: clipKey, clip: pack.clips[clipKey] } : resolvePackClip(pack, motion)
   const loop = motion !== 'love' && motion !== 'celebrate'
   const identity = `${clip.src}:${motion}:${replayKey}:${clip.durations.join(',')}:${clip.stillFrame}`
   const [current, setCurrent] = useState({ identity, frame: 0 })

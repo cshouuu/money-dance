@@ -7,6 +7,7 @@ import { getPetPreset } from './presets'
 import { type PetReaction } from './motion'
 import { reactionDuration, packStateLabels } from './pack-motion'
 import { petPixelAt } from './hit-test'
+import { useRandomAction } from './useRandomAction'
 import './pet-window.css'
 
 function PetWindow() {
@@ -37,6 +38,7 @@ function PetWindow() {
   const message = state?.message, settings = state?.settings
   const reactionKind = message?.kind === 'love' || message?.kind === 'celebrate' ? message.kind : null
   const reactionMs = reactionKind ? reactionDuration(state?.pack, reactionKind) : 0
+  const random = useRandomAction(state?.pack, !!settings && settings.randomActions !== false, !!reaction || !!settings?.reducedMotion)
   useEffect(() => {
     const remaining = message ? reactionMs - (Date.now() - message.at) : 0
     if (!reactionKind || remaining <= 0) { setReaction(null); return }
@@ -113,7 +115,7 @@ function PetWindow() {
     </div>}
     <div ref={bodyRef} className="pet-floating-body" style={{ left: layout?.body.x ?? 0, top: layout?.body.y ?? 0 }}>
       <button className="pet-drag-target" data-interactive aria-label={`摸摸${settings.name}，按住拖动位置`} onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void action('pet') } }} onContextMenu={event => { event.preventDefault(); setMenu(value => !value) }}>
-        <PetCharacter key={settings.presetId} presetId={settings.presetId} pack={state.pack} image={state.image} mood={mood} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction} replayKey={reaction || message?.kind === 'warmth' ? message?.id : 0}/>
+        <PetCharacter key={settings.presetId} presetId={settings.presetId} pack={state.pack} image={state.image} mood={random && random.action.motion !== 'love' && random.action.motion !== 'celebrate' ? random.action.motion : mood} clipKey={!reaction ? random?.action.clipKey : undefined} size={settings.size} reducedMotion={settings.reducedMotion} reaction={reaction || (random?.action.motion === 'love' || random?.action.motion === 'celebrate' ? random.action.motion : null)} replayKey={reaction ? message?.id : random?.id ?? 0}/>
       </button>
       <div className="pet-toolbar" data-interactive>
         <button onClick={() => void action('report')} title="汇报当前计薪"><span className="pet-live-dot"/>{fresh ? settings.hideAmounts ? state.pack ? packStateLabels[mood] : getPetPreset(settings.presetId).labels[mood] : `¥${snapshot.workAmount.toFixed(2)}` : '正在对表'}</button>

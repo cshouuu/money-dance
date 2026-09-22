@@ -6,6 +6,7 @@ import { PetCharacter } from '../pet/PetCharacter'
 import { type PetReaction } from '../pet/motion'
 import { packStateLabels, reactionDuration } from '../pet/pack-motion'
 import { PET_PRESETS, getPetPreset } from '../pet/presets'
+import { BubbleTextSettings } from '../pet/BubbleTextSettings'
 import './DesktopPet.css'
 
 const moods: PetMood[] = ['working', 'slacking', 'overtime', 'rest']
@@ -46,10 +47,10 @@ export function DesktopPet() {
     setPresetCandidate(id); setCandidate(null); setPackCandidate(null); setBindings(null); setIdlePreview(false); setReaction(null); setReplay(value => value + 1); setNotice(''); setError('')
   }
   async function update(changes: Partial<PetSettings>) {
-    if (!desktop || !settings || saving) return
+    if (!desktop || !settings || saving) return false
     setSaving(true); setError(''); setNotice('')
-    try { const next = await desktop.saveSettings({ ...settings, ...changes }); setState(next); setNotice('已保存，下次打开仍会陪着你。') }
-    catch { setError('设置没有保存成功，请重试。') }
+    try { const next = await desktop.saveSettings({ ...settings, ...changes }); setState(next); setNotice('已保存，下次打开仍会陪着你。'); return true }
+    catch { setError('设置没有保存成功，请重试。'); return false }
     finally { setSaving(false) }
   }
   async function selectImage(mode: 'extract' | 'transparent') {
@@ -129,7 +130,7 @@ export function DesktopPet() {
           <div className="pet-stage-ground"/><span className="pet-stage-caption"><MousePointer2 size={13}/> 点一下，给它一个摸摸</span>
         </div>
         <div className="pet-mood-picker" aria-label="预览动作">{moods.map(value => <button key={value} aria-pressed={mood === value && !reaction && !idlePreview} onClick={() => { setMood(value); setIdlePreview(false); setReaction(null); setReplay(value => value + 1) }}>{previewPack ? packStateLabels[value] : preset.labels[value]}</button>)}</div>
-        <div className="pet-storyboard"><span className="pet-storyboard-label">{previewPack ? '你的素材，你的角色' : previewImage ? '照片场景模式' : '一段完整的小动作'}</span><p>{previewPack ? '播放动作包中的原有姿势，按计薪状态自动切换。摸摸和庆祝播完一次后返回；未提供的动作使用待机。' : previewImage ? '保留照片主体，搭配电脑、热饮、抱枕和小毯子的场景演出。想要完整肢体动作，请导入动作包。' : preset.stories[mood]}</p>
+        <div className="pet-storyboard"><span className="pet-storyboard-label">{previewPack ? '你的素材，你的角色' : previewImage ? '照片场景模式' : '一段完整的小动作'}</span><p>{previewPack ? '播放动作包中的原有姿势。桌面默认随机切换，也可关闭随机模式跟随计薪状态。摸摸和庆祝优先播放；未绑定的互动使用待机。' : previewImage ? '保留照片主体，搭配电脑、热饮、抱枕和小毯子的场景演出。想要完整肢体动作，请导入动作包。' : preset.stories[mood]}</p>
           <div className="pet-reaction-picker"><button aria-pressed={reaction?.kind === 'love'} onClick={() => interact('love')}>试试蹭蹭</button><button aria-pressed={reaction?.kind === 'celebrate'} onClick={() => interact('celebrate')}>庆祝一下</button><button onClick={() => { setReaction(null); setReplay(value => value + 1) }}>从头播放</button></div>
         </div>
         {previewPack && <section className="pet-pack-bindings" aria-label="动作包状态绑定"><div className="pet-pack-heading"><div><h3>{previewPack.name}</h3><p>{Object.keys(previewPack.clips).length} 组素材{previewPack.author ? ` · 作者 ${previewPack.author}` : ''}</p></div><button className="pet-secondary" aria-pressed={idlePreview} onClick={() => { setIdlePreview(true); setReaction(null); setReplay(value => value + 1) }}>预览待机</button></div>
@@ -150,12 +151,14 @@ export function DesktopPet() {
         <section className="pet-settings-card"><div className="pet-section-title"><span className="pet-number">02</span><div><h2>按你的节奏陪伴</h2><p>设置自动保存，随时都能调整</p></div></div>
           <fieldset disabled={!desktop || !settings || saving} className="pet-fieldset">
             <label className="pet-toggle-row"><span><b>在桌面显示</b><small>关闭主窗口后继续陪伴，可从托盘退出应用</small></span><input type="checkbox" checked={settings?.enabled ?? true} onChange={event => void update({ enabled: event.target.checked })}/></label>
+            <label className="pet-toggle-row"><span><b>随机做动作</b><small>播完一个动作再随机切换；关闭后跟随工作状态，摸摸互动优先播放</small></span><input type="checkbox" checked={settings?.randomActions ?? true} onChange={event => void update({ randomActions: event.target.checked })}/></label>
             <div className="pet-form-row"><label>它的名字<input maxLength={20} value={name} onChange={event => setName(event.target.value)} onBlur={() => { if (name.trim() && name.trim() !== settings?.name) void update({ name }); else if (!name.trim()) setName(settings?.name ?? '小薪') }}/></label><label>桌宠大小<select value={settings?.size ?? 160} onChange={event => void update({ size: Number(event.target.value) })}><option value={120}>小巧</option><option value={160}>刚刚好</option><option value={200}>大一点</option></select></label></div>
             <div className="pet-form-row"><label>收入汇报<select value={settings?.reportMinutes ?? 60} onChange={event => void update({ reportMinutes: Number(event.target.value) })}>{[0, 15, 30, 60, 120].map(value => <option key={value} value={value}>{value ? `每 ${value} 分钟` : '关闭自动汇报'}</option>)}</select></label><label>喝水 / 活动提醒<select value={settings?.breakMinutes ?? 50} onChange={event => void update({ breakMinutes: Number(event.target.value) })}>{[0, 30, 50, 60, 90].map(value => <option key={value} value={value}>{value ? `每 ${value} 分钟` : '关闭提醒'}</option>)}</select></label></div>
             <label className="pet-toggle-row"><span><b><Heart size={15}/> 暖心关怀</b><small>加班满一小时、持续加班和收工时送上关心</small></span><input type="checkbox" checked={settings?.warmth ?? true} onChange={event => void update({ warmth: event.target.checked })}/></label>
             <label className="pet-toggle-row"><span><b><Sparkles size={15}/> 小小里程碑</b><small>计薪每跨过百元、首个心愿完成时轻轻庆祝</small></span><input type="checkbox" checked={settings?.milestones ?? true} onChange={event => void update({ milestones: event.target.checked })}/></label>
           </fieldset>
         </section>
+        <BubbleTextSettings settings={settings} disabled={!desktop || !settings || saving} save={update}/>
         <section className="pet-settings-card"><div className="pet-section-title"><span className="pet-number">03</span><div><h2>温柔，也有边界</h2><p>安静陪伴，不催促你多工作</p></div></div>
           <fieldset disabled={!desktop || !settings || saving} className="pet-fieldset">
             <label className="pet-toggle-row"><span><b><Bell size={15}/> 定时免打扰</b><small>期间不自动弹出气泡、通知或语音</small></span><input type="checkbox" checked={settings?.quietEnabled ?? true} onChange={event => void update({ quietEnabled: event.target.checked })}/></label>

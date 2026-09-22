@@ -1,4 +1,6 @@
+const { sanitizeBubbleTexts } = require('./pet-copy.cjs');
 const DEFAULT_SETTINGS = Object.freeze({
+  randomActions: true, bubbleTexts: Object.freeze({}),
   enabled: true, name: '小薪', presetId: 'xiaoxin', size: 160, reducedMotion: false,
   reportMinutes: 60, breakMinutes: 50, warmth: true, milestones: true,
   quietEnabled: true, quietStart: '23:00', quietEnd: '08:00',
@@ -7,7 +9,9 @@ const DEFAULT_SETTINGS = Object.freeze({
 const STATES = ['working', 'slacking', 'overtime', 'rest'];
 const ROUTES = ['/', '/pet', '/slacking', '/overtime', '/convert', '/settings', '/summary', '/attendance', '/assets', '/journey', '/roster', '/accidents'];
 function sanitizeSettings(input = {}) {
+  if (!input || typeof input !== 'object') input = {};
   const result = { ...DEFAULT_SETTINGS };
+  result.bubbleTexts = sanitizeBubbleTexts(input.bubbleTexts);
   for (const key of Object.keys(result)) {
     if (typeof result[key] === 'boolean' && typeof input[key] === 'boolean') result[key] = input[key];
   }

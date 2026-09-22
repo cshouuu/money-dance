@@ -8,7 +8,8 @@ import { getPetPreset, presetCue } from './presets'
 import './pet-character.css'
 
 export const moodLabels: Record<PetMood, string> = { working: '爪爪打字', slacking: '偷闲抱鱼', overtime: '揉眼递热饮', rest: '蜷起来睡觉' }
-export function PetCharacter({ image, pack, presetId, idlePreview = false, mood, size = 160, reducedMotion = false, reaction = null, replayKey = 0, showCue = false }: {
+export function PetCharacter({ image, pack, presetId, idlePreview = false, mood, size = 160, reducedMotion = false, reaction = null, replayKey = 0, showCue = false, clipKey }: {
+  clipKey?: string
   presetId?: PetPresetId
   pack?: PetPack | null
   idlePreview?: boolean
@@ -17,7 +18,7 @@ export function PetCharacter({ image, pack, presetId, idlePreview = false, mood,
 }) {
   const motion = reaction ?? mood
   const frame = usePetMotion(motion, reducedMotion || !!pack, replayKey)
-  if (pack) return <PackCharacter pack={pack} motion={idlePreview ? 'idle' : motion} size={size} reducedMotion={reducedMotion} replayKey={replayKey} showCue={showCue}/>
+  if (pack) return <PackCharacter pack={pack} motion={idlePreview ? 'idle' : motion} clipKey={clipKey} size={size} reducedMotion={reducedMotion} replayKey={replayKey} showCue={showCue}/>
   const preset = getPetPreset(presetId), atlasLayout = preset.layout
   const crop = atlasLayout.frames[frame.row * atlasLayout.columns + frame.frame]
   const cue = presetCue(preset.id, motion, frame.frame, frame.cue)

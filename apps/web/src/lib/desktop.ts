@@ -18,6 +18,8 @@ export interface PetPack {
   clips: Record<string, PackClip>; bindings: Record<PackState, string>
 }
 export interface PetSettings {
+  randomActions?: boolean
+  bubbleTexts?: Partial<Record<'love' | 'break' | 'warmth' | 'rest' | 'celebrate' | 'focus', string[]>>
   presetId?: PetPresetId
   enabled: boolean; name: string; size: number; reducedMotion: boolean
   reportMinutes: number; breakMinutes: number; warmth: boolean; milestones: boolean

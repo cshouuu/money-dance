@@ -83,7 +83,7 @@ async function verify() {
         expectedImage = await renderer.evaluate("window.moneyDanceDesktop.createPet('extract')");
         assert.match(expectedImage, /^data:image\/png;base64,/, 'native worker loads packaged model and ONNX/sharp libraries');
         await renderer.evaluate('window.moneyDanceDesktop.usePet()');
-        await renderer.evaluate("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,name:'打包验证',hideAmounts:true}))");
+        await renderer.evaluate("window.moneyDanceDesktop.getState().then(s => window.moneyDanceDesktop.saveSettings({...s.settings,name:'打包验证',hideAmounts:true,randomActions:false,bubbleTexts:{love:['安装包重启验证']}}))");
         const packFile = path.resolve(__dirname, '../../web/public/pet-pack-template.zip');
         await main.evaluate(`process.mainModule.require('electron').dialog.showOpenDialog = async () => ({ canceled:false, filePaths:[${JSON.stringify(packFile)}] })`);
         expectedPack = await renderer.evaluate('window.moneyDanceDesktop.importPack()');
@@ -97,6 +97,8 @@ async function verify() {
         assert.equal(await renderer.evaluate(`fetch(${JSON.stringify(src)}).then(r => r.ok && r.headers.get('content-type'))`), 'image/png');
         assert.equal(state.settings.name, '打包验证');
         assert.equal(state.settings.hideAmounts, true);
+        assert.equal(state.settings.randomActions, false, 'action mode survives process restart');
+        assert.deepEqual(state.settings.bubbleTexts.love, ['安装包重启验证'], 'bubble copy survives process restart');
         await renderer.evaluate("window.moneyDanceDesktop.resetPet('mili')");
       } else {
         assert.equal(state.pack, null, 'preset replaces imported pack across process restarts');
