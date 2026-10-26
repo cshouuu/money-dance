@@ -67,3 +67,14 @@ jobs:
           fi
           "$wrangler" pages deploy . --project-name=money-dance-workspaces-test --branch=workspaces --commit-hash="$GITHUB_SHA" --commit-dirty=false
           echo 'Workspace test website: https://workspaces.money-dance-workspaces-test.pages.dev/' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify the published test build over HTTPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          site='https://workspaces.money-dance-workspaces-test.pages.dev'
+          curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 15 "$site/test-build.json" -o "$RUNNER_TEMP/deployed-build.json"
+          node -e 'const build=require(process.env.RUNNER_TEMP + "/deployed-build.json"); if(build.commit!==process.env.GITHUB_SHA || build.environment!=="workspaces-test" || build.homepageWorkspaceOverview!==false) process.exit(1); console.log("Published commit verified:",build.commit);'
+          curl --fail --silent --show-error --max-time 20 "$site/" -o "$RUNNER_TEMP/deployed-index.html"
+          curl --fail --silent --show-error --max-time 20 "$site/spaces" -o "$RUNNER_TEMP/deployed-spaces.html"
+          cmp "$RUNNER_TEMP/deployed-index.html" "$RUNNER_TEMP/deployed-spaces.html"
+
