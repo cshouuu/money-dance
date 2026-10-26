@@ -21,13 +21,13 @@
   },
   "dependencies": {
     "fflate": "0.8.3",
-    "onnxruntime-node": "1.29.0",
-    "onnxruntime-web": "1.29.0",
-    "sharp": "0.35.4"
+    "onnxruntime-node": "1.30.0",
+    "onnxruntime-web": "1.30.0",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "electron": "44.3.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "com.moneydance.desktop",
