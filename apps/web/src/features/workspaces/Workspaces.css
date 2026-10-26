@@ -10,6 +10,9 @@
 .workspace-setup form { display: grid; gap: 16px; }
 .workspace-notice { padding: 16px; background: var(--surface-soft, #f4f5f1); border-radius: 14px; }
 .workspace-rule-history { margin: 24px 0; }
+.workspace-card > div:first-child > a { color: var(--ink); text-decoration: none; }
+.workspace-card > div:first-child > a:hover { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.workspace-card > div:first-child > a:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; border-radius: 4px; }
 .workspace-context { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 0 0 24px; padding: 20px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); }
 .workspace-context p { margin: 6px 0 0; color: var(--text-muted); }
 .workspace-context a { color: var(--primary); }
