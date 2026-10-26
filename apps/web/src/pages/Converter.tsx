@@ -113,7 +113,7 @@ export function Converter() {
   const saving = wishlistItems.find(item => queued?.progress.get(item.id)?.state === 'saving')
 
   return <section className="page converter-page">
-    <header className="page-header"><div><p className="eyebrow">WISH LIST</p><h1>按顺序，攒下每一个心愿。</h1><p>同一份工作收入只分配一次，攒够一个后自动继续下一个。</p></div></header>
+    <header className="page-header"><div><p className="eyebrow">WISH LIST</p><h1>按顺序，攒下每一个心愿。</h1><p>所有空间的工作收入汇入同一份心愿清单，每份收入只分配一次。工时与完成日期以主业作息作为参考估算。</p></div></header>
     {store.error && <p role="alert">{store.error}</p>}
     {needsMigration && <section className="input-card wish-migration" aria-label="旧心愿分配预览">
       <div><b>让旧心愿共用一份收入</b><p>目前仍显示各自独立估算的进度。切换后，从原起始日期统一计算，再按创建顺序分配；以前标记已买的金额会扣除。</p></div>

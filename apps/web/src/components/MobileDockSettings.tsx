@@ -8,8 +8,9 @@ import './MobileDockSettings.css'
 
 const positions = ['第 1 项 · 最左', '第 2 项', '第 3 项', '第 4 项 · 最右']
 
-function DockEditor({ close }: { close: () => void }) {
-  const [draft, setDraft] = useState(loadDockPaths)
+function DockEditor({ close, availablePaths }: { close: () => void; availablePaths?: readonly NavigationPath[] }) {
+  const available = NAVIGATION_ITEMS.filter(([path]) => !availablePaths || availablePaths.includes(path))
+  const [draft, setDraft] = useState(() => [...new Set([...loadDockPaths().filter(path => available.some(([to]) => to === path)), ...available.map(([path]) => path)])].slice(0, 4))
   const [error, setError] = useState('')
   const save = () => {
     if (!saveDockPaths(draft)) { setError('暂时无法保存，请检查浏览器存储空间后重试。'); return }
@@ -27,17 +28,17 @@ function DockEditor({ close }: { close: () => void }) {
     <div className="dock-settings-fields">
       {draft.map((path, index) => <SelectField key={index} label={positions[index]} value={path}
         onValueChange={value => { setDraft(current => setDockSlot(current, index, value as NavigationPath)); setError('') }}>
-        {NAVIGATION_ITEMS.map(([to, , label]) => <option key={to} value={to}>{label}</option>)}
+        {available.map(([to, , label]) => <option key={to} value={to}>{label}</option>)}
       </SelectField>)}
     </div>
-    <Button variant="ghost" size="sm" className="dock-settings-reset" onClick={() => { setDraft([...DEFAULT_DOCK_PATHS]); setError('') }}><RotateCcw size={15}/>恢复默认</Button>
+    <Button variant="ghost" size="sm" className="dock-settings-reset" onClick={() => { setDraft([...new Set([...DEFAULT_DOCK_PATHS.filter(path => available.some(([to]) => to === path)), ...available.map(([path]) => path)])].slice(0, 4)); setError('') }}><RotateCcw size={15}/>恢复默认</Button>
     {error && <p className="dock-settings-error" role="alert">{error}</p>}
     <div className="dock-settings-actions"><Button variant="secondary" onClick={close}>取消</Button><Button variant="primary" onClick={save}>保存并应用</Button></div>
   </div>
 }
 
-export function MobileDockSettings({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function MobileDockSettings({ open, onOpenChange, availablePaths }: { open: boolean; onOpenChange: (open: boolean) => void; availablePaths?: readonly NavigationPath[] }) {
   return <BottomSheet open={open} onOpenChange={onOpenChange} title="自定义底部栏" description="选择你的四个常用入口，保存后立即生效。" className="dock-settings-sheet">
-    {open && <DockEditor close={() => onOpenChange(false)}/>}
+    {open && <DockEditor availablePaths={availablePaths} close={() => onOpenChange(false)}/>}
   </BottomSheet>
 }

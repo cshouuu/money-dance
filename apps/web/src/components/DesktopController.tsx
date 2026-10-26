@@ -1,3 +1,6 @@
+import { additionalWishEarnings } from '../lib/workspaces/queries'
+import { loadWorkspaceStore } from '../lib/workspaces/store'
+import { summarizeTodayWork } from '../lib/work'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { desktop, type PetSnapshot } from '../lib/desktop'
@@ -20,13 +23,16 @@ export function DesktopController() {
     const publish = () => {
       const now = new Date(), profile = loadProfile(), records = loadWorkRecords(), attendance = loadAttendanceRecords()
       const snapshot = buildDesktopSnapshot(profile, records, attendance, loadActiveSlacking(), loadJSON<ActiveOvertime | null>(keys.activeOvertime, null), now)
+      const otherWork = loadWorkspaceStore().spaces.map(space => summarizeTodayWork(space.profile, space.workRecords, now, undefined, space.attendanceRecords, space.holidaySettings))
+      snapshot.workAmount += otherWork.reduce((sum, work) => sum + work.earnedAmount, 0)
+      if (snapshot.state === 'rest' && otherWork.some(work => work.status === 'working')) snapshot.state = 'working'
       // Forecasting is deliberately excluded from this background second tick.
       if (now.getTime() - wishUpdatedAt > 60_000) {
         const store = loadWishStore(), item = store.items.find(item => !item.purchasedAt)
         wish = null
         if (item) {
           const earned = store.plan ? evaluateWishAllocation(store.plan, profile, now, records, attendance).amounts[item.id] ?? 0
-            : calculatePaidTimeEarnings(profile, new Date(item.startedAt ?? item.createdAt), now, records, attendance).earnedAmount
+            : calculatePaidTimeEarnings(profile, new Date(item.startedAt ?? item.createdAt), now, records, attendance).earnedAmount + additionalWishEarnings(new Date(item.startedAt ?? item.createdAt), now)
           wish = { id: item.id, name: item.name, progress: item.price > 0 ? Math.min(1, Math.max(0, earned / item.price)) : 1 }
         }
         wishUpdatedAt = now.getTime()

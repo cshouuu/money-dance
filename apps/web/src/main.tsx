@@ -5,6 +5,7 @@ import './styles.css'
 import './mobile.css'
 import { IMPORT_EVENT_KEY, recoverInterruptedImport } from './lib/backup'
 import { initializeTheme } from './components/theme'
+import { isHarmonyBuild } from './lib/harmony'
 
 const rootElement = document.getElementById('root')!
 
@@ -37,7 +38,7 @@ try {
 }
 window.addEventListener('storage', event => { if (event.key === IMPORT_EVENT_KEY && event.newValue) window.location.reload() })
 
-const isNativeShell = 'Capacitor' in window || 'moneyDanceDesktop' in window
+const isNativeShell = isHarmonyBuild || 'Capacitor' in window || 'moneyDanceDesktop' in window
 const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
 if ('serviceWorker' in navigator && !isNativeShell && !isLocalDev) {
   window.addEventListener('load', () => {

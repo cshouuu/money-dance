@@ -1,5 +1,9 @@
+import { useWorkspaces } from '../features/workspaces/useWorkspaces'
+import { workspaceNavigation } from '../lib/workspaces/navigation'
+import { toLocalDateValue } from '../lib/form'
 import { Grid2X2, Palette, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, PawPrint } from 'lucide-react'
 import { desktop } from '../lib/desktop'
+import { isHarmonyBuild } from '../lib/harmony'
 import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -17,16 +21,18 @@ initializeTheme()
 
 const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
-const overviewItems = items.slice(0, 4)
-const workItems = items.slice(4, 9)
 const settingsItem = items[9]
 
 export function Shell() {
+  const spaces = useWorkspaces()
+  const visibleItems = workspaceNavigation(spaces, toLocalDateValue())
+  const overviewItems = visibleItems.filter(item => items.slice(0, 4).includes(item))
+  const workItems = visibleItems.filter(item => items.slice(4, 9).includes(item))
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [dockPaths, setDockPaths] = useState(loadDockPaths)
   const [dockSettingsOpen, setDockSettingsOpen] = useState(false)
-  const compactItems = dockPaths.map(path => items.find(([to]) => to === path)!)
+  const compactItems = [...new Set([...dockPaths.filter(path => visibleItems.some(([to]) => to === path)), ...visibleItems.map(([to]) => to)])].slice(0, 4).map(path => items.find(([to]) => to === path)!)
   useEffect(() => subscribeDockPaths(setDockPaths), [])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [themePickerOpen, setThemePickerOpen] = useState(false)
@@ -70,7 +76,7 @@ export function Shell() {
           <span className="brand-mark"><img src="/money-dance-icon.svg" alt="" /></span>
           <div className="brand-copy"><b>MoneyDance</b><small>TIME IS MONEY</small></div>
         </div>
-        <button
+        <Button
           type="button"
           className="sidebar-toggle"
           aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
@@ -79,7 +85,7 @@ export function Shell() {
           onClick={() => setSidebarCollapsed(value => !value)}
         >
           {sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
+        </Button>
       </div>
 
       <nav className="sidebar-navigation">
@@ -94,8 +100,10 @@ export function Shell() {
       </nav>
 
       <div className="sidebar-footer">
+        <NavLink to="/spaces" className="nav-item"><Grid2X2 size={18}/><span>工作空间</span></NavLink>
+        <span className="workspace-test-label">按工作方式独立设置</span>
         {desktop && <NavLink to="/pet" aria-label="桌边搭子" title="桌边搭子" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}><PawPrint size={18}/><span>桌边搭子</span></NavLink>}
-        <button
+        <Button
           type="button"
           className="nav-item theme-switcher-button"
           aria-label="一键换肤"
@@ -104,9 +112,9 @@ export function Shell() {
         >
           <Palette size={18}/>
           <span>一键换肤</span>
-        </button>
+        </Button>
         {renderDesktopItem(settingsItem)}
-        <p className="privacy-note">Local-first · 薪资默认只保存在{desktop ? '这台电脑' : '你的浏览器'}</p>
+        <p className="privacy-note">Local-first · 薪资默认只保存在{desktop ? '这台电脑' : isHarmonyBuild ? '这台设备' : '你的浏览器'}</p>
       </div>
     </AnimatedSidebar>
 
@@ -115,7 +123,7 @@ export function Shell() {
     <div className="mobile-nav-layer">
       <nav className="mobile-dock" aria-label="移动端主导航">
         {compactItems.slice(0, 2).map(item => renderMobileItem(item))}
-        <button
+        <Button
           className="mobile-dock-more"
           type="button"
           aria-label="打开全部功能"
@@ -124,7 +132,7 @@ export function Shell() {
         >
           <span><Grid2X2 size={18} /></span>
           <small>全部</small>
-        </button>
+        </Button>
         {compactItems.slice(2).map(item => renderMobileItem(item))}
       </nav>
     </div>
@@ -138,15 +146,16 @@ export function Shell() {
     >
       <Button variant="secondary" className="mobile-dock-customize" onClick={() => { setMobileOpen(false); setDockSettingsOpen(true) }}><SlidersHorizontal size={17}/>自定义底部栏</Button>
       <nav className="mobile-drawer-grid" aria-label="全部功能">
-        {items.map(item => renderMobileItem(item, true))}
+        <NavLink to="/spaces" className="mobile-drawer-item" onClick={() => setMobileOpen(false)}><Grid2X2 size={20}/><span>工作空间</span></NavLink>
+        {visibleItems.map(item => renderMobileItem(item, true))}
         {desktop && <NavLink to="/pet" className="mobile-drawer-item" onClick={() => setMobileOpen(false)}><PawPrint size={20}/><span>桌边搭子</span></NavLink>}
-        <button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
+        <Button type="button" className="mobile-drawer-item mobile-theme-switcher" onClick={() => { setMobileOpen(false); setThemePickerOpen(true) }}>
           <Palette size={20}/>
           <span>一键换肤</span>
-        </button>
+        </Button>
       </nav>
     </BottomSheet>
-    <MobileDockSettings open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
+    <MobileDockSettings availablePaths={visibleItems.map(([path]) => path)} open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <ThemePickerSheet open={themePickerOpen} onOpenChange={setThemePickerOpen}/>
     </div>
   </LazyMotion>

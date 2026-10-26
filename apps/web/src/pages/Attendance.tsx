@@ -1,3 +1,5 @@
+import { SharedAttendance } from '../features/workspaces/SharedAttendance'
+import { useWorkspaces } from '../features/workspaces/useWorkspaces'
 import { useNavigate } from 'react-router-dom'
 import { vacationForDate } from '@salary-flow/core'
 import { VacationSettingsButton } from '../components/VacationSettings'
@@ -24,6 +26,12 @@ function validRequestedDate(value: string | null): string | null {
 }
 
 export function Attendance() {
+  const spaces = useWorkspaces()
+  const [search] = useSearchParams()
+  return spaces.length > 1 && search.get('space') !== 'primary' ? <SharedAttendance spaces={spaces}/> : <PrimaryAttendance/>
+}
+
+function PrimaryAttendance() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const searchValue = searchParams.toString()

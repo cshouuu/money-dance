@@ -1,3 +1,4 @@
+import { additionalWishSlices } from './workspaces/queries'
 import { calculateRates, priceToWorkSeconds, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, WishItem } from '../types'
 import { loadChinaHolidaySettings } from './attendance'
@@ -208,7 +209,7 @@ export function evaluateWishAllocation(
     }
     return { startAt: interval.start.getTime(), endAt: interval.end.getTime(), ratePerSecond: Math.max(0, rate) }
   })
-  return advanceWishAllocation(state, slices, end, revisions)
+  return advanceWishAllocation(state, [...slices, ...additionalWishSlices(new Date(incomeFrom), now)], end, revisions)
 }
 
 export function copyWishAllocationState(state: WishAllocationState): WishAllocationState {

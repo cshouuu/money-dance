@@ -1,3 +1,4 @@
+import { SharedJourney } from '../features/workspaces/SharedJourney'
 import { rosterForDate, workProfileForDate } from '@salary-flow/core'
 import { rosterStandardDayAmount } from '../lib/roster'
 import { stageVacationSummary, vacationRange, vacationPayLabel } from '../lib/vacations'
@@ -195,7 +196,7 @@ export function WorkJourney() {
   const startNew = () => openEditor(open ? { kind: 'end', stage: open } : { kind: 'create' })
   const choose = (id: string) => { setSelectedId(id); setMobileDetail(true); setTab('overview'); setPage(0) }
   const days = stages.reduce((sum, stage) => sum + journeyElapsedDays(stage, today), 0)
-  return <div className={`page journey-page${mobileDetail ? ' journey-show-detail' : ''}`}>
+  return <div className={`page journey-page${mobileDetail ? ' journey-show-detail' : ''}`}><SharedJourney/>
     <header className="journey-heading"><div><p className="journey-eyebrow">MY WORK JOURNEY</p><h1>工作旅程<span>每一段，都算数。</span></h1><p className="journey-muted">把努力留在时间里，也为下一段生活留出空间。</p></div><div className="journey-actions"><Button variant="secondary" className="journey-button" onClick={() => openEditor({ kind: 'history' })}>补录过去</Button><Button variant="primary" className="journey-button" onClick={startNew}><Plus size={16}/>{stages.length ? '开启新工作' : '建立当前工作'}</Button></div></header>
     <section className="journey-hero"><div><span className="journey-hero-label"><Route size={17}/>走过的每一步，都有回响</span><h2>{stages.length ? active ? '认真工作的你，正在积累自己的故事。' : '暂时停下来，也是旅程的一部分。' : '从第一段工作，开始记录你的旅程。'}</h2><p>{stages.length ? '新的开始不会覆盖过去。工作、休息，都有属于自己的位置。' : '已有的工资与计时记录，会按你确认的日期归入工作阶段。'}</p></div><div className="journey-hero-stats"><div><strong>{stages.length}<small> 段</small></strong><span>工作经历</span></div><div><strong>{days.toLocaleString()}<small> 天</small></strong><span>累计任职</span></div></div></section>
     {undo && <div className="journey-callout journey-undo" role="status"><span>已删除「{undo.name}」</span><Button variant="secondary" disabled={undoBusy} onClick={async () => { setUndoBusy(true); const error = await undoWorkStageDeletion(); setUndoBusy(false); setUndoError(error ?? ''); if (!error) setUndo(null) }}>撤销删除</Button>{undoError && <p role="alert">{undoError}</p>}</div>}

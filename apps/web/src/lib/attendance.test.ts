@@ -137,6 +137,39 @@ describe('calendar month paid-day count', () => {
     expect(getMonthlyPaidDayCount(DEFAULT_PROFILE, new Date(2026, 7, 1, 12), [], disabledSettings)).toBe(21)
   })
 
+  it.each([5, 6])('counts every month exactly once for a %i-day week, including leap February', workDaysPerWeek => {
+    const profile = { ...DEFAULT_PROFILE, workWeekMode: 'fixed' as const, workDaysPerWeek }
+    for (const year of [2024, 2025, 2026, 2027]) {
+      for (let month = 0; month < 12; month += 1) {
+        const totalDays = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+        const weekdays = Array.from({ length: totalDays }, (_, index) => new Date(Date.UTC(year, month, index + 1)).getUTCDay())
+        const expected = weekdays.filter(day => day !== 0 && (workDaysPerWeek === 6 || day !== 6)).length
+        for (const day of [1, 15, totalDays]) {
+          const date = new Date(year, month, day, 12)
+          expect(getMonthlyPaidDayCount(profile, date, [], disabledSettings)).toBe(expected)
+          expect(getMonthlyScheduledWorkDayCount(profile, date, [], disabledSettings)).toBe(expected)
+        }
+      }
+    }
+  })
+
+  it.each([
+    // September 20 is a Sunday makeup workday; September 25 is paid Mid-Autumn leave.
+    // The official break also removes Saturday September 26 from a six-day week.
+    [5, true, 23, 22],
+    [6, true, 26, 25],
+    [5, false, 22, 22],
+    [6, false, 26, 26],
+  ] as const)('separates September salary days from attendance (%i-day week, holidays %s)', (workDaysPerWeek, enabled, paid, worked) => {
+    const profile = { ...DEFAULT_PROFILE, workWeekMode: 'fixed' as const, workDaysPerWeek }
+    const settings = { ...holidaySettings, enabled }
+    const date = new Date(2026, 8, 14, 12)
+    expect(getMonthlyPaidDayCount(profile, date, [], settings)).toBe(paid)
+    expect(getMonthlyScheduledWorkDayCount(profile, date, [], settings)).toBe(worked)
+    expect(getMonthlyPaidDayCount({ ...profile, salaryType: 'daily' }, date, [], settings)).toBe(worked)
+    expect(getMonthlyPaidDayCount({ ...profile, salaryType: 'annual' }, date, [], settings)).toBe(paid)
+  })
+
   it('keeps personal leave in the denominator but removes an explicit company holiday', () => {
     const leave = { date: '2026-08-03', status: 'leave' as const, leaveType: 'personal' as const, payMode: 'unpaid' as const, updatedAt: '' }
     const companyHoliday = { date: '2026-08-04', status: 'holiday' as const, payMode: 'unpaid' as const, updatedAt: '' }

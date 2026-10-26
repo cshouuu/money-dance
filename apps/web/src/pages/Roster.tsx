@@ -1,3 +1,4 @@
+import type { WorkSpace } from '../lib/workspaces/model'
 import { rosterDayLabel } from '../lib/roster'
 import { actualPaidIntervalsInRange } from '../lib/paidTime'
 import { useMemo, useState } from 'react'
@@ -28,7 +29,8 @@ function templatePlan(profile: SalaryProfile, stageId: string | null): RosterPla
   const first: ShiftTemplate = { ...newShift(), name: '常规班', startTime: config.workStartTime, endTime: config.workEndTime,
     endDay: config.workEndTime <= config.workStartTime ? 1 : 0,
     breaks: getUnpaidBreakOffsets(config).map((rest, i) => ({ id: createId(), name: i ? '休息' : '午休', startMinute: rest.start / 60, endMinute: rest.end / 60, paid: false })) }
-  const future = existing && (!stage?.endDate || stage.endDate>start) ? shiftSessionLocalDate(start,1) : start
+  const hasConfiguredShifts = existing && (existing.templates.length > 0 || existing.overrides.some(item => item.shifts.length > 0))
+  const future = hasConfiguredShifts && (!stage?.endDate || stage.endDate>start) ? shiftSessionLocalDate(start,1) : start
   return existing ? { ...clone(existing), id: createId(), effectiveFrom: future, overrides: existing.overrides.filter(item => item.date >= future) } : {
     id: createId(), stageId, effectiveFrom: start, enabled: true, mode: 'manual', anchorDate: start,
     templates: [first], cycle: [[first.id], [], [], []], overrides: [], respectVacations: true, respectHolidays: false,
@@ -56,7 +58,8 @@ function ShiftEditor({ shift, change, remove, payMode }: { payMode?: RosterPlan[
   </article>
 }
 
-function Editor({ profile, stageId }: { profile: SalaryProfile; stageId: string | null }) {
+type RosterAdapter = Pick<WorkSpace, 'workRecords' | 'attendanceRecords' | 'ledger' | 'holidaySettings'> & { save: typeof saveRosterPlans }
+export function RosterEditor({ profile, stageId, adapter }: { profile: SalaryProfile; stageId: string | null; adapter?: RosterAdapter }) {
   const [search] = useSearchParams()
   const [draft,setDraft] = useState(() => templatePlan(profile,stageId))
   const [expected,setExpected] = useState(profile)
@@ -116,16 +119,16 @@ function Editor({ profile, stageId }: { profile: SalaryProfile; stageId: string 
   }
   const preview = useMemo(() => {
     if(!review) return null
-    const next={...profile,rosters:review.plans};const records=loadWorkRecords();const attendance=loadAttendanceRecords();const ledger=loadLedger()
+    const next={...profile,rosters:review.plans};const records=adapter?.workRecords??loadWorkRecords();const attendance=adapter?.attendanceRecords??loadAttendanceRecords();const ledger=adapter?.ledger??loadLedger()
     const at=new Date(`${review.start.slice(0,7)}-15T12:00:00`)
     const rows=[]
-    for(let date=review.start;date<=review.end && rows.length<31;date=shiftSessionLocalDate(date,1)) rows.push({date,label:rosterDayLabel(next,date)??(isEmployedOn(next,date)?'原作息':'未任职'),shifts:effectiveRosterShifts(next,date),hours:intervalSeconds(actualPaidIntervalsInRange(next,localDateWithTime(date,'00:00'),localDateWithTime(shiftSessionLocalDate(date,1),'00:00'),[],attendance)),pay:plannedIncomeForDate(next,date,attendance)})
-    return { rows,before:getMonthlyWorkStats(profile,ledger,records,attendance,at).expectedIncome,after:getMonthlyWorkStats(next,ledger,records,attendance,at).expectedIncome }
+    for(let date=review.start;date<=review.end && rows.length<31;date=shiftSessionLocalDate(date,1)) rows.push({date,label:rosterDayLabel(next,date)??(isEmployedOn(next,date)?'原作息':'未任职'),shifts:effectiveRosterShifts(next,date),hours:intervalSeconds(actualPaidIntervalsInRange(next,localDateWithTime(date,'00:00'),localDateWithTime(shiftSessionLocalDate(date,1),'00:00'),[],attendance)),pay:plannedIncomeForDate(next,date,attendance,adapter?.holidaySettings)})
+    return { rows,before:getMonthlyWorkStats(profile,ledger,records,attendance,at,{},adapter?.holidaySettings).expectedIncome,after:getMonthlyWorkStats(next,ledger,records,attendance,at,{},adapter?.holidaySettings).expectedIncome }
   },[review,profile])
   const save = async () => {
     if(!review||busy)return
     setBusy(true)
-    const failed=await saveRosterPlans(expected,review.plans)
+    const failed=await (adapter?.save ?? saveRosterPlans)(expected,review.plans)
     setBusy(false)
     if(failed){setError(failed);return}
     const next={...expected,rosters:review.plans}
@@ -157,5 +160,5 @@ export function Roster() {
   const profile=useProfile();const [search]=useSearchParams()
   const available=profile.workJourney?.stages.filter(stage=>stage.profile)??[]
   const [stageId,setStageId]=useState<string|null>(()=>(search.get('stage')||null)??available.find(stage=>stage.startDate<=toLocalDateValue()&&(!stage.endDate||stage.endDate>=toLocalDateValue()))?.id??available[0]?.id??null)
-  return <section className="page roster-page"><header className="page-header"><div><p className="eyebrow">OPTIONAL SCHEDULE</p><h1>排班设置</h1><p>为轮班、长班和不固定作息设置自己的安排。</p></div><Link className="text-button" to="/attendance">返回薪苦日历</Link></header>{available.length>0&&<SelectField label="为哪段工作设置排班" hint="对应工作旅程中的工作经历。排班只在所选工作的任职日期内生效，不会覆盖其他工作的安排。" value={stageId??''} onValueChange={setStageId}>{available.map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}</SelectField>}{profile.workJourney&&!available.length?<p>请先在工作旅程中补充工作和薪资。</p>:<Editor key={stageId??'current'} profile={profile} stageId={stageId}/>}</section>
+  return <section className="page roster-page"><header className="page-header"><div><p className="eyebrow">OPTIONAL SCHEDULE</p><h1>排班设置</h1><p>为轮班、长班和不固定作息设置自己的安排。</p></div><Link className="text-button" to="/attendance">返回薪苦日历</Link></header>{available.length>0&&<SelectField label="为哪段工作设置排班" hint="对应工作旅程中的工作经历。排班只在所选工作的任职日期内生效，不会覆盖其他工作的安排。" value={stageId??''} onValueChange={setStageId}>{available.map(stage=><option key={stage.id} value={stage.id}>{stage.name}</option>)}</SelectField>}{profile.workJourney&&!available.length?<p>请先在工作旅程中补充工作和薪资。</p>:<RosterEditor key={stageId??'current'} profile={profile} stageId={stageId}/>}</section>
 }

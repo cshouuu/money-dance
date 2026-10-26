@@ -1,3 +1,4 @@
+import { SpaceSessionRecords } from '../features/workspaces/SpaceSessionRecords'
 import { getScheduledBusinessDate } from '../lib/work'
 import { wageMilestoneAmounts } from '../lib/wageMilestones'
 import { isEmployedOn } from '@salary-flow/core'
@@ -394,7 +395,7 @@ export function Slacking() {
 
   return <section className="page timer-page slacking-page">
     {!isEmployedOn(profile, currentDate) && <p className="timer-save-error">当前处于休息阶段，新计时已暂停。历史记录仍可查看与补记。<a href="/journey">前往工作旅程开启新工作 →</a></p>}
-    <header className="page-header"><div><p className="eyebrow">SLACKING TIMER</p><h1>摸鱼，也要有收益感。</h1><p>计时基于真实时间戳，刷新、锁屏、切换页面都不会让时间丢失。</p></div></header>
+    <SpaceSessionRecords kind="slacking"/><header className="page-header"><div><p className="eyebrow">SLACKING TIMER</p><h1>摸鱼，也要有收益感。</h1><p>计时基于真实时间戳，刷新、锁屏、切换页面都不会让时间丢失。</p></div></header>
     <div className="timer-workspace">
     <div className={`timer-card ${active ? 'running' : ''}`}>
       <div className="fish-orbit slacking-visual" role="img" aria-label={`摸鱼状态：${timerVisual.label}`} title={`摸鱼状态：${timerVisual.label}`}>{timerVisual.emoji}</div>

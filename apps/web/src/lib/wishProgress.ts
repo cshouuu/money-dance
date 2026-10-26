@@ -1,3 +1,4 @@
+import { additionalWishEarnings } from './workspaces/queries'
 import { calculateRates, priceToWorkSeconds, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceRecord, DailyWorkRecord, WishItem } from '../types'
 import { loadChinaHolidaySettings } from './attendance'
@@ -36,7 +37,7 @@ export function getWishProgress(
     workRecords,
     attendanceRecords,
     settings,
-  ).earnedAmount
+  ).earnedAmount + additionalWishEarnings(progressStart, now)
   const price = Math.max(0, Number.isFinite(item.price) ? item.price : 0)
   const earnedAmount = Math.min(price, Math.max(0, rawEarnedAmount))
   const remainingAmount = Math.max(0, price - earnedAmount)

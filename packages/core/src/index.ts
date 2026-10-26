@@ -1,6 +1,7 @@
 export type SalaryType = 'monthly' | 'annual' | 'daily' | 'hourly'
 export type SalaryHistoryMode = 'none' | 'custom'
 export type WorkMode = 'scheduled' | 'flexible'
+export type WorkTemplate = 'fixed' | 'nurse' | 'factory' | 'sales' | 'freelance' | 'parttime'
 export type WorkWeekMode = 'fixed' | 'alternating'
 export type AlternatingWeekType = 'big' | 'small'
 export type LivingCostMode = 'deduct' | 'daily-ledger'
@@ -80,6 +81,10 @@ export function rosterShiftsForDate(profile: SalaryProfile, date: string): Shift
 }
 
 export interface SalaryProfile {
+  /** Presentation preset travels with dated work rules, never with UI selection. */
+  workTemplate?: WorkTemplate
+  /** Optional personal monthly income goal; never changes payroll calculations. */
+  monthlyIncomeTarget?: number
   /** Dated changes within a job; absence preserves existing calculations. */
   workSettingsHistory?: WorkSettingsChange[]
   rosters?: RosterPlan[]
@@ -125,7 +130,7 @@ export type WorkSettingsSnapshot = Pick<SalaryProfile,
   'salary' | 'salaryType' | 'payday' | 'paydayAdjustment' | 'salaryDeductions' |
   'monthlyRateBasis' | 'monthlyWorkDays' | 'workDaysPerWeek' | 'workWeekMode' |
   'alternatingAnchorDate' | 'alternatingAnchorType' | 'workStartTime' | 'workEndTime' |
-  'breakStartTime' | 'breakEndTime' | 'breakPeriods' | 'paidBreak' | 'defaultWorkMode'>
+  'breakStartTime' | 'breakEndTime' | 'breakPeriods' | 'paidBreak' | 'defaultWorkMode' | 'workTemplate' | 'monthlyIncomeTarget'>
 
 export interface WorkSettingsChange {
   stageId: string | null

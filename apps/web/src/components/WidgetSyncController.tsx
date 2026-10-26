@@ -1,3 +1,6 @@
+import { WORKSPACES_KEY } from '../lib/workspaces/model'
+import { loadWorkspaceStore } from '../lib/workspaces/store'
+import { mergeSpaceTimelines } from '../lib/workspaces/widget'
 import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { loadAttendanceRecords } from '../lib/attendance'
@@ -21,6 +24,7 @@ import { loadWishStore } from '../lib/wishStore'
 const SYNC_DEBOUNCE_MS = 180
 const SAFE_LAUNCH_TARGET = /^\/(?:$|(?:slacking|overtime|convert)(?:[/?#]|$))/
 const WIDGET_STORAGE_KEYS = new Set([
+  WORKSPACES_KEY,
   keys.profile,
   keys.wishes,
   keys.wishAllocation,
@@ -46,14 +50,18 @@ function createSnapshot() {
   const attendanceRecords = loadAttendanceRecords()
   const now = new Date()
   const wishes = loadWishStore()
-  return { ...buildWidgetSnapshot({
+  const snapshot = buildWidgetSnapshot({
     profile,
     workRecords,
     attendanceRecords,
     now,
     activeSlacking: loadActiveSlacking(),
     activeOvertime: loadJSON<ActiveOvertime | null>(keys.activeOvertime, null),
-  }), wishWidget: buildWishWidgetSnapshot(profile, wishes.items, loadJSON<string[]>(keys.widgetWishes, []), workRecords, attendanceRecords, now, wishes.plan) }
+  })
+  const extras = loadWorkspaceStore().spaces.map(space => buildWidgetSnapshot({ profile: space.profile, workRecords: space.workRecords,
+    attendanceRecords: space.attendanceRecords, holidaySettings: space.holidaySettings, now }).workTimeline)
+  return { ...snapshot, workTimeline: extras.length ? mergeSpaceTimelines([snapshot.workTimeline, ...extras]) : snapshot.workTimeline,
+    wishWidget: buildWishWidgetSnapshot(profile, wishes.items, loadJSON<string[]>(keys.widgetWishes, []), workRecords, attendanceRecords, now, wishes.plan) }
 }
 
 export async function performWidgetSync(): Promise<WidgetSyncOutcome> {

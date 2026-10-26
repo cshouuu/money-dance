@@ -41,11 +41,11 @@ export function getMonthlyWorkStats(
   attendanceRecords: readonly AttendanceRecord[],
   now = new Date(),
   sessions: { overtime?: readonly OvertimeSession[]; slacking?: readonly SlackingSession[] } = {},
+  holidaySettings = loadChinaHolidaySettings(now),
 ): MonthlyWorkStats {
   const month = toLocalMonthValue(now)
   const { start, end } = getSummaryRange('month', month)
-  const summary = summarizeLedger(profile, [...ledger], start, end, now, [...workRecords], [...attendanceRecords])
-  const holidaySettings = loadChinaHolidaySettings(now)
+  const summary = summarizeLedger(profile, [...ledger], start, end, now, [...workRecords], [...attendanceRecords], holidaySettings)
   const currentRateProfile = salaryProfileForBusinessDate(profile, toLocalDateValue(now), [...attendanceRecords], holidaySettings)
   const rates = calculateRates(currentRateProfile)
   const workdayCount = getMonthlyScheduledWorkDayCount(profile, now, attendanceRecords, holidaySettings)

@@ -1,8 +1,9 @@
+import { WORKSPACES_KEY } from './workspaces/model'
 import { useEffect, useState } from 'react'
 import { keys, STORAGE_CHANGED_EVENT } from './storage'
 import { loadWishStore } from './wishStore'
 
-const observed = new Set([keys.wishes, keys.wishAllocation, keys.workRecords, keys.attendanceRecords])
+const observed = new Set([WORKSPACES_KEY, keys.wishes, keys.wishAllocation, keys.workRecords, keys.attendanceRecords])
 
 export function useWishStore() {
   const [store, setStore] = useState(loadWishStore)

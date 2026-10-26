@@ -1,3 +1,4 @@
+import { SpaceSessionRecords } from '../features/workspaces/SpaceSessionRecords'
 import { isEmployedOn } from '@salary-flow/core'
 import { originalOvertimeSecondRate } from '../lib/overtime'
 import { useProfile } from '../lib/useProfile'
@@ -435,7 +436,7 @@ export function Overtime() {
 
   return <section className="page overtime-page">
     {!isEmployedOn(profile, currentDate) && <p className="timer-save-error">当前处于休息阶段，新计时已暂停。历史记录仍可查看与补记。<a href="/journey">前往工作旅程开启新工作 →</a></p>}
-    <header className="page-header"><div><p className="eyebrow">OVERTIME TIMER</p><h1>加班，也得算得明白。</h1><p>有钱就算钱，没钱也把时间记下来。刷新、锁屏或切换页面都不会丢失计时。</p></div></header>
+    <SpaceSessionRecords kind="overtime"/><header className="page-header"><div><p className="eyebrow">OVERTIME TIMER</p><h1>加班，也得算得明白。</h1><p>有钱就算钱，没钱也把时间记下来。刷新、锁屏或切换页面都不会丢失计时。</p></div></header>
 
     <div className="timer-workspace">
     <div className={`timer-card overtime-timer${active ? ' running' : ''}`}>

@@ -1,3 +1,4 @@
+import { PRIMARY_SPACE_ID, SPACE_TEMPLATES, WORKSPACES_KEY } from './workspaces/model'
 import { keys } from './storage'
 
 type Check = (value: unknown) => boolean
@@ -35,6 +36,8 @@ const roster = fields({ id, stageId: nullable(id), effectiveFrom: date, enabled:
   respectVacations: bool, respectHolidays: bool,
   pay: fields({ mode: one('salary', 'hourly', 'shift'), value: positive, basis: one('planned', 'actual'), monthlyHours: positive, overtime: one('manual', 'unpaid', 'multiplier', 'fixed'), overtimeValue: positive }, { preserveMonthlySalary: bool }) })
 const profileFields: Record<string, Check> = {
+  workTemplate: one(...SPACE_TEMPLATES.map(template => template.id)),
+  monthlyIncomeTarget: positive,
   salary: positive, salaryType: one('monthly', 'annual', 'daily', 'hourly'), payday: nullable(v => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 31),
   paydayAdjustment: one('none', 'previous-workday', 'next-workday'), workStartTime: clock, workEndTime: clock, breakStartTime: clock, breakEndTime: clock,
   paidBreak: bool, breakPeriods: array(breakPeriod), includeLivingCost: bool, monthlyLivingCost: positive,
@@ -72,15 +75,24 @@ export const BACKUP_CHECKS: Record<string, Check> = {
   [keys.achievements]: fields({ version: one(1), slacking: achievementState, overtime: achievementState }),
   [keys.assets]: unique(fields({ id, name: str, price: positive, purchaseDate: time, category: str, createdAt: time })),
   [keys.ledger]: unique(fields({ id, kind: one('purchase', 'accident', 'manual', 'salary_override', 'overtime'), direction: one('income', 'expense'), amount: positive, source: str, occurredAt: time },
-    { workStageId: str, localDate: date, livingCostDeducted: bool, linkedId: str, note: str, replacesId: str, deleted: bool })),
+    { spaceId: one(PRIMARY_SPACE_ID), workStageId: str, localDate: date, livingCostDeducted: bool, linkedId: str, note: str, replacesId: str, deleted: bool })),
   [keys.workRecords]: unique(fields({ date, mode: one('scheduled', 'flexible'), status: one('ready', 'working', 'paused', 'ended'), sessions: unique(fields({ id, startTime: time }, { endTime: time })), updatedAt: time },
-    { settlementMode: one('actual', 'full-day'), settlementVersion: one(2), settlementPending: bool, overtimeSessionId: str, plannedEndTime: time }), 'date'),
+    { actualHoursOnly: bool, settlementMode: one('actual', 'full-day'), settlementVersion: one(2), settlementPending: bool, overtimeSessionId: str, plannedEndTime: time }), 'date'),
   [keys.attendanceRecords]: unique(fields({ date, status: one('normal', 'leave', 'holiday'), updatedAt: time },
     { leaveType: one('personal', 'sick', 'annual', 'compensatory', 'marriage', 'maternity', 'prenatal', 'paternity', 'parental', 'bereavement', 'remote'), leavePeriod: one('full-day', 'morning', 'afternoon'), ...pay }), 'date'),
   [HOLIDAY_KEY]: fields({ enabled: bool, effectiveFrom: date, dataVersion: str }),
   [THEME_KEY]: str,
   [PLANS_KEY]: unique(fields({ id, kind: one('slacking', 'overtime'), startTime: time, status: one('scheduled', 'running', 'completed', 'conflict', 'cancelled') }, { endTime: time, message: str, ...pay })),
 }
+
+labels[WORKSPACES_KEY] = '工作空间'
+BACKUP_CHECKS[WORKSPACES_KEY] = fields({ version: one(1), revision: v => positive(v) && Number.isInteger(v), primaryName: id,
+  spaces: unique(fields({ id: v => id(v) && v !== PRIMARY_SPACE_ID, name: v => id(v) && (v as string).trim().length > 0 && (v as string).length <= 40,
+    template: one(...SPACE_TEMPLATES.map(item => item.id)), createdAt: time, profile,
+    holidaySettings: BACKUP_CHECKS[HOLIDAY_KEY], workRecords: BACKUP_CHECKS[keys.workRecords],
+    attendanceRecords: BACKUP_CHECKS[keys.attendanceRecords], ledger: BACKUP_CHECKS[keys.ledger],
+    overtime: BACKUP_CHECKS[keys.overtimeSessions], slacking: BACKUP_CHECKS[keys.sessions],
+  }, { archivedOn: date })) })
 
 /** Validate the whole tree before using dynamic keys or recursive profile rules. */
 export function assertSafeTree(value: unknown) {

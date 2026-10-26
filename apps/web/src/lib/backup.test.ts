@@ -1,3 +1,4 @@
+import { WORKSPACES_KEY, emptyWorkspaceStore } from './workspaces/model'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PROFILE } from '@salary-flow/core'
 import { keys } from './storage'
@@ -12,6 +13,7 @@ const at = '2026-09-15T09:00:00.000Z'
 const until = '2026-09-15T10:00:00.000Z'
 const wish = { id: 'wish-1', name: '旅行', price: 5000, createdAt: at }
 const fixture: Record<string, unknown> = {
+  [WORKSPACES_KEY]: emptyWorkspaceStore(),
   [keys.profile]: { ...DEFAULT_PROFILE, salary: 19000,
     workJourney: { version: 1, revision: 2, stages: [{ id: 'job', name: '第一份工作', company: '公司', role: '开发', startDate: '2026-01-01', endDate: null, profile: DEFAULT_PROFILE, createdAt: at }] },
     workSettingsHistory: [{ stageId: 'job', effectiveFrom: '2026-09-01', settings: { ...DEFAULT_PROFILE, salary: 19000 } }],
@@ -94,7 +96,7 @@ describe('cross-platform backups', () => {
 
 describe('backup validation', () => {
   it.each([
-    ['format', 'other'], ['version', 2], ['source', 'unknown'], ['exportedAt', 'bad'],
+    ['format', 'other'], ['version', 3], ['source', 'unknown'], ['exportedAt', 'bad'],
   ])('rejects invalid %s metadata', (key, value) => {
     expect(() => parseBackup(JSON.stringify({ ...backup(), [key]: value }))).toThrow()
   })

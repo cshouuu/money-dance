@@ -13,6 +13,8 @@ import { getFlexibleEarnedAmount, getScheduledWorkedSeconds, isFlexibleFullDaySe
 export type SummaryDimension = 'day' | 'month' | 'year'
 
 export interface SummaryEntry {
+  spaceId?: string | null
+  spaceName?: string
   workStageId?: string
   id: string
   direction: LedgerDirection
@@ -199,13 +201,12 @@ function livingCostSummaryEntries(profile: SalaryProfile, start: Date, end: Date
   return entries
 }
 
-function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[], attendanceRecords: AttendanceRecord[]): SummaryEntry[] {
+function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, now: Date, workRecords: DailyWorkRecord[], attendanceRecords: AttendanceRecord[], holidaySettings = loadChinaHolidaySettings(now)): SummaryEntry[] {
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
   const entries: SummaryEntry[] = []
   const workRecordByDate = new Map(workRecords.map(record => [record.date, record]))
   const attendanceByDate = new Map(attendanceRecords.map(record => [record.date, record]))
-  const holidaySettings = loadChinaHolidaySettings(now)
 
   for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
     const day = new Date(cursor)
@@ -259,9 +260,9 @@ function salarySummaryEntries(profile: SalaryProfile, start: Date, end: Date, no
       } else {
         if (!workRecord && attendance?.status !== 'normal' && !isConfiguredWorkday(day, datedProfile, holidaySettings)) continue
         amount = profile.workJourney && !workRecord?.sessions.length
-          ? getScheduledWorkedSeconds(datedProfile, { date, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now, attendanceRecords) * rates.second
+          ? getScheduledWorkedSeconds(datedProfile, { date, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now, attendanceRecords, holidaySettings) * rates.second
           : workRecord?.sessions.length
-          ? getScheduledWorkedSeconds(datedProfile, workRecord, now, attendanceRecords) * rates.second
+          ? getScheduledWorkedSeconds(datedProfile, workRecord, now, attendanceRecords, holidaySettings) * rates.second
           : sameCalendarDay(day, today) ? calculateEarnedToday(datedProfile, now) : rates.daily
       }
     }
@@ -326,11 +327,11 @@ function isInRange(entry: LedgerEntry, start: Date, end: Date): boolean {
   return !Number.isNaN(occurredAt.getTime()) && occurredAt >= start && occurredAt < end
 }
 
-export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords(), attendanceRecords = loadAttendanceRecords()): SummaryResult {
+export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], start: Date, end: Date, now = new Date(), workRecords = loadWorkRecords(), attendanceRecords = loadAttendanceRecords(), holidaySettings = loadChinaHolidaySettings(now)): SummaryResult {
   const attendanceSalaryIds = new Set(attendanceRecords.filter(record => isEmployedOn(profile, record.date)).map(record => salaryEntryIdForDate(record.date)))
   const overrides = ledger.filter(entry => entry.kind === 'salary_override' && entry.replacesId && !attendanceSalaryIds.has(entry.replacesId))
   const replacedSalaryIds = new Set(overrides.map(entry => entry.replacesId))
-  const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords, attendanceRecords).filter(entry => !replacedSalaryIds.has(entry.id))
+  const salaryEntries = salarySummaryEntries(profile, start, end, now, workRecords, attendanceRecords, holidaySettings).filter(entry => !replacedSalaryIds.has(entry.id))
   const livingCostEntries = livingCostSummaryEntries(profile, start, end, now, livingCostSuppressedDates(profile, overrides))
   const storedEntries: SummaryEntry[] = ledger
     .filter(entry => !entry.deleted && isInRange(entry, start, end) && !(entry.kind === 'salary_override' && entry.replacesId && attendanceSalaryIds.has(entry.replacesId)))
@@ -348,6 +349,7 @@ export function summarizeLedger(profile: SalaryProfile, ledger: LedgerEntry[], s
         ledgerEntryId: entry.id,
         replacesId: entry.replacesId,
         workStageId: entry.workStageId,
+        spaceId: entry.spaceId,
       }
     })
 

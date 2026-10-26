@@ -1,3 +1,4 @@
+import type { WorkSpace } from '../lib/workspaces/model'
 import { continuedRosterShifts } from '../lib/roster'
 import { Link } from 'react-router-dom'
 import { rosterForDate } from '@salary-flow/core'
@@ -7,16 +8,17 @@ import { CalendarCheck2, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { plannedIncomeForDate } from '../lib/monthlyStats'
-import { loadLedger, salaryEntryIdForDate } from '../lib/ledger'
+import { getSummaryRange, summarizeLedger, loadLedger, salaryEntryIdForDate } from '../lib/ledger'
 import { LEAVE_TYPES, loadAttendanceRecords } from '../lib/attendance'
 import { MAX_MONEY_AMOUNT, normalizeDecimalInput, parseNumberInput, preventInvalidNumberKey } from '../lib/form'
 import type { AttendanceLeavePeriod, AttendancePayMode, AttendanceRecord, AttendanceStatus, LeaveType } from '../types'
-import { Checkbox, Input, SelectField, Tabs, TabsTrigger } from '../ui/BeuiControls'
+import { Button, Checkbox, Input, SelectField, Tabs, TabsTrigger } from '../ui/BeuiControls'
 import { useDialogFocus } from './useDialogFocus'
 import { useModalViewport } from './useModalViewport'
 import './AttendanceDialog.css'
 
 interface AttendanceDialogProps {
+  space?: WorkSpace
   open: boolean
   date: string
   record?: AttendanceRecord
@@ -32,8 +34,9 @@ function formatDate(value: string): string {
   return `${year}年${month}月${day}日`
 }
 
-export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel }: AttendanceDialogProps) {
-  const profile = useProfile()
+export function AttendanceDialog({ space, open, date, record, onSave, onReset, onCancel }: AttendanceDialogProps) {
+  const primaryProfile = useProfile()
+  const profile = space?.profile ?? primaryProfile
   const [status, setStatus] = useState<AttendanceSelection>('automatic')
   const [leaveType, setLeaveType] = useState<LeaveType>('personal')
   const [leavePeriod, setLeavePeriod] = useState<AttendanceLeavePeriod>('full-day')
@@ -94,7 +97,7 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     }
   }
 
-  const manualSalary = loadLedger().find(entry => !entry.deleted && entry.kind === 'salary_override' && entry.replacesId === salaryEntryIdForDate(date))
+  const manualSalary = (space?.ledger ?? loadLedger()).find(entry => !entry.deleted && entry.kind === 'salary_override' && entry.replacesId === salaryEntryIdForDate(date))
   const rosterFinal = rosterForDate(profile, date)?.overrides.find(item => item.date === date)?.amount
   const previewRecord: AttendanceRecord | undefined = status === 'automatic' ? undefined : {
     date, status, updatedAt: new Date().toISOString(),
@@ -102,8 +105,10 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
     ...(!payEnabled ? status === 'normal' ? {} : { payMode: 'unpaid' as const } : payMode === 'multiplier'
       ? { payMode, multiplier: Number(multiplier) } : { payMode, fixedAmount: Number(fixedAmount) }),
   }
-  const previewRecords = [...loadAttendanceRecords().filter(item => item.date !== date), ...(previewRecord ? [previewRecord] : [])]
-  const previewAmount = status === 'automatic' && manualSalary ? manualSalary.amount : plannedIncomeForDate(profile, date, previewRecords)
+  const previewRecords = [...(space?.attendanceRecords ?? loadAttendanceRecords()).filter(item => item.date !== date), ...(previewRecord ? [previewRecord] : [])]
+  const actualPreview = space && profile.defaultWorkMode === 'flexible' && status === 'automatic'
+  const previewRange = getSummaryRange('day', date)
+  const previewAmount = status === 'automatic' && manualSalary ? manualSalary.amount : actualPreview ? summarizeLedger(profile, [], previewRange.start, previewRange.end, new Date(), space.workRecords, previewRecords, space.holidaySettings).income : plannedIncomeForDate(profile, date, previewRecords, space?.holidaySettings)
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -133,10 +138,10 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
 
   return createPortal(<div className="dialog-backdrop attendance-dialog-backdrop" role="presentation" onMouseDown={event => { if (event.currentTarget === event.target) onCancel() }}>
     <form ref={dialogRef} className="attendance-dialog" role="dialog" aria-modal="true" aria-labelledby="attendance-dialog-title" onSubmit={submit}>
-      <div className="attendance-dialog-header"><div><p className="eyebrow">ATTENDANCE DETAIL</p><h2 id="attendance-dialog-title">调整出勤情况</h2><span><CalendarCheck2 size={14}/>{formatDate(date)}</span></div><button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></button></div>
+      <div className="attendance-dialog-header"><div><p className="eyebrow">ATTENDANCE DETAIL</p><h2 id="attendance-dialog-title">{space ? `${space.name} · 出勤` : '调整出勤情况'}</h2><span><CalendarCheck2 size={14}/>{formatDate(date)}</span></div><Button ref={closeButtonRef} type="button" aria-label="关闭" onClick={onCancel}><X size={18}/></Button></div>
 
-      {rosterForDate(profile, date) && <p className="vacation-note">本日新开班次按排班计算。<Link to={`/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>调整本日班次与工资 →</Link></p>}
-      {continuedRosterShifts(profile,date).map(({businessDate,shift})=><p className="vacation-note" key={`${businessDate}-${shift.id}`}>「{shift.name}」从 {businessDate} 延续至今天，整班出勤、休息及工资请在<Link to={`/roster?date=${businessDate}&stage=${rosterForDate(profile,businessDate)?.stageId??''}`} onClick={onCancel}>开班日调整 →</Link>。下方设置仅影响今天新开的班次及日薪。</p>)}
+      {rosterForDate(profile, date) && <p className="vacation-note">本日新开班次按排班计算。<Link to={space && space.id !== 'primary' ? `/spaces?space=${space.id}` : `/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>调整本日班次与工资 →</Link></p>}
+      {continuedRosterShifts(profile,date).map(({businessDate,shift})=><p className="vacation-note" key={`${businessDate}-${shift.id}`}>「{shift.name}」从 {businessDate} 延续至今天，整班出勤、休息及工资请在<Link to={space && space.id !== 'primary' ? `/spaces?space=${space.id}` : `/roster?date=${businessDate}&stage=${rosterForDate(profile,businessDate)?.stageId??''}`} onClick={onCancel}>开班日调整 →</Link>。下方设置仅影响今天新开的班次及日薪。</p>)}
       {vacationForDate(profile, date) && <p className="vacation-note">这天属于「{vacationForDate(profile, date)?.name}」。单日调整优先；正常上班默认保留假期工资，额外补贴可另记加班收入。恢复自动判断后继续应用假期安排。</p>}
       <fieldset className="attendance-field"><legend>这一天怎么过的？</legend><Tabs className="attendance-switch attendance-status-switch" value={status} onValueChange={value => selectStatus(value as AttendanceSelection)}><TabsTrigger value="automatic">自动判断</TabsTrigger><TabsTrigger value="normal">正常上班</TabsTrigger><TabsTrigger value="leave">请假</TabsTrigger><TabsTrigger value="holiday">放假</TabsTrigger></Tabs></fieldset>
 
@@ -145,7 +150,7 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
           <SelectField label="请假类型" value={leaveType} onValueChange={value => setLeaveType(value as LeaveType)}>{LEAVE_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</SelectField>
           <fieldset className="attendance-field attendance-leave-period-field"><legend>请多久？</legend><Tabs className="attendance-switch attendance-leave-period-switch" value={leavePeriod} onValueChange={value => setLeavePeriod(value as AttendanceLeavePeriod)}><TabsTrigger value="full-day">全天</TabsTrigger><TabsTrigger value="morning">上午半天</TabsTrigger><TabsTrigger value="afternoon">下午半天</TabsTrigger></Tabs></fieldset>
         </>}
-        {rosterFinal !== undefined && <p className="vacation-note">排班中已指定本日基本工资 ¥{rosterFinal.toFixed(2)}，修改下方出勤不会改变这个金额。<Link to={`/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>修改本日工资 →</Link></p>}
+        {rosterFinal !== undefined && <p className="vacation-note">排班中已指定本日基本工资 ¥{rosterFinal.toFixed(2)}，修改下方出勤不会改变这个金额。<Link to={space && space.id !== 'primary' ? `/spaces?space=${space.id}` : `/roster?date=${date}&stage=${rosterForDate(profile,date)?.stageId??''}`} onClick={onCancel}>修改本日工资 →</Link></p>}
         {status === 'normal'
           ? <fieldset className="attendance-field"><legend>当天工资怎么计算？</legend><Tabs className="attendance-switch attendance-normal-pay-switch" value={!payEnabled ? 'default' : payMode} onValueChange={value => { if (value === 'default') { setPayEnabled(false) } else { setPayEnabled(true); setPayMode(value as Exclude<AttendancePayMode, 'unpaid'>) } }}><TabsTrigger value="default">默认工资</TabsTrigger><TabsTrigger value="multiplier">工资倍率</TabsTrigger><TabsTrigger value="fixed">固定金额</TabsTrigger></Tabs></fieldset>
           : <fieldset className="attendance-field"><legend>{status === 'leave' && leavePeriod !== 'full-day' ? '请假这半天的工资' : '这天的工资'}</legend><Tabs className="attendance-switch" value={!payEnabled ? 'unpaid' : customPay ? 'custom' : 'normal'} onValueChange={value => { setPayEnabled(value !== 'unpaid'); setCustomPay(value === 'custom'); if(value === 'normal') { setPayMode('multiplier'); setMultiplier('1') } }}><TabsTrigger value="unpaid">不计薪</TabsTrigger><TabsTrigger value="normal">工资照常</TabsTrigger><TabsTrigger value="custom">另设金额</TabsTrigger></Tabs></fieldset>}
@@ -156,10 +161,10 @@ export function AttendanceDialog({ open, date, record, onSave, onReset, onCancel
       </div>}
 
       <p className="attendance-dialog-note">{status === 'automatic' ? '恢复这天原有的工作与假期安排。' : status === 'leave' && leavePeriod !== 'full-day' ? '未请假的半天照常计薪。这里选择的金额或比例只作用于请假半天。' : '仅更新这一天的出勤与基本工资，额外加班收入保留。'}</p>
-      <div className="attendance-amount-preview"><b>预计当天基本工资：{Number.isFinite(previewAmount) ? '¥' + previewAmount.toFixed(2) : '待填写'}</b><small>按整日安排计算，不含另记的加班与手工收入。</small></div>
+      <div className="attendance-amount-preview"><b>{actualPreview ? '已记录的本日基本工资：' : '预计当天基本工资：'}{Number.isFinite(previewAmount) ? '¥' + previewAmount.toFixed(2) : '待填写'}</b><small>{actualPreview ? '按实际已记录工时计算，不自动补成整天。' : '按整日安排计算，不含另记的加班与手工收入。'}</small></div>
       {manualSalary && status !== 'automatic' && <label className="attendance-override-confirm"><Checkbox checked={overrideConfirmed} onCheckedChange={setOverrideConfirmed} ariaLabel="确认替换这天已指定的工资"/><span>账本已指定这天工资 ¥{manualSalary.amount.toFixed(2)}。我确认改按本次出勤计算；恢复自动判断后可恢复原指定工资。</span></label>}
       {saveError && <p className="attendance-save-error" role="alert">{saveError}</p>}
-      <div className={`attendance-dialog-actions${record ? ' has-reset' : ''}`}>{record && <button type="button" className="attendance-reset" disabled={saving} onClick={() => void persist(onReset)}>恢复自动判断</button>}<button type="button" className="dialog-cancel" disabled={saving} onClick={onCancel}>取消</button><button type="submit" className="dialog-confirm" disabled={saving}>{saving ? '保存中…' : status === 'automatic' ? '使用自动判断' : '保存出勤'}</button></div>
+      <div className={`attendance-dialog-actions${record ? ' has-reset' : ''}`}>{record && <Button type="button" className="attendance-reset" disabled={saving} onClick={() => void persist(onReset)}>恢复自动判断</Button>}<Button type="button" className="dialog-cancel" disabled={saving} onClick={onCancel}>取消</Button><Button type="submit" className="dialog-confirm" disabled={saving}>{saving ? '保存中…' : status === 'automatic' ? '使用自动判断' : '保存出勤'}</Button></div>
     </form>
   </div>, document.body)
 }

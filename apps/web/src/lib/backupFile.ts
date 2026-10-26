@@ -1,5 +1,8 @@
 import { MAX_BACKUP_BYTES, type Backup } from './backup'
 import { isAndroidNative } from './appUpdate'
+import { harmonyFile, isHarmonyBuild } from './harmony'
+
+export function hasNativeBackupPicker() { return isHarmonyBuild || isAndroidNative() }
 
 export function backupSource(): Backup['source'] {
   return isAndroidNative() ? 'android' : 'moneyDanceDesktop' in window ? 'desktop' : 'web'
@@ -13,6 +16,10 @@ async function nativeFile<T>(method: string, options: Record<string, unknown> = 
 }
 export async function saveBackupFile(text: string, filename: string): Promise<'saved' | 'download' | 'cancelled'> {
   if (new TextEncoder().encode(text).byteLength > MAX_BACKUP_BYTES) throw new Error('备份超过 8 MB，无法保存。')
+  if (isHarmonyBuild) {
+    const result = await harmonyFile('save', text, filename)
+    return result.cancelled ? 'cancelled' : 'saved'
+  }
   if (isAndroidNative()) {
     const result = await nativeFile<{ cancelled?: boolean }>('save', { text, filename })
     return result.cancelled ? 'cancelled' : 'saved'
@@ -25,7 +32,7 @@ export async function saveBackupFile(text: string, filename: string): Promise<'s
   return 'download'
 }
 export async function openNativeBackup(): Promise<string | null> {
-  const result = await nativeFile<{ cancelled?: boolean; text?: string }>('open')
+  const result = isHarmonyBuild ? await harmonyFile('open') : await nativeFile<{ cancelled?: boolean; text?: string }>('open')
   if (result.cancelled) return null
   if (typeof result.text !== 'string') throw new Error('没有读取到备份内容。')
   return result.text

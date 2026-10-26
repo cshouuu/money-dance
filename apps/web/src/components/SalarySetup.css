@@ -1,0 +1,6 @@
+.salary-setup { max-width: 860px; margin: 0 auto; padding: 32px 20px; padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+.salary-setup h1 { font-size: 28px; margin: 8px 0 16px; }
+.salary-setup p { line-height: 1.7; }
+.salary-setup form { display: grid; gap: 20px; margin-top: 28px; }
+.salary-setup-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.salary-setup [role="alert"] { color: #b42318; }

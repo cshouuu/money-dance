@@ -71,6 +71,8 @@ export interface WorkSession {
 }
 
 export interface DailyWorkRecord {
+  /** Explicit hourly contract: no daily cap or full-day top-up. */
+  actualHoursOnly?: boolean
   date: string
   mode: 'scheduled' | 'flexible'
   status: DailyWorkStatus
@@ -117,6 +119,8 @@ export type LedgerDirection = 'income' | 'expense'
 export type LedgerKind = 'purchase' | 'accident' | 'manual' | 'salary_override' | 'overtime'
 
 export interface LedgerEntry {
+  /** Explicit main-job income attribution; other jobs own their ledger container. */
+  spaceId?: 'primary'
   /** Optional job attribution for late pay/bonuses; never changes arrival date. */
   workStageId?: string
   id: string

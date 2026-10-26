@@ -5,6 +5,7 @@ import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import type { WorkSettingsSnapshot } from '@salary-flow/core'
 import { isSessionLocalDate } from './sessionBusinessDate'
+import { templateForProfile } from './workspaces/model'
 
 /** Settings edit the active job, or the nearest upcoming job during a gap. */
 export function settingsWorkStage(profile: SalaryProfile, date = toLocalDateValue()) {
@@ -297,6 +298,12 @@ export function saveProfile(profile: SalaryProfile, now = new Date(), updateStag
   const stored = loadJSON<Partial<SalaryProfile>>(keys.profile, {})
   // A stale settings tab may not overwrite a journey edited in another tab.
   if (profileFingerprint(stored.workJourney) !== profileFingerprint(profile.workJourney) || profileFingerprint(stored.vacations) !== profileFingerprint(profile.vacations) || profileFingerprint(stored.rosters) !== profileFingerprint(profile.rosters)) return null
+  return persistProfile(profile, stored, now, updateStage)
+}
+
+/** Call only after checking the original profile; dated template changes can
+ * intentionally add roster versions without weakening stale-editor protection. */
+function persistProfile(profile: SalaryProfile, stored: Partial<SalaryProfile>, now: Date, updateStage: boolean): SalaryProfile | null {
   const previousConfiguration: LivingCostConfiguration = {
     mode: (stored.includeLivingCost ?? DEFAULT_PROFILE.includeLivingCost)
       ? normalizeLivingCostMode(stored.livingCostMode)
@@ -325,14 +332,21 @@ export function saveProfile(profile: SalaryProfile, now = new Date(), updateStag
   return saveJSON(keys.profile, next) ? next : null
 }
 
+/** Read without creating the demonstration defaults used by the web preview. */
+export function hasSavedSalaryProfile(): boolean {
+  const stored = loadJSON<Partial<SalaryProfile> | null>(keys.profile, null)
+  return typeof stored?.salary === 'number' && Number.isFinite(stored.salary) && stored.salary >= 0
+}
+
 /** Only job rules are versioned here; personal expenses and ledger start are separate. */
 export function workSettingsSnapshot(profile: SalaryProfile): WorkSettingsSnapshot {
   const { salary, salaryType, payday, paydayAdjustment, salaryDeductions, monthlyRateBasis, monthlyWorkDays,
     workDaysPerWeek, workWeekMode, alternatingAnchorDate, alternatingAnchorType, workStartTime, workEndTime,
-    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode } = profile
+    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode, workTemplate, monthlyIncomeTarget } = profile
   return structuredClone({ salary, salaryType, payday, paydayAdjustment, salaryDeductions, monthlyRateBasis, monthlyWorkDays,
     workDaysPerWeek, workWeekMode, alternatingAnchorDate, alternatingAnchorType, workStartTime, workEndTime,
-    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode })
+    breakStartTime, breakEndTime, breakPeriods, paidBreak, defaultWorkMode,
+    workTemplate: workTemplate ?? templateForProfile(profile, toLocalDateValue()), monthlyIncomeTarget: monthlyIncomeTarget ?? 0 })
 }
 
 /** A revision replaces rules up to the next saved revision, never earlier dates. */
@@ -366,7 +380,7 @@ export function withDatedWorkSettings(previous: SalaryProfile, draft: SalaryProf
 export function saveDatedProfile(expected: SalaryProfile, draft: SalaryProfile, effectiveFrom: string, now = new Date()): SalaryProfile | null {
   if (profileFingerprint(loadProfile(now)) !== profileFingerprint(expected)) return null
   const next = withDatedWorkSettings(expected, draft, effectiveFrom, now)
-  const saved = saveProfile(next, now, false)
+  const saved = persistProfile(next, loadJSON<Partial<SalaryProfile>>(keys.profile, {}), now, false)
   return saved ? settingsProfile(saved, toLocalDateValue(now)) : null
 }
 

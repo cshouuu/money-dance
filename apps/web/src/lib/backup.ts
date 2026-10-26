@@ -1,3 +1,4 @@
+import { WORKSPACES_KEY, type WorkspaceStore } from './workspaces/model'
 import { keys } from './storage'
 import { BACKUP_CHECKS, PLANS_KEY, UNDO_KEY, assertSafeTree, validateBackupData } from './backupSchema'
 
@@ -10,7 +11,7 @@ type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Snapshot = Record<string, string | null>
 export interface Backup {
   format: 'moneydance-backup'
-  version: 1
+  version: 1 | 2
   exportedAt: string
   source: 'web' | 'android' | 'desktop'
   data: Record<string, unknown>
@@ -32,6 +33,8 @@ export function assertNoActiveTimers(storage: Store = localStorage) {
   if (Array.isArray(work) && work.some(record => record && (['working', 'paused'].includes(record.status) || record.settlementPending || record.sessions?.some((session: { endTime?: string }) => !session.endTime)))) {
     throw new Error('请先结束弹性工作并完成结算，再导出或导入。')
   }
+  const spaces = read(storage, WORKSPACES_KEY) as WorkspaceStore | null
+  if (spaces?.spaces.some(space => space.workRecords.some(record => record.status === 'working' || record.status === 'paused' || record.settlementPending || record.sessions.some(session => !session.endTime)))) throw new Error('请先结束各工作空间的计时并完成结算，再导出或导入。')
   const plans = read(storage, PLANS_KEY)
   if (Array.isArray(plans) && plans.some(plan => plan?.status === 'running')) throw new Error('请先完成正在执行的计时预约，再导出或导入。')
 }
@@ -39,7 +42,7 @@ export function assertNoActiveTimers(storage: Store = localStorage) {
 function fromSnapshot(values: Snapshot, source: Backup['source'], exportedAt = new Date().toISOString()): Backup {
   const data = Object.fromEntries(BACKUP_KEYS.filter(key => values[key] !== null && values[key] !== undefined).map(key => [key, JSON.parse(values[key]!) as unknown]))
   validateBackupData(data)
-  const backup: Backup = { format: 'moneydance-backup', version: 1, exportedAt, source, data }
+  const backup: Backup = { format: 'moneydance-backup', version: data[WORKSPACES_KEY] ? 2 : 1, exportedAt, source, data }
   if (size(serializeBackup(backup)) > MAX_BACKUP_BYTES) throw new Error('备份超过 8 MB，请联系支持协助迁移。')
   return backup
 }
@@ -53,9 +56,11 @@ export function parseBackup(text: string): Backup {
   try { value = JSON.parse(text.replace(/^\uFEFF/, '')) as Backup }
   catch { throw new Error('无法读取备份，请选择 MoneyDance 导出的 JSON 文件。') }
   if (!value || value.format !== 'moneydance-backup') throw new Error('这不是 MoneyDance 备份文件。')
-  if (value.version !== 1) throw new Error('不支持此备份版本，请更新应用后再试。')
+  if (value.version !== 1 && value.version !== 2) throw new Error('不支持此备份版本，请更新应用后再试。')
   if (!['web', 'android', 'desktop'].includes(value.source) || typeof value.exportedAt !== 'string' || !Number.isFinite(Date.parse(value.exportedAt))) throw new Error('备份来源或导出日期无效。')
   validateBackupData(value.data)
+  const spaces = value.data[WORKSPACES_KEY] as WorkspaceStore | undefined
+  if (spaces?.spaces.some(space => space.workRecords.some(record => ['working', 'paused'].includes(record.status) || record.settlementPending || record.sessions.some(session => !session.endTime)))) throw new Error('备份中有未结束的空间计时，请先在原设备结算。')
   const work = value.data[keys.workRecords] as { status: string; settlementPending?: boolean; sessions: { endTime?: string }[] }[] | undefined
   if (work?.some(record => ['working', 'paused'].includes(record.status) || record.settlementPending || record.sessions.some(session => !session.endTime))) throw new Error('备份中还有未结算的工作，请在原设备结算后重新导出。')
   const plans = value.data[PLANS_KEY] as { status: string }[] | undefined
@@ -73,6 +78,7 @@ export function backupSummary(backup: Backup) {
     { label: '出勤记录', count: count(keys.attendanceRecords) }, { label: '工作记录', count: count(keys.workRecords) },
     { label: '摸鱼记录', count: count(keys.sessions) }, { label: '加班记录', count: count(keys.overtimeSessions) },
     { label: '物品', count: count(keys.assets) },
+    { label: '新增工作空间', count: (backup.data[WORKSPACES_KEY] as WorkspaceStore | undefined)?.spaces.length ?? 0 },
   ]
 }
 

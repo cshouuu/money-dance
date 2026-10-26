@@ -1,3 +1,6 @@
+import { Button } from '../ui/BeuiControls'
+import type { WorkSpace } from '../lib/workspaces/model'
+import { summarizeSpaces } from '../lib/workspaces/queries'
 import type { SalaryProfile } from '@salary-flow/core'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo } from 'react'
@@ -7,6 +10,8 @@ import type { AttendanceRecord, DailyWorkRecord, LedgerEntry } from '../types'
 import './LedgerCalendar.css'
 
 interface LedgerCalendarProps {
+  spaces?: WorkSpace[]
+  spaceFilter?: string
   profile: SalaryProfile
   ledger: LedgerEntry[]
   workRecords: DailyWorkRecord[]
@@ -57,7 +62,7 @@ function anchorForDimension(next: SummaryDimension, current: SummaryDimension, a
   return year === now.getFullYear() ? toLocalDateValue(now) : `${year}-01-01`
 }
 
-export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords, dimension, anchor, onChange }: LedgerCalendarProps) {
+export function LedgerCalendar({ spaces, spaceFilter, profile, ledger, workRecords, attendanceRecords, dimension, anchor, onChange }: LedgerCalendarProps) {
   const now = new Date()
   const today = toLocalDateValue(now)
   const selectedMonth = dimension === 'day' ? anchor.slice(0, 7) : dimension === 'month' ? anchor : `${anchor}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -65,7 +70,7 @@ export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords
 
   const cellNet = (cellDimension: SummaryDimension, cellAnchor: string) => {
     const { start, end } = getSummaryRange(cellDimension, cellAnchor)
-    return summarizeLedger(profile, ledger, start, end, now, workRecords, attendanceRecords).net
+    return spaces ? summarizeSpaces(spaces, start, end, now, spaceFilter).net : summarizeLedger(profile, ledger, start, end, now, workRecords, attendanceRecords).net
   }
 
   const dayCells = useMemo<(CalendarCell | null)[]>(() => {
@@ -79,7 +84,7 @@ export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords
       cells.push({ key: dateAnchor, label: String(day), anchor: dateAnchor, net: cellNet('day', dateAnchor), current: dateAnchor === today })
     }
     return cells
-  }, [dimension, selectedMonth, profile, ledger, workRecords, attendanceRecords, today])
+  }, [spaces, spaceFilter, dimension, selectedMonth, profile, ledger, workRecords, attendanceRecords, today])
 
   const monthCells = useMemo<CalendarCell[]>(() => {
     if (dimension !== 'month') return []
@@ -87,7 +92,7 @@ export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords
       const monthAnchor = `${selectedYear}-${String(index + 1).padStart(2, '0')}`
       return { key: monthAnchor, label: `${index + 1}月`, anchor: monthAnchor, net: cellNet('month', monthAnchor), current: monthAnchor === toLocalMonthValue(now) }
     })
-  }, [dimension, selectedYear, profile, ledger, workRecords, attendanceRecords])
+  }, [spaces, spaceFilter, dimension, selectedYear, profile, ledger, workRecords, attendanceRecords])
 
   const yearCells = useMemo<CalendarCell[]>(() => {
     if (dimension !== 'year') return []
@@ -97,7 +102,7 @@ export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords
       const yearAnchor = String(value)
       return { key: yearAnchor, label: value === now.getFullYear() ? '本年' : `${value}年`, anchor: yearAnchor, net: cellNet('year', yearAnchor), current: value === now.getFullYear() }
     })
-  }, [dimension, selectedYear, profile, ledger, workRecords, attendanceRecords])
+  }, [spaces, spaceFilter, dimension, selectedYear, profile, ledger, workRecords, attendanceRecords])
 
   const navigate = (direction: -1 | 1) => {
     if (dimension === 'day') {
@@ -119,16 +124,16 @@ export function LedgerCalendar({ profile, ledger, workRecords, attendanceRecords
   return <section className="ledger-calendar" aria-labelledby="ledger-calendar-title">
     <div className="calendar-title-row"><div><p className="eyebrow">INCOME & EXPENSE</p><h2 id="ledger-calendar-title">收支日历</h2></div><CalendarDays size={20}/></div>
     <div className="calendar-dimension-tabs" role="group" aria-label="日历粒度">
-      {dimensions.map(item => <button key={item.value} type="button" className={dimension === item.value ? 'active' : ''} aria-pressed={dimension === item.value} onClick={() => onChange(item.value, anchorForDimension(item.value, dimension, anchor, now))}>{item.label}</button>)}
+      {dimensions.map(item => <Button key={item.value} type="button" className={dimension === item.value ? 'active' : ''} aria-pressed={dimension === item.value} onClick={() => onChange(item.value, anchorForDimension(item.value, dimension, anchor, now))}>{item.label}</Button>)}
     </div>
     <div className="calendar-period-nav">
-      <button type="button" aria-label="上一时间段" onClick={() => navigate(-1)}><ChevronLeft size={18}/></button>
+      <Button type="button" aria-label="上一时间段" onClick={() => navigate(-1)}><ChevronLeft size={18}/></Button>
       <strong>{dimension === 'day' ? `${selectedYear}年 ${Number(selectedMonth.slice(5))}月` : dimension === 'month' ? `${selectedYear}年` : `${selectedYear - 6} — ${selectedYear}`}</strong>
-      <button type="button" aria-label="下一时间段" onClick={() => navigate(1)}><ChevronRight size={18}/></button>
+      <Button type="button" aria-label="下一时间段" onClick={() => navigate(1)}><ChevronRight size={18}/></Button>
     </div>
     {dimension === 'day' && <div className="calendar-weekdays" aria-hidden="true">{['日','一','二','三','四','五','六'].map(day => <span key={day}>{day}</span>)}</div>}
     <div className={`calendar-grid ${dimension}`}>
-      {cells.map((cell, index) => cell ? <button key={cell.key} type="button" className={`${netClass(cell.net)}${cell.anchor === anchor ? ' selected' : ''}${cell.current ? ' current' : ''}`} aria-pressed={cell.anchor === anchor} onClick={() => onChange(dimension, cell.anchor)}><b>{cell.label}</b><span>{formatNet(cell.net)}</span></button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>) }
+      {cells.map((cell, index) => cell ? <Button key={cell.key} type="button" className={`${netClass(cell.net)}${cell.anchor === anchor ? ' selected' : ''}${cell.current ? ' current' : ''}`} aria-pressed={cell.anchor === anchor} onClick={() => onChange(dimension, cell.anchor)}><b>{cell.label}</b><span>{formatNet(cell.net)}</span></Button> : <span className="calendar-empty-cell" key={`empty-${index}`}/>) }
     </div>
     <div className="calendar-legend"><span><i className="income"/>收入结余</span><span><i className="expense"/>支出结余</span><span>点击日期查看明细</span></div>
   </section>

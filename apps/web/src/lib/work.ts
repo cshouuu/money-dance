@@ -216,6 +216,7 @@ export function getFlexibleOvertimeWindow(
   paidSecondsPerDay: number,
   now = new Date(),
 ): FlexibleOvertimeWindow | null {
+  if (record.actualHoursOnly) return null
   const target = Math.max(0, Number.isFinite(paidSecondsPerDay) ? paidSecondsPerDay : 0)
   let remainingBaseSeconds = target
   const segments: FlexibleWorkSegment[] = []
@@ -252,6 +253,7 @@ export function getFlexibleEarnedAmount(
   salaryType: SalaryProfile['salaryType'],
   now = new Date(),
 ): number {
+  if (record.actualHoursOnly) return getFlexibleWorkedSeconds(record, now) * rates.second
   if (isFlexibleFullDaySettlement(record, salaryType)) return rates.daily
   return getFlexibleWorkedSeconds(record, now, rates.paidSecondsPerDay) * rates.second
 }
@@ -287,7 +289,7 @@ export function getAutomaticFlexibleSettlementMode(
   return null
 }
 
-export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRecord[], now = new Date(), _providedRates?: SalaryRates, attendanceRecords: AttendanceRecord[] = []): TodayWorkSummary {
+export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRecord[], now = new Date(), _providedRates?: SalaryRates, attendanceRecords: AttendanceRecord[] = [], holidaySettings = loadChinaHolidaySettings(now)): TodayWorkSummary {
   const today = toLocalDateValue(now)
   const currentRecord = getCurrentWorkRecord(records, now)
   const record = currentRecord && (currentRecord.mode === 'flexible' || currentRecord.sessions.some(session=>!session.endTime)) ? currentRecord
@@ -296,7 +298,6 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   const businessDate = record?.date ?? (mode === 'scheduled' ? getScheduledBusinessDate(profile, now) : today)
   if (!isEmployedOn(profile, businessDate)) return { mode, status: 'ready', dayType: 'rest', workedSeconds: 0, earnedAmount: 0, businessDate }
   const attendance = attendanceRecords.find(item => item.date === businessDate)
-  const holidaySettings = loadChinaHolidaySettings(now)
   const datedProfile = salaryProfileForBusinessDate(profile, businessDate, attendanceRecords, holidaySettings)
   const rates = calculateRates(datedProfile)
   const customAttendanceAmount = getCustomAttendanceAmount(attendance, rosterStandardDayAmount(datedProfile, businessDate, rates.daily))
@@ -373,13 +374,13 @@ export function summarizeTodayWork(profile: SalaryProfile, records: DailyWorkRec
   }
 
   const automaticScheduledSeconds = profile.workJourney
-    ? getScheduledWorkedSeconds(datedProfile, { date: businessDate, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now)
+    ? getScheduledWorkedSeconds(datedProfile, { date: businessDate, mode: 'scheduled', status: 'ended', sessions: [], updatedAt: now.toISOString() }, now, attendanceRecords, holidaySettings)
     : getWorkedPaidSeconds(datedProfile, now)
   const halfDayTarget = rates.paidSecondsPerDay * 0.5
   const workedSeconds = mode === 'flexible'
     ? record ? getFlexibleWorkedSeconds(record, now) : 0
     : record?.sessions.length
-      ? getScheduledWorkedSeconds(datedProfile, record, now, attendanceRecords)
+      ? getScheduledWorkedSeconds(datedProfile, record, now, attendanceRecords, holidaySettings)
     : isHalfDayLeave(attendance)
       ? attendanceLeavePeriod(attendance) === 'morning'
         ? Math.max(0, Math.min(halfDayTarget, automaticScheduledSeconds - halfDayTarget))
@@ -410,6 +411,7 @@ export function startFlexibleWork(date: string, time: string, current?: DailyWor
     date,
     mode: 'flexible',
     status: 'working',
+    ...(current?.actualHoursOnly ? { actualHoursOnly: true } : {}),
     sessions: [...(current?.mode === 'flexible' ? current.sessions.filter(item => item.endTime) : []), session],
     ...(plannedEndTime ? { plannedEndTime } : {}),
     updatedAt: new Date().toISOString(),
@@ -518,8 +520,8 @@ export function scheduledOverride(date: string): DailyWorkRecord {
 }
 
 /** Explicit fixed-shift times intersect the configured paid schedule, including breaks. */
-export function getScheduledWorkedSeconds(profile: SalaryProfile, record: DailyWorkRecord, now = new Date(), attendanceRecords: AttendanceRecord[] = []): number {
-  return actualPaidIntervalsForDate(profile, record.date, now, [record], attendanceRecords)
+export function getScheduledWorkedSeconds(profile: SalaryProfile, record: DailyWorkRecord, now = new Date(), attendanceRecords: AttendanceRecord[] = [], holidaySettings = loadChinaHolidaySettings(now)): number {
+  return actualPaidIntervalsForDate(profile, record.date, now, [record], attendanceRecords, holidaySettings)
     .reduce((total, interval) => total + Math.max(0, Math.min(now.getTime(), interval.end.getTime()) - interval.start.getTime()) / 1000, 0)
 }
 

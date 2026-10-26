@@ -3,8 +3,7 @@ import { Download, Upload, DatabaseBackup } from 'lucide-react'
 import { Button, Checkbox } from '../ui/BeuiControls'
 import { ConfirmDialog } from './ConfirmDialog'
 import { synchronizeWidgetsForBackup } from './WidgetSyncController'
-import { isAndroidNative } from '../lib/appUpdate'
-import { backupSource, openNativeBackup, saveBackupFile } from '../lib/backupFile'
+import { backupSource, hasNativeBackupPicker, openNativeBackup, saveBackupFile } from '../lib/backupFile'
 import { assertNoActiveTimers, backupFileName, backupFingerprint, backupSummary, BackupRecoveryRequiredError, createBackup, importBackup, MAX_BACKUP_BYTES, parseBackup, previousBackup, serializeBackup, type Backup } from '../lib/backup'
 import './DataBackupCard.css'
 
@@ -41,7 +40,7 @@ export function DataBackupCard() {
   }
   const choose = () => {
     setPreview(null); setConfirmed(false); setError('')
-    if (isAndroidNative()) void attempt(async () => { const text = await openNativeBackup(); if (text !== null) await select(text) })
+    if (hasNativeBackupPicker()) void attempt(async () => { const text = await openNativeBackup(); if (text !== null) await select(text) })
     else file.current?.click()
   }
   const commit = () => {

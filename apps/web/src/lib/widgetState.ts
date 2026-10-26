@@ -1,3 +1,4 @@
+import type { ChinaHolidaySettings } from './attendance'
 import { calculateRates, type SalaryProfile, type SalaryRates } from '@salary-flow/core'
 import type { ActiveOvertime, ActiveSlacking, AttendanceRecord, DailyWorkRecord, OvertimePayMode } from '../types'
 import { toLocalDateTime, toLocalDateValue } from './form'
@@ -51,6 +52,7 @@ export interface WidgetSnapshot {
 }
 
 export interface BuildWidgetSnapshotOptions {
+  holidaySettings?: ChinaHolidaySettings
   profile: SalaryProfile
   workRecords: DailyWorkRecord[]
   attendanceRecords: AttendanceRecord[]
@@ -62,6 +64,7 @@ export interface BuildWidgetSnapshotOptions {
 }
 
 interface BuildTimelineOptions {
+  holidaySettings?: ChinaHolidaySettings
   profile: SalaryProfile
   workRecords: DailyWorkRecord[]
   attendanceRecords: AttendanceRecord[]
@@ -207,6 +210,7 @@ export function buildWorkTimeline(options: BuildTimelineOptions): WidgetTimeline
       new Date(time),
       rates,
       attendanceRecords,
+      options.holidaySettings,
     ).earnedAmount)
     amountCache.set(time, amount)
     return amount
@@ -292,6 +296,7 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
     options.profile,
     options.activeOvertime ? resolveSessionStartBusinessDate(options.activeOvertime.startTime,options.activeOvertime.startLocalDate,options.activeOvertime.startTimezoneOffsetMinutes)?.startLocalDate ?? toLocalDateValue(new Date(safeSyncedAt)) : toLocalDateValue(new Date(safeSyncedAt)),
     options.attendanceRecords,
+    options.holidaySettings,
   ))
   const activeSlacking = normalizeActiveSlacking(options.activeSlacking)
   const slackingStartAt = timestamp(activeSlacking?.startTime)
@@ -334,6 +339,7 @@ export function buildWidgetSnapshot(options: BuildWidgetSnapshotOptions): Widget
       rates,
       startAt: safeSyncedAt,
       endAt: validUntil,
+      holidaySettings: options.holidaySettings,
     }),
     ...(slackingStartAt === null || !slackingBusinessDate
       ? {}
