@@ -4,7 +4,6 @@ import { toLocalDateValue } from '../lib/form'
 import { Grid2X2, Palette, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, PawPrint } from 'lucide-react'
 import { desktop } from '../lib/desktop'
 import { isHarmonyBuild } from '../lib/harmony'
-import { LazyMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { AnimatedSidebar } from '../ui/AnimatedSidebar'
@@ -18,8 +17,6 @@ import { MobileDockSettings } from './MobileDockSettings'
 import './Shell.css'
 
 initializeTheme()
-
-const loadMotionFeatures = () => import('../ui/motion-features').then(module => module.default)
 
 const settingsItem = items[9]
 
@@ -62,8 +59,7 @@ export function Shell() {
     <span>{label}</span>
   </NavLink>
 
-  return <LazyMotion features={loadMotionFeatures} strict>
-    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+  return <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
     <AnimatedSidebar
       collapsed={sidebarCollapsed}
       expandedWidth={232}
@@ -158,5 +154,4 @@ export function Shell() {
     <MobileDockSettings availablePaths={visibleItems.map(([path]) => path)} open={dockSettingsOpen} onOpenChange={setDockSettingsOpen}/>
     <ThemePickerSheet open={themePickerOpen} onOpenChange={setThemePickerOpen}/>
     </div>
-  </LazyMotion>
 }
