@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { loadAttendanceRecords } from '../lib/attendance'
 import { loadProfile } from '../lib/profile'
 import { STORAGE_CHANGED_EVENT, keys, loadJSON } from '../lib/storage'
+import { CHINA_HOLIDAY_DATA_KEY } from '../lib/chinaHolidays'
 import {
   ackWidgetActions,
   consumeWidgetLaunchTarget,
@@ -21,6 +22,7 @@ import { loadWishStore } from '../lib/wishStore'
 const SYNC_DEBOUNCE_MS = 180
 const SAFE_LAUNCH_TARGET = /^\/(?:$|(?:slacking|overtime|convert)(?:[/?#]|$))/
 const WIDGET_STORAGE_KEYS = new Set([
+  CHINA_HOLIDAY_DATA_KEY,
   keys.profile,
   keys.wishes,
   keys.wishAllocation,

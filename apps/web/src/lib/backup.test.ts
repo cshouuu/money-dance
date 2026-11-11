@@ -3,6 +3,8 @@ import { DEFAULT_PROFILE } from '@salary-flow/core'
 import { keys } from './storage'
 import { BACKUP_KEYS, RECOVERY_KEY, backupFingerprint, createBackup, importBackup, parseBackup, previousBackup, recoverInterruptedImport, serializeBackup, type Backup } from './backup'
 import { HOLIDAY_KEY, PLANS_KEY, THEME_KEY, UNDO_KEY } from './backupSchema'
+import holidayData from './chinaHolidays.data.json'
+import { CHINA_HOLIDAY_DATA_KEY } from './chinaHolidays'
 
 function store(seed: Record<string, unknown> = {}) {
   const values = new Map(Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
@@ -12,6 +14,7 @@ const at = '2026-09-15T09:00:00.000Z'
 const until = '2026-09-15T10:00:00.000Z'
 const wish = { id: 'wish-1', name: '旅行', price: 5000, createdAt: at }
 const fixture: Record<string, unknown> = {
+  [CHINA_HOLIDAY_DATA_KEY]: { ...holidayData, version: '2027.2' },
   [keys.profile]: { ...DEFAULT_PROFILE, salary: 19000,
     workJourney: { version: 1, revision: 2, stages: [{ id: 'job', name: '第一份工作', company: '公司', role: '开发', startDate: '2026-01-01', endDate: null, profile: DEFAULT_PROFILE, createdAt: at }] },
     workSettingsHistory: [{ stageId: 'job', effectiveFrom: '2026-09-01', settings: { ...DEFAULT_PROFILE, salary: 19000 } }],
@@ -53,6 +56,7 @@ describe('cross-platform backups', () => {
     const target = store(fixture)
     importBackup(createBackup('web', store({ [keys.profile]: { salary: 123, salaryType: 'monthly' } })), backupFingerprint(target), target)
     expect(target.getItem(keys.wishes)).toBeNull()
+    expect(target.getItem(CHINA_HOLIDAY_DATA_KEY)).toBeNull()
     expect(JSON.parse(target.getItem(keys.profile)!)).toEqual({ salary: 123, salaryType: 'monthly' })
   })
   it('does not duplicate records on repeated imports', () => {

@@ -1,12 +1,12 @@
 import { parseClock, rosterForDate, rosterShiftsForDate } from '@salary-flow/core'
 import { calculateRates, isEmployedOn, vacationForDate, workProfileForDate, type AlternatingWeekType, type SalaryProfile } from '@salary-flow/core'
 import type { AttendanceLeavePeriod, AttendanceRecord, LeaveType } from '../types'
-import { CHINA_HOLIDAY_DATA_VERSION, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
+import { getChinaHolidayData, getChinaHolidayDay, hasChinaHolidayYear, type ChinaHolidayDay } from './chinaHolidays'
 import { toLocalDateTime, toLocalDateValue } from './form'
 import { keys, loadJSON, saveJSON } from './storage'
 import { rosterSalaryAllocation } from './roster'
 
-const CHINA_HOLIDAY_SETTINGS_KEY = 'money-dance.china-holiday-calendar.v1'
+export const CHINA_HOLIDAY_SETTINGS_KEY = 'money-dance.china-holiday-calendar.v1'
 const DATE_VALUE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export interface ChinaHolidaySettings {
@@ -57,7 +57,7 @@ export function loadChinaHolidaySettings(now = new Date()): ChinaHolidaySettings
   const normalized = {
     enabled: stored.enabled ?? true,
     effectiveFrom: DATE_VALUE_PATTERN.test(stored.effectiveFrom ?? '') ? stored.effectiveFrom! : today,
-    dataVersion: CHINA_HOLIDAY_DATA_VERSION,
+    dataVersion: getChinaHolidayData().version,
   }
   if (stored.enabled === undefined || stored.effectiveFrom !== normalized.effectiveFrom || stored.dataVersion !== normalized.dataVersion) {
     saveJSON(CHINA_HOLIDAY_SETTINGS_KEY, normalized)
@@ -66,7 +66,7 @@ export function loadChinaHolidaySettings(now = new Date()): ChinaHolidaySettings
 }
 
 export function saveChinaHolidaySettings(settings: ChinaHolidaySettings): boolean {
-  return saveJSON(CHINA_HOLIDAY_SETTINGS_KEY, { ...settings, dataVersion: CHINA_HOLIDAY_DATA_VERSION })
+  return saveJSON(CHINA_HOLIDAY_SETTINGS_KEY, { ...settings, dataVersion: getChinaHolidayData().version })
 }
 
 export function chinaHolidayForDate(date: string, settings = loadChinaHolidaySettings()): ChinaHolidayDay | undefined {

@@ -287,7 +287,7 @@ async function boot() {
     if (!target.startsWith(`${webRoot}${path.sep}`)) return new Response('', { status: 403 });
     try {
       const response = await net.fetch(pathToFileURL(target).toString());
-      response.headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' ${inlineHashes}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'`);
+      response.headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' ${inlineHashes}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://money-dance-6gl.pages.dev/holidays/china.json; object-src 'none'; frame-src 'none'; base-uri 'self'`);
       return response;
     } catch { return new Response('Not found', { status: 404 }); }
   });

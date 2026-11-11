@@ -6,8 +6,10 @@ import { CalendarClock, CalendarDays, CircleOff, Coffee, Landmark } from 'lucide
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AttendanceCalendar } from '../components/AttendanceCalendar'
+import { ChinaHolidayUpdate } from '../components/ChinaHolidayUpdate'
+import { useChinaHolidaySettings } from '../lib/useChinaHolidays'
 import { AttendanceDialog } from '../components/AttendanceDialog'
-import { attendanceAdjustedDayValue, loadAttendanceRecords, loadChinaHolidaySettings, saveAttendanceRecords, saveChinaHolidaySettings, upsertAttendanceRecord } from '../lib/attendance'
+import { attendanceAdjustedDayValue, loadAttendanceRecords, saveAttendanceRecords, saveChinaHolidaySettings, upsertAttendanceRecord } from '../lib/attendance'
 import { toLocalDateTime, toLocalDateValue } from '../lib/form'
 import type { SummaryDimension } from '../lib/ledger'
 import { loadProfile } from '../lib/profile'
@@ -32,7 +34,7 @@ export function Attendance() {
   const profile = useProfile()
   const [workRecords] = useState(() => loadWorkRecords())
   const [records, setRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
-  const [holidaySettings, setHolidaySettings] = useState(() => loadChinaHolidaySettings())
+  const holidaySettings = useChinaHolidaySettings()
   const [holidaySettingsError, setHolidaySettingsError] = useState('')
   const [dimension, setDimension] = useState<SummaryDimension>('day')
   const [anchor, setAnchor] = useState(() => requestedDate ?? toLocalDateValue())
@@ -76,7 +78,7 @@ export function Attendance() {
       setHolidaySettingsError('节假日设置暂时无法保存，请释放设备存储空间后重试。')
       return
     }
-    setHolidaySettings(next)
+
     setHolidaySettingsError('')
   }, [holidaySettings])
 
@@ -117,7 +119,7 @@ export function Attendance() {
 
   return <section className="page attendance-page">
     <header className="page-header"><div><p className="eyebrow">ATTENDANCE & SALARY</p><h1>薪苦日历</h1><p>上班、请假还是放假，先选日期，再确认这一天的安排和工资。临时变动只需修改当天。</p></div><div className="roster-actions"><Button variant="secondary" onClick={() => navigate('/roster')}><CalendarClock size={16}/>排班设置</Button><VacationSettingsButton/></div></header>
-    <section className="attendance-holiday-settings" aria-labelledby="china-holiday-settings-title"><span className="attendance-holiday-settings-icon"><Landmark size={18}/></span><div><strong id="china-holiday-settings-title">自动识别中国大陆节假日</strong><small>识别法定休假与调休补班，不自动设置加班倍率；手工出勤优先，排班用户可在排班设置中选择是否跟随。</small>{holidaySettings.enabled && <em>从 {holidaySettings.effectiveFrom} 起生效，不重算更早的历史工资</em>}{holidaySettingsError && <em id="china-holiday-settings-error" className="attendance-save-error" role="alert">{holidaySettingsError}</em>}</div><Switch checked={holidaySettings.enabled} onCheckedChange={toggleChinaHolidayCalendar} ariaLabel="自动识别中国大陆节假日"/></section>
+    <section className="attendance-holiday-settings" aria-labelledby="china-holiday-settings-title"><span className="attendance-holiday-settings-icon"><Landmark size={18}/></span><div><strong id="china-holiday-settings-title">自动识别中国大陆节假日</strong><small>识别法定休假与调休补班，不自动设置加班倍率；手工出勤优先，排班用户可在排班设置中选择是否跟随。</small>{holidaySettings.enabled && <em>从 {holidaySettings.effectiveFrom} 起生效，不重算更早的历史工资</em>}{holidaySettingsError && <em id="china-holiday-settings-error" className="attendance-save-error" role="alert">{holidaySettingsError}</em>}</div><Switch checked={holidaySettings.enabled} onCheckedChange={toggleChinaHolidayCalendar} ariaLabel="自动识别中国大陆节假日"/><ChinaHolidayUpdate/></section>
     <AttendanceCalendar profile={profile} records={records} workRecords={workRecords} holidaySettings={holidaySettings} dimension={dimension} anchor={anchor} onChange={(nextDimension, nextAnchor) => { setDimension(nextDimension); setAnchor(nextAnchor) }} onSelectDate={selectDate}/>
     <div className="attendance-stats"><article><span><CalendarDays size={17}/></span><small>本月手工调整</small><strong>{monthStats.adjusted}<i>天</i></strong></article><article><span><CalendarClock size={17}/></span><small>本月请假 / 特殊出勤</small><strong>{monthStats.leave}<i>天</i></strong></article><article><span><Coffee size={17}/></span><small>本月放假</small><strong>{monthStats.holiday}<i>天</i></strong></article><article><span><CircleOff size={17}/></span><small>本月不计薪</small><strong>{monthStats.unpaid}<i>天</i></strong></article></div>
     <p className="attendance-help">平时按已保存的安排计算，有变化时点选日期。请半天假只调整请假半天的工资，保存前可以查看当天金额。</p>
