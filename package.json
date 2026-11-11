@@ -12,6 +12,10 @@
     "test": "npm run build -w @salary-flow/core && npm run test --workspaces --if-present",
     "typecheck": "npm run build -w @salary-flow/core && npm run typecheck -ws --if-present"
   },
-  "overrides": { "miniflare": { "sharp": "0.35.4" } },
-  "engines": { "node": ">=20" }
+  "overrides": {
+    "miniflare": { "sharp": "0.35.5" },
+    "app-builder-lib": { "minimatch": "11.0.1" },
+    "@electron/universal": { "minimatch": "11.0.1" }
+  },
+  "engines": { "node": ">=22.12.0" }
 }

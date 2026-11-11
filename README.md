@@ -180,7 +180,7 @@ MoneyDance
 
 Windows 开发需要 Node.js 22.12+：`npm ci` 后运行 `npm run dev:desktop`；运行 `npm run build:windows` 生成 Windows 安装器。
 
-要求：Node.js 20+。
+要求：Node.js 22.12+。
 
 ~~~bash
 git clone https://github.com/cshouuu/money-dance.git
@@ -316,6 +316,7 @@ Web、iPhone PWA 和 Android APK 属于不同的本地存储容器，目前不�
 
 ## 开发协作基线
 
+- 打包链的 `app-builder-lib` 和 `@electron/universal` 暂时将 `minimatch` 固定为 11.0.1，以修复 [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)；保留旧版 3.x 调用方的依赖接口。上游支持修复版本后可移除此覆盖。
 - 功能开发通过独立分支和 Pull Request 合入 `main`。
 - 任何薪资、出勤、跨日和账本逻辑变更，都需要同时覆盖本地日期与历史数据场景。
 - 移动端弹窗必须锁定页面滚动和底部导航，支持点击遮罩关闭，且新增 / 编辑表单不应默认唤起输入法。
