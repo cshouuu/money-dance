@@ -14,8 +14,7 @@
   },
   "overrides": {
     "miniflare": { "sharp": "0.35.5" },
-    "app-builder-lib": { "minimatch": "11.0.1" },
-    "@electron/universal": { "minimatch": "11.0.1" }
+    "minimatch@>=7.0.0 <11.0.1": "11.0.1"
   },
   "engines": { "node": ">=22.12.0" }
 }
