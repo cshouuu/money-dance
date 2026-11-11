@@ -1,4 +1,5 @@
 import { useProfile } from '../lib/useProfile'
+import { useChinaHolidayData } from '../lib/useChinaHolidays'
 import { useTimerPlanSync } from '../components/TimerPlanController'
 import { CalendarCheck2, Pencil, Plus, Settings2, Trash2, TrendingDown, TrendingUp, WalletCards } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
@@ -34,6 +35,7 @@ function initialDateForSelection(dimension: SummaryDimension, anchor: string): s
 }
 
 export function Summary() {
+  const holidayData = useChinaHolidayData()
   const profile = useProfile()
   const [ledger, setLedger] = useState<LedgerEntry[]>(() => loadLedger())
   useTimerPlanSync(() => setLedger(loadLedger()))
@@ -49,7 +51,7 @@ export function Summary() {
   const summary = useMemo(() => {
     const { start, end } = getSummaryRange(dimension, anchor)
     return summarizeLedger(profile, ledger, start, end, new Date(), workRecords, attendanceRecords)
-  }, [dimension, anchor, profile, ledger, workRecords, attendanceRecords])
+  }, [dimension, anchor, profile, ledger, workRecords, attendanceRecords, holidayData])
   const currentPage = Math.min(page, getPageCount(summary.entries.length))
   const visibleEntries = getPageItems(summary.entries, currentPage)
   const attendanceSalaryIds = useMemo(() => new Set(attendanceRecords.map(record => salaryEntryIdForDate(record.date))), [attendanceRecords])

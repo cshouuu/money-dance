@@ -1,5 +1,7 @@
 import { DEFAULT_PROFILE, type SalaryProfile } from '@salary-flow/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import bundled from './chinaHolidays.data.json'
+import { CHINA_HOLIDAY_DATA_KEY, updateChinaHolidays } from './chinaHolidays'
 import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, chinaHolidayForDate, getCustomAttendanceAmount, getMonthlyPaidDayCount, getMonthlyScheduledWorkDayCount, getOfficialHolidayPayAmount, getWeekStartDateValue, isConfiguredWorkday, resolveAttendanceDay, saveAttendanceRecords, saveChinaHolidaySettings, type ChinaHolidaySettings } from './attendance'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -94,6 +96,32 @@ describe('attendanceStatusLabel', () => {
 })
 
 describe('China holiday workday priority', () => {
+  it('uses 2027 breaks, makeup workdays and statutory pay without overriding manual attendance', () => {
+    const profile = { ...DEFAULT_PROFILE, salaryType: 'monthly' as const, workDaysPerWeek: 5 }
+    expect(resolveAttendanceDay(new Date(2027, 1, 5, 12), profile, undefined, holidaySettings)).toMatchObject({ source: 'china-holiday', isWorkday: false })
+    expect(resolveAttendanceDay(new Date(2027, 0, 31, 12), profile, undefined, holidaySettings)).toMatchObject({ source: 'china-holiday', isWorkday: true })
+    expect(getOfficialHolidayPayAmount('2027-02-05', profile, 100, holidaySettings)).toBe(100)
+    expect(getOfficialHolidayPayAmount('2027-02-09', profile, 100, holidaySettings)).toBe(0)
+    expect(getOfficialHolidayPayAmount('2027-02-05', { ...profile, salaryType: 'hourly' }, 100, holidaySettings)).toBe(0)
+    expect(resolveAttendanceDay(new Date(2027, 1, 5, 12), profile, { date: '2027-02-05', status: 'normal', updatedAt: '' }, holidaySettings)).toMatchObject({ source: 'manual', isWorkday: true })
+    expect(chinaHolidayForDate('2027-02-05', { ...holidaySettings, effectiveFrom: '2027-02-06' })).toBeUndefined()
+  })
+
+  it('uses downloaded corrections in salary calculations while preserving activation and manual records', async () => {
+    const values = new Map<string, string>()
+    vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value) })
+    const data = structuredClone(bundled)
+    data.version = '2098.1'
+    data.years[2027].holidays.push({ name: '测试调整', start: '2027-06-10', end: '2027-06-10' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(data))))
+    await updateChinaHolidays()
+    const profile = { ...DEFAULT_PROFILE, salaryType: 'monthly' as const }
+    expect(values.has(CHINA_HOLIDAY_DATA_KEY)).toBe(true)
+    expect(getOfficialHolidayPayAmount('2027-06-10', profile, 100, holidaySettings)).toBe(0)
+    expect(chinaHolidayForDate('2027-06-10', { ...holidaySettings, enabled: false })).toBeUndefined()
+    expect(chinaHolidayForDate('2027-06-10', { ...holidaySettings, effectiveFrom: '2027-06-11' })).toBeUndefined()
+    expect(resolveAttendanceDay(new Date(2027, 5, 10, 12), profile, { date: '2027-06-10', status: 'normal', updatedAt: '' }, holidaySettings)).toMatchObject({ source: 'manual', isWorkday: true })
+  })
   it('overrides fixed and alternating weeks after the feature effective date', () => {
     const fiveDayProfile = { ...alternatingProfile, workWeekMode: 'fixed' as const, workDaysPerWeek: 5 }
     expect(isConfiguredWorkday(new Date(2026, 1, 17, 12), fiveDayProfile, holidaySettings)).toBe(false)
@@ -110,7 +138,7 @@ describe('China holiday workday priority', () => {
   it('does not rewrite dates before activation and falls back for unknown years', () => {
     const futureOnly = { ...holidaySettings, effectiveFrom: '2026-03-01' }
     expect(chinaHolidayForDate('2026-02-17', futureOnly)).toBeUndefined()
-    expect(resolveAttendanceDay(new Date(2027, 0, 3, 12), { ...alternatingProfile, workWeekMode: 'fixed', workDaysPerWeek: 5 }, undefined, holidaySettings)).toMatchObject({ source: 'profile', isWorkday: false })
+    expect(resolveAttendanceDay(new Date(2028, 0, 2, 12), { ...alternatingProfile, workWeekMode: 'fixed', workDaysPerWeek: 5 }, undefined, holidaySettings)).toMatchObject({ source: 'profile', isWorkday: false })
   })
 
   it('can be disabled without changing the profile fallback', () => {

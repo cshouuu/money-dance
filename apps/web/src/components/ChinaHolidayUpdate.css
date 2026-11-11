@@ -1,0 +1,10 @@
+.china-holiday-update{display:flex;flex-wrap:wrap;align-items:center;gap:9px 14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.china-holiday-update-info{display:flex;flex:1 1 240px;flex-direction:column;gap:5px;min-width:0;font-size:11px;line-height:1.6;color:var(--muted);overflow-wrap:anywhere}
+.china-holiday-update-info a{align-self:flex-start;color:var(--green);text-underline-offset:3px}
+.china-holiday-update .beui-button{min-height:36px;flex-shrink:0}
+.china-holiday-update p{flex-basis:100%;margin:0;font-size:11px;line-height:1.6}
+.china-holiday-update-hint{color:var(--muted)}
+.china-holiday-update-status{color:var(--green)}
+.china-holiday-update-error{color:#a43d3d}
+.workspace-page>.china-holiday-update{margin:0 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--paper)}
+@media(max-width:480px){.china-holiday-update .beui-button{width:100%}}

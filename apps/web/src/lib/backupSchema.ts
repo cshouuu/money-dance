@@ -1,4 +1,5 @@
 import { keys } from './storage'
+import { CHINA_HOLIDAY_DATA_KEY, isChinaHolidayDataset } from './chinaHolidays'
 
 type Check = (value: unknown) => boolean
 const obj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -56,6 +57,7 @@ export const PLANS_KEY = 'salary-flow.timer-plans.v1'
 export const THEME_KEY = 'salary-flow.theme.v1'
 export const UNDO_KEY = 'money-dance:journey-deletion-undo'
 const labels: Record<string, string> = {
+  [CHINA_HOLIDAY_DATA_KEY]: '官方节假日数据',
   [keys.profile]: '工资与历史设置', [keys.wishes]: '心愿', [keys.wishAllocation]: '心愿分配历史',
   [keys.widgetWishes]: '桌面心愿选择', [keys.mobileDock]: '移动导航栏', [keys.sessions]: '摸鱼记录',
   [keys.overtimeSessions]: '加班记录', [keys.achievements]: '成就', [keys.assets]: '物品',
@@ -63,6 +65,7 @@ const labels: Record<string, string> = {
   [HOLIDAY_KEY]: '节假日设置', [THEME_KEY]: '主题', [PLANS_KEY]: '计时预约',
 }
 export const BACKUP_CHECKS: Record<string, Check> = {
+  [CHINA_HOLIDAY_DATA_KEY]: isChinaHolidayDataset,
   [keys.profile]: profile,
   [keys.wishes]: wishes,
   [keys.wishAllocation]: nullable(fields({ version: one(1), adoptedAt: time, initial: wishes, revisions: array(fields({ at: time, items: wishes })) })),

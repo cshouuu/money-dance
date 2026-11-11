@@ -14,7 +14,8 @@ import { WorkTimeDialog } from '../components/WorkTimeDialog'
 import { MonthlyPerformance } from '../components/MonthlyPerformance'
 import { NumberTicker } from '../ui/NumberTicker'
 import { loadAchievementState, reconcileAchievementSessions, saveAchievementState } from '../lib/achievements'
-import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isConfiguredWorkday, isHalfDayLeave, loadAttendanceRecords, loadChinaHolidaySettings } from '../lib/attendance'
+import { useChinaHolidaySettings } from '../lib/useChinaHolidays'
+import { alternatingWeekTypeForDate, attendancePayModeLabel, attendanceStatusLabel, attendanceWorkedFraction, isConfiguredWorkday, isHalfDayLeave, loadAttendanceRecords } from '../lib/attendance'
 import { localDateWithTime, toLocalDateValue, toLocalTimeValue } from '../lib/form'
 import { replaceScheduledWorkTime } from '../lib/work'
 import { createId } from '../lib/id'
@@ -72,7 +73,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
   const workRecordsRef = useRef(workRecords)
   const settledActionRef = useRef<HTMLButtonElement>(null)
   const [attendanceRecords] = useState<AttendanceRecord[]>(() => loadAttendanceRecords())
-  const [holidaySettings] = useState(() => loadChinaHolidaySettings())
+  const holidaySettings = useChinaHolidaySettings()
   const [ledger, setLedger] = useState(() => loadLedger())
   const [slackingSessions, setSlackingSessions] = useState<SlackingSession[]>(loadSlackingSessions)
   const [overtimeSessions, setOvertimeSessions] = useState<OvertimeSession[]>(loadOvertimeSessions)
@@ -134,7 +135,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     : new Map(featuredWishes.map(item => [
     item.id,
     getWishProgress(item, profile, new Date(currentMinute * 60_000), workRecords, attendanceRecords),
-  ])), [attendanceRecords, currentMinute, featuredWishes, profile, workRecords, wishStore])
+  ])), [attendanceRecords, currentMinute, featuredWishes, profile, workRecords, wishStore, holidaySettings])
   const monthlyStats = useMemo(() => getMonthlyWorkStats(
     profile,
     ledger,
@@ -142,7 +143,7 @@ function WorkingDashboard({ profile }: { profile: SalaryProfile }) {
     attendanceRecords,
     now,
     { overtime: overtimeSessions, slacking: slackingSessions },
-  ), [attendanceRecords, currentMinute, ledger, profile, workRecords, overtimeSessions, slackingSessions])
+  ), [attendanceRecords, currentMinute, ledger, profile, workRecords, overtimeSessions, slackingSessions, holidaySettings])
   const firstStart = work.record?.sessions[0]?.startTime
   const plannedEndLabel = work.record?.plannedEndTime
     ? `${toLocalDateValue(new Date(work.record.plannedEndTime)) === workDate ? '' : '次日 '}${toLocalTimeValue(new Date(work.record.plannedEndTime))}`

@@ -1,4 +1,4 @@
 {
-  "version": "0.6.0",
-  "features": ["data-backup", "desktop-companion"]
+  "version": "0.6.2",
+  "features": ["data-backup", "desktop-companion", "china-holiday-update"]
 }

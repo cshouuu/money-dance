@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { getUnpaidBreakOffsets, workProfileForDate, isEmployedOn, parseClock, rosterForDate, rosterShiftsForDate, type RosterPlan, type SalaryProfile, type ShiftTemplate } from '@salary-flow/core'
 import { Button, Checkbox, Input, SelectField, Switch } from '../ui/BeuiControls'
 import { useProfile } from '../lib/useProfile'
+import { useChinaHolidayData } from '../lib/useChinaHolidays'
 import { createId } from '../lib/id'
 import { localDateWithTime, toLocalDateValue } from '../lib/form'
 import { isSessionLocalDate, shiftSessionLocalDate } from '../lib/sessionBusinessDate'
@@ -57,6 +58,7 @@ function ShiftEditor({ shift, change, remove, payMode }: { payMode?: RosterPlan[
 }
 
 function Editor({ profile, stageId }: { profile: SalaryProfile; stageId: string | null }) {
+  const holidayData = useChinaHolidayData()
   const [search] = useSearchParams()
   const [draft,setDraft] = useState(() => templatePlan(profile,stageId))
   const [expected,setExpected] = useState(profile)
@@ -121,7 +123,7 @@ function Editor({ profile, stageId }: { profile: SalaryProfile; stageId: string 
     const rows=[]
     for(let date=review.start;date<=review.end && rows.length<31;date=shiftSessionLocalDate(date,1)) rows.push({date,label:rosterDayLabel(next,date)??(isEmployedOn(next,date)?'原作息':'未任职'),shifts:effectiveRosterShifts(next,date),hours:intervalSeconds(actualPaidIntervalsInRange(next,localDateWithTime(date,'00:00'),localDateWithTime(shiftSessionLocalDate(date,1),'00:00'),[],attendance)),pay:plannedIncomeForDate(next,date,attendance)})
     return { rows,before:getMonthlyWorkStats(profile,ledger,records,attendance,at).expectedIncome,after:getMonthlyWorkStats(next,ledger,records,attendance,at).expectedIncome }
-  },[review,profile])
+  },[review,profile,holidayData])
   const save = async () => {
     if(!review||busy)return
     setBusy(true)

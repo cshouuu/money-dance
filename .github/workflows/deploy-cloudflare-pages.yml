@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'apps/web/**'
+      - '!apps/web/src/lib/chinaHolidays.data.json'
       - 'packages/core/**'
       - 'package*.json'
       - '.github/workflows/deploy-cloudflare-pages.yml'

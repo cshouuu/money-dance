@@ -1,4 +1,5 @@
 import { useProfile } from '../lib/useProfile'
+import { useChinaHolidayData } from '../lib/useChinaHolidays'
 import { calculateRates, formatDuration, priceToWorkSeconds } from '@salary-flow/core'
 import { ArrowUp, CheckCircle2, Clock3, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
@@ -32,6 +33,7 @@ function formatMoney(value: number) {
 type PendingAction = { type: 'delete' | 'purchase'; item: WishItem; store: WishStore } | null
 
 export function Converter() {
+  const holidayData = useChinaHolidayData()
   const [search] = useSearchParams()
   const now = useNow(60_000)
   const profile = useProfile()
@@ -52,13 +54,13 @@ export function Converter() {
   const [showPurchaseToast, setShowPurchaseToast] = useState(false)
   const [page, setPage] = useState(1)
   const currentDate = toLocalDateValue(now)
-  const rates = useMemo(() => calculateRates(salaryProfileForBusinessDate(profile, currentDate, attendanceRecords)), [attendanceRecords, currentDate, profile])
+  const rates = useMemo(() => calculateRates(salaryProfileForBusinessDate(profile, currentDate, attendanceRecords)), [attendanceRecords, currentDate, profile, holidayData])
   const wishlistItems = useMemo(() => items.filter(item => !item.purchasedAt), [items])
   const currentPage = Math.min(page, getPageCount(wishlistItems.length))
   const visibleItems = useMemo(() => getPageItems(wishlistItems, currentPage), [currentPage, wishlistItems])
-  const queued = useMemo(() => plan ? getQueuedWishProgress(plan, profile, now, workRecords, attendanceRecords) : null, [attendanceRecords, now, plan, profile, workRecords])
-  const visibleProgress = useMemo(() => queued?.progress ?? new Map(visibleItems.map(item => [item.id, getWishProgress(item, profile, now, workRecords, attendanceRecords)])), [attendanceRecords, now, profile, queued, visibleItems, workRecords])
-  const migrationPreview = useMemo(() => migration ? getQueuedWishProgress(createWishAllocationPlan(migration.items, now), profile, now, workRecords, attendanceRecords) : null, [attendanceRecords, migration, now, profile, workRecords])
+  const queued = useMemo(() => plan ? getQueuedWishProgress(plan, profile, now, workRecords, attendanceRecords) : null, [attendanceRecords, now, plan, profile, workRecords, holidayData])
+  const visibleProgress = useMemo(() => queued?.progress ?? new Map(visibleItems.map(item => [item.id, getWishProgress(item, profile, now, workRecords, attendanceRecords)])), [attendanceRecords, now, profile, queued, visibleItems, workRecords, holidayData])
+  const migrationPreview = useMemo(() => migration ? getQueuedWishProgress(createWishAllocationPlan(migration.items, now), profile, now, workRecords, attendanceRecords) : null, [attendanceRecords, migration, now, profile, workRecords, holidayData])
   const needsMigration = !plan && items.length > 0
   const disabled = busy || Boolean(store.error)
 
