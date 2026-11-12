@@ -1,0 +1,25 @@
+{
+  "phase": "complete",
+  "before": {
+    "salary-flow.profile.v1": "{\"salary\":9000,\"salaryType\":\"monthly\"}",
+    "salary-flow.wishes.v1": null,
+    "salary-flow.wish-allocation.v1": null,
+    "salary-flow.widget-wishes.v1": null,
+    "salary-flow.mobile-dock.v1": null,
+    "salary-flow.sessions.v1": null,
+    "salary-flow.overtime-sessions.v1": null,
+    "salary-flow.achievements.v1": null,
+    "salary-flow.assets.v1": null,
+    "salary-flow.ledger.v1": "[]",
+    "salary-flow.work-records.v1": null,
+    "salary-flow.attendance-records.v1": null,
+    "money-dance.china-holiday-calendar.v1": null,
+    "salary-flow.theme.v1": null,
+    "salary-flow.timer-plans.v1": null,
+    "salary-flow.active-slacking.v1": null,
+    "salary-flow.active-overtime.v1": null,
+    "money-dance:journey-deletion-undo": null
+  },
+  "createdAt": "2026-11-12T00:45:32.790Z",
+  "source": "web"
+}

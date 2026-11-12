@@ -1,11 +1,19 @@
 import { keys } from './storage'
-import { BACKUP_CHECKS, PLANS_KEY, UNDO_KEY, assertSafeTree, validateBackupData } from './backupSchema'
+import { BACKUP_CHECKS, HOLIDAY_KEY, PLANS_KEY, THEME_KEY, UNDO_KEY, assertSafeTree, validateBackupData } from './backupSchema'
 
 export const MAX_BACKUP_BYTES = 8 * 1024 * 1024
 export const RECOVERY_KEY = 'money-dance.backup-recovery.v1'
 export const IMPORT_EVENT_KEY = 'money-dance.backup-imported.v1'
 export const BACKUP_KEYS = Object.keys(BACKUP_CHECKS)
 const REPLACE_KEYS = [...BACKUP_KEYS, keys.activeSlacking, keys.activeOvertime, UNDO_KEY]
+// Recovery v1 first shipped in v0.6.0. Keep its required fields stable:
+// later backup domains are validated when present, not required in old journals.
+const RECOVERY_V1_REQUIRED_KEYS = [
+  keys.profile, keys.wishes, keys.wishAllocation, keys.widgetWishes, keys.mobileDock,
+  keys.sessions, keys.overtimeSessions, keys.achievements, keys.assets, keys.ledger,
+  keys.workRecords, keys.attendanceRecords, HOLIDAY_KEY, THEME_KEY, PLANS_KEY,
+  keys.activeSlacking, keys.activeOvertime, UNDO_KEY,
+]
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type Snapshot = Record<string, string | null>
 export interface Backup {
@@ -81,14 +89,15 @@ function journal(storage: Store): Journal | null {
   if (!value) return null
   assertSafeTree(value)
   if (!['pending', 'complete'].includes(value.phase) || !value.before || typeof value.before !== 'object'
-    || !REPLACE_KEYS.every(key => Object.hasOwn(value.before, key) && (value.before[key] === null || typeof value.before[key] === 'string'))
-    || Object.keys(value.before).some(key => !REPLACE_KEYS.includes(key))) throw new Error('导入恢复备份无法读取，请勿清除应用数据。')
+    || !RECOVERY_V1_REQUIRED_KEYS.every(key => Object.hasOwn(value.before, key))
+    || Object.entries(value.before).some(([key, raw]) => !REPLACE_KEYS.includes(key) || (raw !== null && typeof raw !== 'string'))) throw new Error('导入恢复备份无法读取，请勿清除应用数据。')
   return value
 }
 function restore(storage: Store, before: Snapshot) {
   // Free imported data first, so restoring does not need space for both copies.
-  for (const key of REPLACE_KEYS) storage.removeItem(key)
-  for (const key of REPLACE_KEYS) if (before[key] !== null) storage.setItem(key, before[key]!)
+  // Only restore keys touched by that import; newer domains were not part of it.
+  for (const key of Object.keys(before)) storage.removeItem(key)
+  for (const [key, raw] of Object.entries(before)) if (raw !== null) storage.setItem(key, raw)
 }
 export function recoverInterruptedImport(storage: Store = localStorage): boolean {
   const saved = journal(storage)
