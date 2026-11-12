@@ -5,6 +5,7 @@ import { BACKUP_KEYS, RECOVERY_KEY, backupFingerprint, createBackup, importBacku
 import { HOLIDAY_KEY, PLANS_KEY, THEME_KEY, UNDO_KEY } from './backupSchema'
 import holidayData from './chinaHolidays.data.json'
 import { CHINA_HOLIDAY_DATA_KEY } from './chinaHolidays'
+import legacyRecovery from './fixtures/backup-recovery-v0.6.0.json'
 
 function store(seed: Record<string, unknown> = {}) {
   const values = new Map(Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
@@ -164,4 +165,68 @@ describe('import failure and crash recovery', () => {
     expect(backupFingerprint(target)).toBe(before)
     expect(recoverInterruptedImport(target)).toBe(false)
   })
+})
+
+describe('recovery across app upgrades', () => {
+  // Captured from v0.6.0 importBackup with synthetic data. Do not regenerate
+  // this persisted format from the current backup key registry.
+  it('boots after an old successful import without rolling back current data or rewriting the journal', () => {
+    const target = store({ ...fixture, [RECOVERY_KEY]: legacyRecovery, unrelated: 'keep' })
+    const before = new Map(target.values)
+    expect(recoverInterruptedImport(target)).toBe(false)
+    expect(target.values).toEqual(before)
+    const previous = previousBackup(target)!
+    expect(previous.data[keys.profile]).toEqual({ salary: 9000, salaryType: 'monthly' })
+    expect(previous.data[keys.ledger]).toEqual([])
+    expect(previous.data).not.toHaveProperty(CHINA_HOLIDAY_DATA_KEY)
+    expect(parseBackup(serializeBackup(previous))).toEqual(previous)
+    expect(target.values).toEqual(before)
+  })
+
+  it('restores an old interrupted import without deleting data added after its snapshot', () => {
+    const target = store({ ...fixture, [RECOVERY_KEY]: { ...legacyRecovery, phase: 'pending' }, unrelated: 'keep' })
+    const downloadedHolidays = target.getItem(CHINA_HOLIDAY_DATA_KEY)
+    expect(recoverInterruptedImport(target)).toBe(true)
+    for (const [key, value] of Object.entries(legacyRecovery.before)) expect(target.getItem(key)).toBe(value)
+    expect(target.getItem(CHINA_HOLIDAY_DATA_KEY)).toBe(downloadedHolidays)
+    expect(target.getItem('unrelated')).toBe('"keep"')
+    expect(target.getItem(RECOVERY_KEY)).toBeNull()
+    expect(recoverInterruptedImport(target)).toBe(false)
+  })
+
+  it('keeps an old pending journal when recovery fails and can safely retry it', () => {
+    const target = store({ ...fixture, [RECOVERY_KEY]: { ...legacyRecovery, phase: 'pending' } })
+    const journal = target.getItem(RECOVERY_KEY)
+    const downloadedHolidays = target.getItem(CHINA_HOLIDAY_DATA_KEY)
+    const fail = { ...target, setItem: () => { throw new Error('quota') } }
+    expect(() => recoverInterruptedImport(fail)).toThrow('原数据恢复暂时失败')
+    expect(target.getItem(RECOVERY_KEY)).toBe(journal)
+    expect(target.getItem(CHINA_HOLIDAY_DATA_KEY)).toBe(downloadedHolidays)
+    expect(recoverInterruptedImport(target)).toBe(true)
+    for (const [key, value] of Object.entries(legacyRecovery.before)) expect(target.getItem(key)).toBe(value)
+    expect(target.getItem(CHINA_HOLIDAY_DATA_KEY)).toBe(downloadedHolidays)
+  })
+
+  it('allows another import and snapshots the current data after an old completed import', () => {
+    const target = store({ ...fixture, [RECOVERY_KEY]: legacyRecovery })
+    const incoming = createBackup('web', store({ [keys.profile]: { salary: 123, salaryType: 'monthly' } }))
+    importBackup(incoming, backupFingerprint(target), target)
+    expect(JSON.parse(target.getItem(keys.profile)!)).toEqual(incoming.data[keys.profile])
+    expect(previousBackup(target)?.data).toEqual(fixture)
+    expect(recoverInterruptedImport(target)).toBe(false)
+  })
+
+  for (const phase of ['pending', 'complete']) {
+    it.each(['missing base key', 'unexpected key', 'invalid added value', 'empty snapshot'])(`rejects %s in a ${phase} journal without writing data`, defect => {
+      const saved = { ...legacyRecovery, phase, before: { ...legacyRecovery.before } as Record<string, unknown> }
+      if (defect === 'missing base key') delete saved.before[keys.ledger]
+      if (defect === 'unexpected key') saved.before['unknown-key'] = null
+      if (defect === 'invalid added value') saved.before[CHINA_HOLIDAY_DATA_KEY] = 42
+      if (defect === 'empty snapshot') saved.before = {}
+      const target = store({ ...fixture, [RECOVERY_KEY]: saved })
+      const before = new Map(target.values)
+      expect(() => recoverInterruptedImport(target)).toThrow('导入恢复备份无法读取')
+      expect(target.values).toEqual(before)
+    })
+  }
 })
